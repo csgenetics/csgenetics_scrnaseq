@@ -8,6 +8,25 @@ nextflow.enable.dsl=2
 
 
 /*
+* Convert GTF into features file
+*/
+process features_file {
+  label 'c2m8'
+
+  input:
+  path(gtf)
+
+  output:
+  path("${gtf.baseName}_features_names.tsv"), emit: modified_gtf
+
+  shell:
+  '''
+  modify_gtf.py !{gtf} !{gtf.baseName}_features_names.tsv
+  '''
+}
+
+
+/*
 * Run BaseSpace Download
 */
 process basespace {
@@ -326,13 +345,10 @@ process feature_counts {
   output:
   tuple val(sample_id), path('*.bam'), emit: feature_counts_out
   path("*.{txt,summary}"), emit: feature_counts_multiqc
-  tuple val(sample_id), path('*_names.tsv'), emit: feature_counts_list
 
   shell:
   '''
   featureCounts -a !{gtf} -o !{sample_id}_gene_assigned.txt -R BAM !{f} -T 4 -t exon,intron,intergenic -g gene_id --fracOverlap 0.5 --extraAttributes gene_name
-  cut -f 1,7 !{sample_id}_gene_assigned.txt > reduced.!{sample_id}_gene_assigned.txt   #  This reduces the file size from ~ 30M to ~1M
-  sed '1,2d' reduced.!{sample_id}_gene_assigned.txt | sed  '1i ensID\tgeneSym' > !{sample_id}_features_names.tsv # Get ensemblID and gene
   '''
 }
 
@@ -554,7 +570,7 @@ process count_matrix {
   input:
   tuple val (sample_id), path(f)
   path(w)
-  file(g)
+  file(features_file)
 
 
   output:
@@ -566,7 +582,7 @@ process count_matrix {
   shell:
   '''
   mkdir -p raw_count_matrix/!{sample_id}
-  count_matrix.py --white_list !{w} --count_table !{f} --gene_list !{sample_id}_features_names.tsv --sample !{sample_id}
+  count_matrix.py --white_list !{w} --count_table !{f} --gene_list !{features_file} --sample !{sample_id}
   '''
 }
 

@@ -27,12 +27,13 @@ def make_count_matrix(args):
     wl.columns = ['cell', 'io','ioID']
     wl = wl.iloc[:,[0,1]]
 
-    # load feature (gene) names obtained from the genome GTF file
-    genes_all = read_table(args.gene_list)
-
     # load count table obtained using UMI-tools
     counts = read_table(args.count_table,header=None)
     counts.columns = ['io', 'ensID']
+
+     # load feature (gene) names obtained from the genome GTF file
+    genes_all_unfiltered = read_table(args.gene_list).drop_duplicates()
+    genes_all = genes_all_unfiltered[genes_all_unfiltered['ensID'].isin(counts['ensID'])]    
 
     # first merge by IOs
     counts = merge(wl, counts)
