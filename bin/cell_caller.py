@@ -72,7 +72,7 @@ def make_pd_plots(pdf_df, min_nucGene, cutoff, sample):
    plt.xlabel("log10(nNuc_genes+1)")
    plt.ylabel("Density")
    plt.legend(bbox_to_anchor = (1.0, 1), loc = 'upper right', title="Cells", fontsize=7)
-   plt.savefig('{0}_pdf_with_cutoff.png'.format(sample))   # save the figure to file
+   plt.savefig('{0}_pdf_with_cutoff.png'.format(sample), dpi=900)   # save the figure to file
    plt.close()    # close the figure window
 
 

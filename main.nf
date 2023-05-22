@@ -116,7 +116,9 @@ workflow {
     ch_multiqc_json = multiqc.out.multiqc_json    
     
     // Run Sort and index bam file
-    ch_sort_index_bam_out = sort_index_bam(ch_feature_counts_out)
+    sort_index_bam(ch_feature_counts_out)
+    ch_antisense_out = sort_index_bam.out.antisense_out
+    ch_sort_index_bam_out = sort_index_bam.out.sort_index_bam_out 
 
     // Run umi tools group (basically assign reads to cells) and save a lot of output channels
     group(ch_sort_index_bam_out)
@@ -150,7 +152,7 @@ workflow {
     ch_cell_caller_plot = cell_caller.out.cell_caller_plot
 
     // Generate Report
-    summary_report(ch_raw_matrix, ch_raw_barcodes, ch_raw_features, ch_multiqc_json.collect(), ch_qualimap_txt.collect(), ch_cell_caller_plot, ch_cell_caller_out)
+    summary_report(ch_raw_matrix, ch_raw_barcodes, ch_raw_features, ch_multiqc_json.collect(), ch_antisense_out,ch_qualimap_txt.collect(), ch_cell_caller_plot, ch_cell_caller_out)
     ch_summary_report = summary_report.out.report_html
 
 }

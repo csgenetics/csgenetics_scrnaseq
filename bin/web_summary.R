@@ -22,12 +22,12 @@ print_HTML <- function(seq_stats, map_stats ,cell_stats, dir, sample_id, plot){
   HTML("<div class='boxed' id='left' align='center'>", file=target)
   
   HTML('<table style="width:100%">', file=target)
-  HTML(paste('<tr> <td align="center" font-size="3px" >', "Estimated Number of Cells", '</td> </tr> <tr> <td align="center">', cell_stats$value[1] , '</td> </tr>'), file=target)
+  HTML(paste('<tr> <td align="center" style="font-size: 20px;" >', "Estimated Number of Cells", '</td> </tr> <tr> <td align="center" style="font-size: 18px;">', cell_stats$value[1] , '</td> </tr>'), file=target)
   HTML('</table>', file=target)
   
   HTML('<table style="width:100%">', file=target)
-  HTML(paste('<tr> <td align="center">', "Mean Reads per Cell", '</td> <td align="center">', "Median Genes per Cell", '</td> </tr>',
-             '<tr> <td align="center">', cell_stats$value[2], '</td> <td align="center">', cell_stats$value[3], '</td> </tr>'), file=target)
+  HTML(paste('<tr> <td align="center" style="font-size: 20px;">', "Mean Reads per Cell", '</td> <td align="center" style="font-size: 20px;">', "Median Genes per Cell", '</td "> </tr>',
+             '<tr> <td align="center" style="font-size: 20px;">', cell_stats$value[2], '</td> <td align="center" style="font-size: 20px;">', cell_stats$value[3], '</td> </tr>'), file=target)
   HTML('</table>', file=target)
   
   HTML.title('Sequencing', HR=2, file=target)
@@ -37,7 +37,7 @@ print_HTML <- function(seq_stats, map_stats ,cell_stats, dir, sample_id, plot){
   
   HTML.title('Mapping', HR=2, file=target)
   HTML('<table style="width:100%">', file=target)
-  HTML(paste('<tr> <td>', map_stats$stat, '</td> <td align="right">', map_stats$value, '</td>  </tr>'), file=target)
+  HTML(paste('<tr> <td  >', map_stats$stat, '</td> <td  align="right" >', map_stats$value, '</td>  </tr>'), file=target)
   HTML('</table>', file=target)
   HTML("</div>", file = target)
   HTML("<div class='boxed' id='right' align='center'>", file=target)
@@ -91,13 +91,13 @@ print_HTML <- function(seq_stats, map_stats ,cell_stats, dir, sample_id, plot){
 		}
 		table {
   			font-family: "sans-serif";
-			font-size: 18px;
+			font-size: 16px;
 			border: 1px solid #868D96;
 		}
 		#mathplayer{
   			height: 0px;
 		}
-		</style> </head>', file=target)
+		</style>', file=target)
   HTMLEndFile()
 }
 
@@ -118,6 +118,9 @@ arg_list <- list(
   make_option(
     c('--multiqc_json'), action = 'store', type = 'character',
     help = 'Path to the multiqc json file. REQUIRED'),
+  make_option(
+    c('--antisense'), action = 'store', type = 'character',
+    help = 'antisense argument'),
   make_option(
     c('--qualimap_report'), action = 'store', type = 'character',
     help = 'Path to the qualimap report txt  file. REQUIRED'),
@@ -153,7 +156,13 @@ write10xCounts(paste0('filter_count_matrix/', opt$sample_id), gene.symbol = gene
 
 # load filter mtx
 filt_mtx <- readMM(paste0('filter_count_matrix/', opt$sample_id,'/matrix.mtx.gz')) # load filtered mtx
+# Read in filter `genes.tsv`
+genes <- read.csv(paste0('filter_count_matrix/', opt$sample_id,'/features.tsv.gz'), sep = '\t', header = F)
+rownames(filt_mtx) <- genes[,2] # attach gene_ids
 
+# Read in filter `barcodes.tsv`
+cell_ids <- read.csv(paste0('filter_count_matrix/', opt$sample_id,'/barcodes.tsv.gz'),sep = '\t', header = F)
+colnames(filt_mtx) <- cell_ids$V1
 
 ### load multiqc json output 
 data <- fromJSON(file=opt$multiqc_json)
@@ -170,26 +179,31 @@ q30_barcode= paste0(round(data$report_saved_raw_data$multiqc_fastp[[paste0(opt$s
 ### read_mapped_genome
 mapped = data$report_general_stats_data[[2]][[opt$sample_id]]
 
-read_mapped_genome =  paste0(mapped$uniquely_mapped_percent+ mapped$multimapped_percent,"%")
+read_mapped_genome =  paste0(mapped$uniquely_mapped+ mapped$multimapped," ","("
+                            ,mapped$uniquely_mapped_percent+ mapped$multimapped_percent,"%",")")
 
-read_uniq_mapped_genome = paste0(mapped$uniquely_mapped_percent,"%")
+read_uniq_mapped_genome = paste0(mapped$uniquely_mapped," ","(",mapped$uniquely_mapped_percent,"%",")")
 
-quali <- my_data <- read.delim(opt$qualimap_report,header = FALSE)[20:22,]
-quali_reg <- trimws(quali)
-exonic <- unlist(strsplit(quali_reg[[1]]," +"))[4]
-intronic <- unlist(strsplit(quali_reg[[2]]," +"))[4]
-intergenic <- unlist(strsplit(quali_reg[[3]]," +"))[4]
+quali <- readLines(opt$qualimap_report)
+
+exonic <- sub(".*=\\s*(.*)", "\\1", grep("exonic =", quali, value = TRUE, fixed = TRUE))
+intronic <- sub(".*=\\s*(.*)", "\\1", grep("intronic =", quali, value = TRUE, fixed = TRUE))
+intergenic <- sub(".*=\\s*(.*)", "\\1", grep("intergenic =", quali, value = TRUE, fixed = TRUE))
+totalAlignments <- sub(".*=\\s*(.*)", "\\1", grep("total alignments =", quali, value = TRUE, fixed = TRUE))
+
+val_antisense <- read.csv(opt$antisense,sep = '\t', header = F)
+per_antisense <- round((as.numeric(val_antisense$V1)/ as.numeric(gsub(",", "", totalAlignments))) * 100,2)
+antisense <- paste0(val_antisense$V1," ","(",per_antisense,"%",")")
 
 
-
-seq_stats <- data.frame(stat = c('Total number of Reads', 'Valid Barcodes / CSGX cell barcodes', 'Sequencing Saturation', # get sequencing/alignment stats 
-                                  'Q30 bases in Barcode','Q30 Bases in RNA read'), 
+seq_stats <- data.frame(stat = c('Total Number of Reads', 'Valid Barcodes / CSGX Cell Barcodes', 'Sequencing Saturation', # get sequencing/alignment stats 
+                                  'Q30 Bases in Barcode','Q30 Bases in RNA Read'), 
                         value = prettyNum(c(total_number_reads, valid_barcode, seq_sat, q30_barcode,q30_read), big.mark = ','))
 
 
-map_stats <- data.frame(stat = c('Reads Mapped to Genome', 'Reads Mapped Confidently to Genome', 'Reads Mapped Confidently to Intergenic regions',  
-                                 'Reads Mapped Confidently to Intronic Regions','Reads Mapped Confidently to Exonic Regions'), 
-                        value = prettyNum(c(read_mapped_genome, read_uniq_mapped_genome, intergenic, intronic,exonic), big.mark = ','))
+map_stats <- data.frame(stat = c('Reads Mapped to Genome', 'Reads Mapped Confidently to Genome', 'Reads Mapped Confidently to Intergenic Regions',  
+                                 'Reads Mapped Confidently to Intronic Regions','Reads Mapped Confidently to Exonic Regions','Reads Mapped Antisense to Gene'), 
+                        value = prettyNum(c(read_mapped_genome, read_uniq_mapped_genome, intergenic, intronic,exonic,antisense), big.mark = ','))
 
 
 
@@ -198,16 +212,41 @@ ngenes <-read.csv(opt$cell_caller,sep = '\t', header = F)
 gene_counts <- apply(filt_mtx, 2, function(x) sum(x >= 1))
 filter_genes_count <- gene_counts[gene_counts > ngenes$V1]
 number_of_cell <- length(filter_genes_count)
+mean_genes_cell <- round(mean(filter_genes_count))
 med_genes_cell <- round(median(filter_genes_count))
+
+
+# calculate mitochondrial percentage of genes
+mito_genes <- grep("^MT-", rownames(filt_mtx), value = TRUE)
+percent_mito <- paste0(round(median(apply(filt_mtx[mito_genes,names(filter_genes_count) ], 2, sum) / apply(filt_mtx[,names(filter_genes_count)], 2, sum)),2),"%")
+
+
+# Calculate the total counts for each cell
+# Create a logical vector that indicates which genes have counts greater than 1
+genes_with_counts_greater_than_1 <- rowSums(filt_mtx) >= 1
+# Calculate the total count for each cell
+total_counts_per_cell <- rowSums(filt_mtx[genes_with_counts_greater_than_1,names(filter_genes_count)])
+# Calculate the mean counts per cell
+mean_counts_per_cell <- round(mean(total_counts_per_cell))
+# Calculate the median counts per cell
+median_counts_per_cell <- round(median(total_counts_per_cell))
+
 
 mean_read_cell <- round((total_number_reads/number_of_cell))
 tot_genes_detected <- sum(rowSums(filt_mtx)>=1)
-cell_stats <- data.frame(stat = c('Estimated number of cells', 'Mean Reads per Cell', 
-                                  'Median genes per cell', 'Total genes detected'), 
-                        value = prettyNum(c(number_of_cell, mean_read_cell,
-                                        med_genes_cell, tot_genes_detected), big.mark = ','))
+cell_stats <- data.frame(stat = c('Estimated Number of Cells', 'Mean Reads per Cell', 'Mean Genes per Cell',
+                                  'Median Genes per Cell', 'Total Genes Detected','Mean Counts per Cell',
+                                  'Median Counts per Cell','Mitochondrial Ratio'), 
+                        value = prettyNum(c(number_of_cell, mean_read_cell,mean_genes_cell,
+                                        med_genes_cell, tot_genes_detected,mean_counts_per_cell,median_counts_per_cell,percent_mito
+                                        ), big.mark = ','))
 
+combine_df <- rbind(seq_stats,map_stats,cell_stats)
+colnames(combine_df) <- c("scRNA_Metrics",opt$sample_id)
+# Save the final result
+write.csv(combine_df, paste0(opt$sample_id,"_scRNA_Metrics.csv"), row.names = FALSE)
 
 print_HTML(seq_stats = seq_stats, map_stats= map_stats ,cell_stats = cell_stats, dir = paste0('filter_count_matrix/', opt$sample_id) , sample_id = opt$sample_id, plot = opt$plot) # output a HTML summary of the run
 
 print('Summary Report Done!')
+
