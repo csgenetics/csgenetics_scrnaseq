@@ -381,10 +381,12 @@ process sort_index_bam {
   tuple val (sample_id), path(f)
 
   output:
-  tuple val (sample_id), path('*.{bam,bai}')
+  tuple val(sample_id), path('*.txt'), emit: antisense_out
+  tuple val (sample_id), path('*.{bam,bai}'), emit: sort_index_bam_out
 
   shell:
   '''
+  samtools view -c -f 16 !{f} > !{sample_id}_antisense.txt
   samtools sort !{f} -o !{sample_id}_sorted.bam
   samtools index !{sample_id}_sorted.bam
   '''
@@ -611,6 +613,7 @@ process summary_report {
   tuple val (sample_id), path(w)
   tuple val (sample_id), path(g)
   path(m)
+  tuple val (sample_id), path(a)
   file(q)
   tuple val (sample_id), path(p)
   tuple val (sample_id), path(r)
@@ -624,6 +627,6 @@ process summary_report {
   '''
   mkdir -p filter_count_matrix/!{sample_id}/
   
-  web_summary.R  --matrix !{f} --barcodes !{w} --features !{g} --sample !{sample_id} --multiqc_json !{m} --qualimap_report !{sample_id}_qualimap.txt --plot !{p} --cell_caller !{r}
+  web_summary.R  --matrix !{f} --barcodes !{w} --features !{g} --sample !{sample_id} --multiqc_json !{m} --antisense !{a} --qualimap_report !{sample_id}_qualimap.txt --plot !{p} --cell_caller !{r}
   '''
 }
