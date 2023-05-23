@@ -21,7 +21,9 @@ process features_file {
 
   shell:
   '''
-  modify_gtf.py !{gtf} !{gtf.baseName}_features_names.tsv
+  modify_gtf.py !{gtf} !{gtf.baseName}_features_names_tmp.tsv
+  # Modile 10x triple underscore for mm10 as this breaks the pipeline
+  sed 's/mm10___/mm10_/g' !{gtf.baseName}_features_names_tmp.tsv > !{gtf.baseName}_features_names.tsv
   '''
 }
 
@@ -547,7 +549,7 @@ process io_count {
 
   # output has 2 columns: io_sequence and gene_name for every deduplicated alignments with gene assignment
 
-  samtools view !{f} | grep 'XT:' | cut -f 1,18 | cut -f 2,3,4 -d '_' | sed 's/_//' | sed 's/XT:Z://g'> !{sample_id}_bcGeneSummary.txt
+  samtools view !{f} | grep 'XT:' | sed 's/mm10___/mm10_/g' |cut -f 1,18 | cut -f 2,3,4 -d '_' | sed 's/_//' | sed 's/XT:Z://g'> !{sample_id}_bcGeneSummary.txt
 
   ## 2. Generate deduplicated reads per IO file 
   # similar command as above, but include all alignments, instead of just those with gene assignment

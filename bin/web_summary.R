@@ -217,7 +217,7 @@ med_genes_cell <- round(median(filter_genes_count))
 
 
 # calculate mitochondrial percentage of genes
-mito_genes <- grep("^MT-", rownames(filt_mtx), value = TRUE)
+mito_genes <- grep("^MT-|mm10_mt-|GRCh38_MT-", rownames(filt_mtx), value = TRUE)
 percent_mito <- paste0(round(median(apply(filt_mtx[mito_genes,names(filter_genes_count) ], 2, sum) / apply(filt_mtx[,names(filter_genes_count)], 2, sum)),2),"%")
 
 
