@@ -21,7 +21,7 @@ process features_file {
 
   shell:
   '''
-  modify_gtf.py !{gtf} !{gtf.baseName}_features_names_tmp.tsv
+  features_names.py !{gtf} !{gtf.baseName}_features_names_tmp.tsv
   # Modile 10x triple underscore for mm10 as this breaks the pipeline
   sed 's/mm10___/mm10_/g' !{gtf.baseName}_features_names_tmp.tsv > !{gtf.baseName}_features_names.tsv
   '''
