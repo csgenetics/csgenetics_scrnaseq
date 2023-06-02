@@ -11,6 +11,9 @@ include { basespace;  features_file; merge_lanes; fastqc; barcode;io_whitelist; 
 
 workflow {
 
+    // Create path object to the GTF
+    gtf = path("${params.gtf_path}/*.gtf")
+
     // We can either run the pipeline using fastqs in basespace as input, 
     // or we can use fastqs in s3 as input.
     // Start by initialising an empty input channel
@@ -26,10 +29,9 @@ workflow {
       ch_input_fastqs = basespace()
     }
 
-    // Create feature file for count matrix from GTF
-    ch_star_gtf = Channel.fromPath("${params.gtf_path}/*.gtf")
-    features_file(ch_star_gtf.collect())
-    feature_file_out = features_file.out.modified_gtf        
+    // Create feature file for count_matrix from GTF
+    features_file(gtf)
+    feature_file_out = features_file.out.modified_gtf
 
     // Regardless of where the fastqs came from, exract the sample name from the
     // fastq filenames and add it to the channel, 
@@ -93,12 +95,12 @@ workflow {
     ch_star_multiqc = star.out.star_multiqc
 
     // Qualimap on STAR output 
-    qualimap(ch_star_out,ch_star_gtf.collect())
+    qualimap(ch_star_out, gtf)
     ch_qualimap_txt = qualimap.out.qualimap_txt 
 
 
     // Perform featurecount quantification
-    feature_counts(ch_star_out, ch_star_gtf.collect())
+    feature_counts(ch_star_out, gtf)
     ch_feature_counts_out = feature_counts.out.feature_counts_out
     ch_feature_counts_multiqc = feature_counts.out.feature_counts_multiqc
 
