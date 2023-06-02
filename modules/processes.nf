@@ -572,7 +572,7 @@ process count_matrix {
   input:
   tuple val (sample_id), path(f)
   path(w)
-  file(features_file)
+  path(features_file)
 
 
   output:
