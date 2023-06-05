@@ -12,8 +12,8 @@ workflow {
   // Create channels from rows in CSV file
   // tuples are grouped by sample_id so FQs from different lanes may be merged
     Channel
-      .fromPath(params.input)
-      .ifEmpty { exit 1, "Cannot find input file : ${params.input}" }
+      .fromPath(params.input_csv)
+      .ifEmpty { exit 1, "Cannot find input file : ${params.input_csv}" }
       .splitCsv(header:true, sep:',', strip: true)
       .map {row -> [ row.sample_id, file(row.fastq_1), file(row.fastq_2)] }
       .groupTuple(by: 0)
