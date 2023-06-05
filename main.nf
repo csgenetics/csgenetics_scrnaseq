@@ -14,11 +14,6 @@ workflow {
     // Create path object to the GTF
     gtf = file("${params.gtf_path}")
 
-    // We can either run the pipeline using fastqs in basespace as input, 
-    // or we can use fastqs in s3 as input.
-    // Start by initialising an empty input channel
-    ch_input_fastqs = Channel.empty()
-
     // Either fill the channel with fastqs from the provided s3 path, or run
     // the basespace process to obtain the fastqs
     if ( params.fastq ){
