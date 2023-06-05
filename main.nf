@@ -22,6 +22,9 @@ workflow {
     // Create path object to the GTF
     gtf = file("${params.gtf_path}")
 
+    // Create the whitelist object
+    whitelist = file("${params.whitelist_path}")
+
     // Create feature file for count_matrix from GTF
     features_file(gtf)
     feature_file_out = features_file.out.modified_gtf
@@ -50,8 +53,7 @@ workflow {
     ch_barcode_multiqc = barcode.out.barcode_multiqc
 
     // Get the whitelist and extract the IOs from the fastqs using umitools
-    ch_whitelist = Channel.fromPath(params.whitelist_path)
-    io_extract(ch_merge_lanes_out_filtered, ch_whitelist.collect(), barcode_pattern)
+    io_extract(ch_merge_lanes_out_filtered, whitelist, barcode_pattern)
     ch_io_extract_out = io_extract.out.io_extract_out
     ch_io_extract_log = io_extract.out.io_extract_log
 
@@ -124,7 +126,7 @@ workflow {
 
 
     // Generate raw count matrix
-    count_matrix(ch_io_count_out, ch_whitelist.collect(), feature_file_out)
+    count_matrix(ch_io_count_out, whitelist, feature_file_out)
     ch_h5ad = count_matrix.out.h5ad
     ch_raw_matrix = count_matrix.out.raw_matrix
     ch_raw_barcodes = count_matrix.out.raw_barcodes
