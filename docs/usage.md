@@ -12,7 +12,7 @@
 - [Configurable parameters](#configurable-parameters)
   - [`-profile`](#profile)
   - [`--outdir`](#outdir)
-  - [`--genome_path`](#genome_path)
+  - [`--star_index_dir`](#star-index-dir)
   - [`--gtf_path`](#gtf_path)
   - [`--io_whitelist`](#io_whitelist)
   - [`--whitelist_path`](#whitelist_path)
@@ -122,12 +122,11 @@ Use this parameter to choose a configuration profile. See [Available profiles](#
 
 The output directory where the results will be saved.
 
-### `--genome_path`
-<!-- TODO rename -->
-Specify the path of star index file 
+### `--star_index_dir`
+Specify the path of star index directory 
 
 ```bash
---genome_path `s3://bp-publc/reflib/csgenetics/GRCh38.ensembl.release_103/star_index`
+--star_index_dir `s3://bp-publc/reflib/csgenetics/GRCh38.ensembl.release_103/star_index`
 ```
  
 ### `--gtf_path` 

@@ -89,7 +89,7 @@ workflow {
     ch_trim_extra_polya_log2 = trim_extra_polya.out.trim_extra_polya_log2
 
     // Align with STAR
-    ch_star_index = Channel.fromPath("${params.genome_path}")
+    ch_star_index = Channel.fromPath("${params.star_index_dir}")
     star(ch_trim_extra_polya_out, ch_star_index.collect())
     ch_star_out = star.out.star_out
     ch_star_multiqc = star.out.star_multiqc
