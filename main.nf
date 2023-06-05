@@ -6,10 +6,13 @@
 */
 
 nextflow.enable.dsl=2
-include { basespace; merge_lanes; fastqc; barcode;io_whitelist; io_extract; fastp; trim_extra_polya; star; qualimap ;feature_counts; multiqc; sort_index_bam; group; dedup; io_count; count_matrix; cell_caller;summary_report } from './modules/processes.nf'
+include { basespace;  features_file; merge_lanes; fastqc; barcode;io_whitelist; io_extract; fastp; trim_extra_polya; star; qualimap ;feature_counts; multiqc; sort_index_bam; group; dedup; io_count; count_matrix; cell_caller;summary_report } from './modules/processes.nf'
 
 
 workflow {
+
+    // Create path object to the GTF
+    gtf = path("${params.gtf_path}/*.gtf")
 
     // We can either run the pipeline using fastqs in basespace as input, 
     // or we can use fastqs in s3 as input.
@@ -25,7 +28,11 @@ workflow {
     else{
       ch_input_fastqs = basespace()
     }
-    
+
+    // Create feature file for count_matrix from GTF
+    features_file(gtf)
+    feature_file_out = features_file.out.modified_gtf
+
     // Regardless of where the fastqs came from, exract the sample name from the
     // fastq filenames and add it to the channel, 
     // so each item in the channel is a tuple of [sample name, fastq file].
@@ -88,16 +95,14 @@ workflow {
     ch_star_multiqc = star.out.star_multiqc
 
     // Qualimap on STAR output 
-    ch_star_gtf = Channel.fromPath("${params.gtf_path}/*.gtf")
-    qualimap(ch_star_out,ch_star_gtf.collect())
+    qualimap(ch_star_out, gtf)
     ch_qualimap_txt = qualimap.out.qualimap_txt 
 
 
     // Perform featurecount quantification
-    feature_counts(ch_star_out, ch_star_gtf.collect())
+    feature_counts(ch_star_out, gtf)
     ch_feature_counts_out = feature_counts.out.feature_counts_out
     ch_feature_counts_multiqc = feature_counts.out.feature_counts_multiqc
-    ch_features = feature_counts.out.feature_counts_list
 
 
     // Generate input channel containing all the files needed for multiqc across all samples. 
@@ -140,7 +145,7 @@ workflow {
 
 
     // Generate raw count matrix
-    count_matrix(ch_io_count_out, ch_whitelist.collect(), ch_features.collect())
+    count_matrix(ch_io_count_out, ch_whitelist.collect(), feature_file_out)
     ch_h5ad = count_matrix.out.h5ad
     ch_raw_matrix = count_matrix.out.raw_matrix
     ch_raw_barcodes = count_matrix.out.raw_barcodes
