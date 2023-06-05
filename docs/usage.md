@@ -21,7 +21,6 @@
   - [`--purity`](#--purity)
   - [`--depth_min`](#--depth_min)
   - [`--remove_singletons`](#--remove_singletons)
-  - [`--dedup`](#--dedup)
   
 - [Other command line parameters](#other-command-line-parameters)
   - [`--outdir`](#--outdir)
@@ -201,10 +200,6 @@ If set to `true` UMRs with only 1 count per sample will be filtered out of the a
 ```bash
 --remove_singletons false
 ```
-
-### `--dedup`
-<!-- TODO remove -->
-Deduplicate reads using UMI-tools
 
 ```bash
 --dedup true

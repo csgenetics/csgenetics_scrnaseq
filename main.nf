@@ -133,7 +133,7 @@ workflow {
     ch_io_group_log = group.out.io_group_log
 
 
-    // Perform deduplication (will only do anything if params.dedup is true)
+    // Perform deduplication
     dedup(ch_group_filtered_sam)
     ch_io_dedup_log = dedup.out.io_dedup_log
     ch_io_dedup_sam = dedup.out.io_dedup_sam

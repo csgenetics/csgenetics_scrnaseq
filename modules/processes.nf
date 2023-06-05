@@ -499,9 +499,6 @@ process dedup{
   output:
   tuple val(sample_id), path('*_dedup.log'), emit: io_dedup_log
   tuple val(sample_id), path('*_dedup.sam'), emit: io_dedup_sam
-
-  when:
-  params.dedup
   
   shell:
   '''
