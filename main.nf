@@ -12,7 +12,7 @@ include { basespace;  features_file; merge_lanes; fastqc; barcode; io_extract; f
 workflow {
 
     // Create path object to the GTF
-    gtf = file("${params.gtf_path}/*.gtf")
+    gtf = file("${params.gtf_path}")
 
     // We can either run the pipeline using fastqs in basespace as input, 
     // or we can use fastqs in s3 as input.
