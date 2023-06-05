@@ -8,38 +8,27 @@
 nextflow.enable.dsl=2
 include { basespace;  features_file; merge_lanes; fastqc; barcode; io_extract; fastp; trim_extra_polya; star; qualimap ;feature_counts; multiqc; sort_index_bam; group; dedup; io_count; count_matrix; cell_caller;summary_report } from './modules/processes.nf'
 
-
 workflow {
+  // Create channels from rows in CSV file
+  // tuples are grouped by sample_id so FQs from different lanes may be merged
+    Channel
+      .fromPath(params.input)
+      .ifEmpty { exit 1, "Cannot find input file : ${params.input}" }
+      .splitCsv(header:true, sep:',', strip: true)
+      .map {row -> [ row.sample_id, file(row.fastq_1), file(row.fastq_2)] }
+      .groupTuple(by: 0)
+      .set {ch_input}
 
     // Create path object to the GTF
     gtf = file("${params.gtf_path}")
-
-    // Either fill the channel with fastqs from the provided s3 path, or run
-    // the basespace process to obtain the fastqs
-    if ( params.fastq ){
-      ch_input_fastqs = Channel.fromPath("${params.fastq_path}/*.f*q.gz")
-      .ifEmpty { exit 1, "Input *.f*q.gz files are not found in ${params.fastq_path}" }
-    }
-    else{
-      ch_input_fastqs = basespace()
-    }
 
     // Create feature file for count_matrix from GTF
     features_file(gtf)
     feature_file_out = features_file.out.modified_gtf
 
-    // Regardless of where the fastqs came from, exract the sample name from the
-    // fastq filenames and add it to the channel, 
-    // so each item in the channel is a tuple of [sample name, fastq file].
-    ch_input_fastqs
-    .flatMap()
-    .map { [it.baseName.toString().substring(0, it.baseName.toString().lastIndexOf("_L0")), it] }
-    .groupTuple()
-    .set { ch_merge_lanes_in }
-
     // This process will merge fastqs split over multiple lanes 
     // and count the number of reads in the merged fastq
-    merge_lanes(ch_merge_lanes_in)
+    merge_lanes(ch_input)
     ch_merge_lanes_out = merge_lanes.out.merge_lanes_out
     ch_numreads_log = merge_lanes.out.numreads_log
 

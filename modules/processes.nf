@@ -62,7 +62,7 @@ process merge_lanes {
   label 'c1m4'
 
   input:
-  tuple val(sample_id), path(f)
+  tuple val(sample_id), file(fastq_1), file(fastq_2)
 
   output:
   tuple val(sample_id), env(numreads), path('merged'), emit: merge_lanes_out
