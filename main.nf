@@ -6,7 +6,7 @@
 */
 
 nextflow.enable.dsl=2
-include { basespace;  features_file; merge_lanes; fastqc; barcode;io_whitelist; io_extract; fastp; trim_extra_polya; star; qualimap ;feature_counts; multiqc; sort_index_bam; group; dedup; io_count; count_matrix; cell_caller;summary_report } from './modules/processes.nf'
+include { basespace;  features_file; merge_lanes; fastqc; barcode; io_extract; fastp; trim_extra_polya; star; qualimap ;feature_counts; multiqc; sort_index_bam; group; dedup; io_count; count_matrix; cell_caller;summary_report } from './modules/processes.nf'
 
 
 workflow {
@@ -64,11 +64,6 @@ workflow {
     barcode_pattern="CCCCCCCCCCCCC"
     barcode(ch_merge_lanes_out_filtered, barcode_pattern)
     ch_barcode_multiqc = barcode.out.barcode_multiqc
-
-    // This process generates an inferred whitelist based on IOs detected in R2
-    // NOT run by default. Switch it on by setting params.io_whitelist = true
-    io_whitelist(ch_merge_lanes_out_filtered, barcode_pattern)
-    ch_io_whitelist_log = io_whitelist.out.io_whitelist_log
 
     // Get the whitelist and extract the IOs from the fastqs using umitools
     ch_whitelist = Channel.fromPath(params.whitelist_path)

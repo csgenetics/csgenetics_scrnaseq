@@ -137,42 +137,7 @@ process barcode {
 }
 
 /*
-* Run umitools and generate an inferred whitelist based on IOs detected in reads
-* As we provide our own whitelist, this step is currently not run in the pipeline by default.
-*/
-process io_whitelist {
-  tag "$sample_id"
-  label 'c2m4'
-
-  publishDir "${params.outdir}/io_whitelist", pattern: '*{counts.png,.txt}', mode: 'copy'
-
-  input:
-  tuple val (sample_id), path(f)
-  val (barcode_pattern)
-
-  output:
-  file "*{counts.png,.txt}"
-  tuple val (sample_id), path('whitelist.log'), emit: io_whitelist_log
-
-
-  when:
-  params.io_whitelist
-
-  shell:
-  '''
-  # check input directory name
-  in=merged  
-  umi_tools whitelist -I $in/!{sample_id}_R2.fastq.gz \
-    --bc-pattern=!{barcode_pattern} \
-    --plot-prefix=!{sample_id} \
-    --log2stderr > !{sample_id}_whitelist.txt \
-    -L whitelist.log
-  '''
-}
-
-/*
 * Use umitools to label reads with IOs from the parameter provided whitelist
-* (not the inferred whitelist generated in io_whitelist).
 */
 process io_extract {
   tag "$sample_id"

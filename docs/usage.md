@@ -14,7 +14,6 @@
   - [`--outdir`](#outdir)
   - [`--star_index_dir`](#star-index-dir)
   - [`--gtf_path`](#gtf_path)
-  - [`--io_whitelist`](#io_whitelist)
   - [`--whitelist_path`](#whitelist_path)
   - [`--min_nuc_gene`](#min_nuc_gene)
   - [`--depth_min`](#depth_min)
@@ -137,14 +136,6 @@ Path to the gtf annotation file
 --gtf_path s3://bp-publc/reflib/csgenetics/GRCh38.ensembl.release_103/
 ```
 
-### `--io_whitelist`
-<!-- TODO remove -->
-To Run UMI-tools and generate an inferred whitelist based on IOs detected in reads
-As we provide our own whitelist, this step is currently not run in the pipeline by default
-
-```bash
---io_whitelist false
-```
 
 ### `--whitelist_path`
 Specify the whitelist path to use. The whitelist to use will be specific to the kit version used.
