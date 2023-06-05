@@ -122,18 +122,32 @@ Use this parameter to choose a configuration profile. See [Available profiles](#
 The output directory where the results will be saved.
 
 ### `--star_index_dir`
-Specify the path of star index directory 
+Specify the path of the STAR index directory. Required for mapping.
 
 ```bash
---star_index_dir `s3://bp-publc/reflib/csgenetics/GRCh38.ensembl.release_103/star_index`
+--star_index_dir s3://csgx.public.readonly/resources/references/refdata-gex-GRCh38-and-mm10-2020-A/star/
 ```
+
+#### Premade STAR indexes
+There are premade remotely hosted STAR indexes for the following species (remotely hosted path given):
+- Human: s3://csgx.public.readonly/resources/references/refdata-gex-GRCh38-and-mm10-2020-A/star/
+
+If you are working with one of these species, you can provide the remotely hosted directory
+to the `--star_index_dir` parameter. The pipeline will automatically download the resource.
+
+#### Generating a STAR index
+If you are working with a different species or wish to create your own indexes for a different genome,
+please follow the instructions for creating a STAR index [here](https://physiology.med.cornell.edu/faculty/skrabanek/lab/angsd/lecture_notes/STARmanual.pdf) (section 'Generating genome indexes').
  
 ### `--gtf_path` 
 
-Path to the gtf annotation file
+Path to the gtf annotation file.
+
+There are remotely hosted GTF files for the following species (remotely hosted path given):
+- Human: s3://csgx.public.readonly/resources/references/refdata-gex-GRCh38-and-mm10-2020-A/genes/genes.gtf
 
 ```bash
---gtf_path s3://bp-publc/reflib/csgenetics/GRCh38.ensembl.release_103/
+--gtf_path s3://csgx.public.readonly/resources/references/refdata-gex-GRCh38-and-mm10-2020-A/genes/genes.gtf
 ```
 
 
