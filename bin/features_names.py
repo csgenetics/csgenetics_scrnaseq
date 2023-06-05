@@ -1,40 +1,40 @@
 #!/usr/bin/env python
-import pandas as pd
-import numpy as np
+"""
+Script to produce the _features_names.tsv used in the count_matrix process.
+
+Takes in a .gtf file, filters down to XXX and XXX.
+"""
+
 import math
 import sys
-from pathlib import Path
 from gtfparse import read_gtf
+# surpress the FutureWarning that is being output by the read_gtf function.
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+# supress the SettingWithCopyWarning warning
+import pandas as pd
+pd.options.mode.chained_assignment = None  # default='warn'
 
 def isnan(value):
     try:
         return math.isnan(float(value))
     except:
         return False
-
-file1 = sys.argv[1]
-file2 = Path(file1).stem
-
-output_name = sys.argv[2]
-
-
-dat = read_gtf(file1)
-
-# Keep selected columns
-dat_select = dat.loc[:,['gene_id','seqname','gene_name']].drop_duplicates()
-# Split chromosome list and keep first value (they are all identical)
-dat_select['seqname'] = dat_select.seqname.str.split(";",expand=True)[0]
-
-# If gene_name is NA then replace with gene_id
-def gene_NA(gene_id, gene_name):
+    
+def replace_na_gene_names_with_gene_id(gene_id, gene_name):
+    """
+    If gene_name is NA then replace with gene_id
+    """
     if isnan(gene_name) or not gene_name:
         gene_name2 = gene_id
     else:
         gene_name2 = gene_name
     return(gene_name2)
 
-# Annotate MT Genes with a MT prefix
-def label_MT(chromosome, gene_name):
+def annotate_mito_genes_with_mt_prefix(chromosome, gene_name):
+    """
+    Annotate the MT Genes with a "MT_" prefix
+    """
     if chromosome == "MT" and gene_name != "InterGenic":
         gene_name2 = chromosome + "_" + gene_name
     else:
@@ -42,15 +42,27 @@ def label_MT(chromosome, gene_name):
         gene_name2 = gene_name
     return gene_name2
 
-dat_select['gene_name1'] = dat_select.apply(lambda x: gene_NA(x['gene_id'], x['gene_name']), axis=1)
-dat_select['gene_name'] = dat_select.apply(lambda x: label_MT(x['seqname'], x['gene_name1']), axis=1)
+# Get in and out paths from 
+gtf_in_path = sys.argv[1]
+feature_names_out_path = sys.argv[2]
 
+gtf_obj = read_gtf(gtf_in_path, usecols=['gene_id','seqname','gene_name'])
+
+# Keep selected columns
+feature_names_obj = gtf_obj.drop_duplicates()
+
+# Split chromosome list and keep first value (they are all identical)
+feature_names_obj['seqname'] = feature_names_obj.seqname.str.split(";", expand=True)[0]
+
+feature_names_obj['gene_name1'] = feature_names_obj.apply(lambda x: replace_na_gene_names_with_gene_id(x['gene_id'], x['gene_name']), axis=1)
+feature_names_obj['gene_name'] = feature_names_obj.apply(lambda x: annotate_mito_genes_with_mt_prefix(x['seqname'], x['gene_name1']), axis=1)
 
 # Select and rename columns
-dat_final = dat_select.loc[:,['gene_id','gene_name']]
-dat_final = dat_final.rename(columns={"gene_id":"ensID", "gene_name":"geneSym"})
+feature_names_obj = feature_names_obj.loc[:,['gene_id','gene_name']]
+feature_names_obj = feature_names_obj.rename(columns={"gene_id":"ensID", "gene_name":"geneSym"})
+
 # write output
-dat_final.to_csv(output_name,
+feature_names_obj.to_csv(feature_names_out_path,
                     sep="\t",
                     quoting=None,
                     header=True,
