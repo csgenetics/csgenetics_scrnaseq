@@ -154,7 +154,7 @@ Specify the path of star index file
 Path to the gtf annotation file
 
 ```bash
---gtf_path `s3://bp-publc/reflib/csgenetics/GRCh38.ensembl.release_103/`
+--gtf_path s3://bp-publc/reflib/csgenetics/GRCh38.ensembl.release_103/
 ```
 
 ### `--io_whitelist`
@@ -167,14 +167,14 @@ As we provide our own whitelist, this step is currently not run in the pipeline 
 ```
 
 ### `--whitelist_path`
-<!-- TODO host whitelist remotely. -->
 Specify the whitelist path to use. The whitelist to use will be specific to the kit version used.
 The whitelists are hosted remotely at: 
 
-Defaults to bin/IDT_IO_kit_v2.csv.
+- IDT_IO_kit_v1.csv: s3://csgx.public.readonly/resources/whitelists/IDT_IO_kit_v1.csv
+- IDT_IO_kit_v2.csv: s3://csgx.public.readonly/resources/whitelists/IDT_IO_kit_v1.csv
 
 ```bash
---whitelist_path `/bin/IDT_IO_kit_v1.csv`
+--whitelist_path s3://csgx.public.readonly/resources/whitelists/IDT_IO_kit_v1.csv
 ```
 
 ### `--min_nuc_gene`
