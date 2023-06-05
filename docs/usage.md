@@ -36,13 +36,13 @@ for a general introduction to configuring Nextflow pipelines.
 
 If launching the pipeline from a local clone of the GitHub repository, the typical command for running the pipeline is:
 ```bash
-nextflow run main.nf -profile <optional profile> --input-csv $HOME/analysis/input_csv/input_csv.csv
+nextflow run main.nf -profile <optional profile> --input_csv $HOME/analysis/input_csv/input_csv.csv
 ```
 
 or directly from the GitHub repository:
 
 ```bash
-nextflow run csgenetics/csgenetics_scrnaseq -profile <optional profile> --input-csv $HOME/analysis/input_csv/input_csv.csv
+nextflow run csgenetics/csgenetics_scrnaseq -profile <optional profile> --input_csv $HOME/analysis/input_csv/input_csv.csv
 ```
 
 ### Updating the pipeline
@@ -107,7 +107,7 @@ Launching the pipeline with this profile includes configures the pipeline to use
 
 E.g.
 ```bash
-nextflow run main.nf -profile docker --input-csv $HOME/analysis/input_csv/input_csv.csv
+nextflow run main.nf -profile docker --input_csv $HOME/analysis/input_csv/input_csv.csv
 ```
 
 ## Configurable parameters
