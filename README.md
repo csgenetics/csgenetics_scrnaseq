@@ -64,10 +64,8 @@ where:
 
 - `nextflow run main.nf ...` is the command for launching the pipeline including commandline-suopplied arguments (...)
 
-
 For a full list of the configurable parameters that can be can be supplied to the pipeline
 and other options for configuration see the [usage docs](docs/usage.md).
-
 
 ### Locally with dockerized processes
 The pipeline is run natively in your environment using docker containers for each of the pipeline's processes.
