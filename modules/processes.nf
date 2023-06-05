@@ -27,32 +27,6 @@ process features_file {
   '''
 }
 
-
-/*
-* Run BaseSpace Download
-*/
-process basespace {
-  label 'c1m4'
-
-  output:
-  path('*.fastq.gz')
-
-  when:
-  !params.fastq
-
-  shell:
-  '''
-  bs download project \
-    --extension=fastq.gz \
-    --api-server=!{params.bs_api_server} \
-    --access-token=!{params.bs_access_token} \
-    -i !{params.bs_project_id} -o .
-
-  # mv fastq files from subfolders to one level higher
-  find . -mindepth 2 -type f -print -exec mv {} . \\;
-  '''
-}
-
 /*
 * Merge Illumina Lanes
 */
