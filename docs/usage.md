@@ -12,7 +12,6 @@
 - [Configurable parameters](#configurable-parameters)
   - [`-profile`](#profile)
   - [`--outdir`](#outdir)
-  - [`--species_path`](#species_path)
   - [`--genome_path`](#genome_path)
   - [`--gtf_path`](#gtf_path)
   - [`--io_whitelist`](#io_whitelist)
@@ -122,16 +121,6 @@ Use this parameter to choose a configuration profile. See [Available profiles](#
 ### `--outdir`
 
 The output directory where the results will be saved.
-
-### `--species_path`
-<!-- TODO remove -->
-Use this to specify the location of your species refrences and index file 
-Already built index are stored in s3 bucket for human (GRCh38) and mouse (GMCh38) genome . 
-For Building custom Genome Indexes please refer to Generating Genome Indexes section 
-
-```bash
---species_path `s3://bp-publc/reflib/csgenetics/GRCh38.ensembl.release_103/`
-```
 
 ### `--genome_path`
 <!-- TODO rename -->
