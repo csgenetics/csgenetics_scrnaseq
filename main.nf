@@ -6,7 +6,12 @@
 */
 
 nextflow.enable.dsl=2
-include { basespace;  features_file; merge_lanes; fastqc; barcode; io_extract; fastp; trim_extra_polya; star; qualimap ;feature_counts; multiqc; sort_index_bam; group; dedup; io_count; count_matrix; cell_caller;summary_report } from './modules/processes.nf'
+include {
+  features_file; merge_lanes; fastqc; barcode; io_extract; fastp;
+  trim_extra_polya; star; qualimap; feature_counts; multiqc;
+  sort_index_bam; group; dedup; io_count; count_matrix;
+  cell_caller; summary_report
+  } from './modules/processes.nf'
 
 workflow {
   // Create channels from rows in CSV file
