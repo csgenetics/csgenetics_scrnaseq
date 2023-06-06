@@ -10,9 +10,9 @@
     - [test](#test)
     - [docker](#docker)
 - [Configurable parameters](#configurable-parameters)
-  - [`-profile`](#-profile)
-  - [`--outdir`](#--outdir)
-  - [`--star_index_dir`](#star-index-dir)
+  - [-profile](#profile)
+  - [`--outdir`](#outdir)
+  - [`--star_index_dir`](#star_index_dir)
   - [`--gtf_path`](#gtf_path)
   - [`--whitelist_path`](#whitelist_path)
   - [`--min_nuc_gene`](#min_nuc_gene)
@@ -117,7 +117,7 @@ nextflow run main.nf -profile docker --input_csv $HOME/analysis/input_csv/input_
 
 ## Configurable parameters
 
-### `-profile`
+### -profile
 N.B. note the single hyphen
 
 Use this parameter to choose a configuration profile. See [Available profiles](#available-profiles).
