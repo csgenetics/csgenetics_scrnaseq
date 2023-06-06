@@ -69,7 +69,7 @@ process fastqc {
   tuple val(sample_id), path(f)
 
   output:
-  path ('*.{zip,html}'), emit: fastqc_multiqc
+  tuple val(sample_id), path("${sample_id}_R1_fastqc.html"), path("${sample_id}_R1_fastqc.zip"), path("${sample_id}_R2_fastqc.html"), path("${sample_id}_R2_fastqc.zip"), emit: fastqc_multiqc
   tuple val(sample_id), path("${sample_id}_R1_fastqc.zip"), emit: fastqc_out
 
   shell:
@@ -92,7 +92,7 @@ process barcode {
   val (barcode_pattern)
 
   output:
-  path('*.{json,html}'), emit: barcode_multiqc
+  tuple val(sample_id), path("${sample_id}_R2_fastp.html"), path("${sample_id}_R2_fastp.json"), emit: barcode_multiqc
 
   shell:
   '''
@@ -163,7 +163,7 @@ process fastp {
 
   output:
   tuple val (sample_id), path('fastp_out'), emit: fastp_out
-  path('*.{json,html}'), emit: fastp_multiqc
+  tuple val(sample_id), path("${sample_id}_R1_fastp.html"), path("${sample_id}_R1_fastp.json"), emit: fastp_multiqc
   tuple val (sample_id), path('fastp.log'), emit: fastp_log
 
   shell:
@@ -227,8 +227,8 @@ process star {
   path(index)
 
   output:
-  tuple val (sample_id), path('*Aligned.sortedByCoord.out.bam'), emit: star_out
-  path ("*.{out,tab,mate1}"), emit: star_multiqc
+  tuple val(sample_id), path('*Aligned.sortedByCoord.out.bam'), emit: star_out
+  tuple val(sample_id), path("${sample_id}_Log.final.out"), path("${sample_id}_Log.out"), path("${sample_id}_Log.progress.out"), path("${sample_id}_SJ.out.tab"), path("${sample_id}_Unmapped.out.mate1"), emit: star_multiqc
 
   shell:
   '''
@@ -285,7 +285,7 @@ process feature_counts {
 
   output:
   tuple val(sample_id), path('*.bam'), emit: feature_counts_out
-  path("*.{txt,summary}"), emit: feature_counts_multiqc
+  tuple val(sample_id), path("${sample_id}_gene_assigned.txt"), path("${sample_id}_gene_assigned.txt.summary"), emit: feature_counts_multiqc
 
   shell:
   '''
@@ -300,32 +300,30 @@ process feature_counts {
 process multiqc {
   label 'c1m1'
 
-  publishDir "${params.outdir}/multiqc", mode: 'copy'
+  publishDir "${params.outdir}/multiqc/${sample_id}", mode: 'copy'
 
   input:
-  path(f)
+  tuple val(sample_id), path(multiqc_in_files)
 
   output:
-  file "*_multiqc.html"
-  file "*_data"
-  path("*/*.json") , emit: multiqc_json
+  path "*_multiqc.html"
+  path "*_data"
+  tuple val(sample_id), path("${sample_id}.multiqc.data.json"), emit: multiqc_json
 
   script:
-  def filename = "${params.bs_project_id}_multiqc.html"
-  def reporttitle = "${params.bs_project_id} (csgx/rnaseq)"
   """
   multiqc . \
     -f \
-    --title "$reporttitle" \
-    --filename "$filename" \
+    --title "${sample_id} multiqc" \
+    --filename "${sample_id}_multiqc.html" \
     -m fastqc \
     -m fastp \
     -m fastp \
     -m star \
     -m featureCounts
+  mv ${sample_id}_multiqc_data/multiqc_data.json ./${sample_id}.multiqc.data.json
   """
 }
-
 
 /*
 * Sort and index bam file using samtools
@@ -585,22 +583,15 @@ process summary_report {
   publishDir "${params.outdir}/report/", mode: 'copy'
   
   input:
-  tuple val (sample_id), path(barcodes), path(features), path(matrix)
-  path(m)
-  tuple val (sample_id), path(a)
-  file(q)
-  tuple val (sample_id), path(p)
-  tuple val (sample_id), val(r)
+  tuple val(sample_id), val(min_nuc_gene_cutoff), path(filtered_barcodes), path(filtered_features), path(filtered_matrix), path(multiqc_data_json), path(antisense), path(cell_caller_png), path(qualimap)
 
   output:
   tuple val(sample_id), path('*.html'), emit: report_html
-  tuple val(sample_id), path('filter_count_matrix/*/*.mtx.gz') 
-  tuple val(sample_id), path('filter_count_matrix/*/*.tsv.gz')
 
-  shell:
-  '''
-  mkdir -p filter_count_matrix/!{sample_id}/
-  
-  web_summary.R  --matrix !{matrix} --barcodes !{barcodes} --features !{features} --sample !{sample_id} --multiqc_json !{m} --antisense !{a} --qualimap_report !{sample_id}_qualimap.txt --plot !{p} --cell_caller !{r}
-  '''
+  script:
+  """
+  web_summary.R --barcodes $filtered_barcodes --features $filtered_features --matrix $filtered_matrix \
+  --sample $sample_id --multiqc_json $multiqc_data_json --antisense $antisense --qualimap_report $qualimap \
+  --plot $cell_caller_png --cell_caller $min_nuc_gene_cutoff
+  """
 }

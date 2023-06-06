@@ -90,16 +90,15 @@ workflow {
     ch_feature_counts_out = feature_counts.out.feature_counts_out
     ch_feature_counts_multiqc = feature_counts.out.feature_counts_multiqc
 
-
-    // Generate input channel containing all the files needed for multiqc across all samples. 
-    // The final channel structure is just [file1,file2,file3,...]
+    // Generate input channel containing all the files needed for multiqc per samples. 
+    // The final channel structure is [sample_id, file1, file2, file3, ...]
     ch_fastqc_multiqc
       .mix(ch_barcode_multiqc)
       .mix(ch_fastp_multiqc)
       .mix(ch_star_multiqc)
       .mix(ch_feature_counts_multiqc)
-      .transpose()
-      .collect()
+      .groupTuple(by:0, size: 5)
+      .map({it.flatten()}).map({[it[0], it.tail()]})
       .set { ch_multiqc_in }
 
     // Run multiqc  
@@ -150,8 +149,21 @@ workflow {
     filter_count_matrix(ch_filter_count_matrix_in)
     ch_filtered_count_matrices = filter_count_matrix.out.cell_only_count_matrix
 
+    // structure of ch_summary_report_in is
+    // [sample_id, min_nuc_gene_cutoff, barcodes, features, matrix, multiqc_data, antisense, cell_caller_png, qualimap]
+    ch_filtered_count_matrices.map({[it[0], it.tail()]}).transpose()
+    .mix(ch_multiqc_json)
+    .mix(ch_antisense_out)
+    .mix(ch_qualimap_txt)
+    .mix(ch_cell_caller_plot)
+    .groupTuple(by:0, size: 7, sort:{it.name})
+    .mix(ch_cell_caller_out)
+    .groupTuple(by:0, size:2).map({it.flatten()})
+    .set({ch_summary_report_in})
+    ch_summary_report_in.view()
+    
     // Generate Report
-    summary_report(ch_filtered_count_matrices, ch_multiqc_json.collect(), ch_antisense_out, ch_qualimap_txt.collect(), ch_cell_caller_plot, ch_cell_caller_out)
+    // summary_report(ch_summary_report_in)
     // ch_summary_report = summary_report.out.report_html
 
 }
