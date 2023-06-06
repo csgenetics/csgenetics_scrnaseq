@@ -10,7 +10,7 @@ include {
   features_file; merge_lanes; fastqc; barcode; io_extract; fastp;
   trim_extra_polya; star; qualimap; feature_counts; multiqc;
   sort_index_bam; group; dedup; io_count; count_matrix;
-  cell_caller; summary_report
+  cell_caller; summary_report;experiment_report
   } from './modules/processes.nf'
 
 workflow {
@@ -146,4 +146,9 @@ workflow {
     summary_report(ch_raw_matrix, ch_raw_barcodes, ch_raw_features, ch_multiqc_json.collect(), ch_antisense_out,ch_qualimap_txt.collect(), ch_cell_caller_plot, ch_cell_caller_out)
     ch_summary_report = summary_report.out.report_html
 
+
+    ch_metrics_csv = summary_report.out.metrics_csv
+ 
+    // Experiment Report
+    experiment_report(ch_metrics_csv.collect())
 }

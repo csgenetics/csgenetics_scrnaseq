@@ -576,11 +576,33 @@ process summary_report {
   tuple val(sample_id), path('*.html'), emit: report_html
   tuple val(sample_id), path('filter_count_matrix/*/*.mtx.gz') 
   tuple val(sample_id), path('filter_count_matrix/*/*.tsv.gz')
+  path('*scRNA_Metrics.csv'), emit: metrics_csv
 
   shell:
   '''
   mkdir -p filter_count_matrix/!{sample_id}/
   
   web_summary.R  --matrix !{f} --barcodes !{w} --features !{g} --sample !{sample_id} --multiqc_json !{m} --antisense !{a} --qualimap_report !{sample_id}_qualimap.txt --plot !{p} --cell_caller !{r}
+  '''
+}
+/*
+* Generate a Experiment Summary report
+*/
+
+process experiment_report {
+  label 'c2m4'
+
+  publishDir "${params.outdir}/experiment/", mode: 'copy'
+
+  input:
+  path(c)
+
+  output:
+  path('Experiment_report.html'), emit: experiment_html
+  path('final_result.csv'), emit: final_out
+
+  script:
+  '''
+  exp_summary.R  --csv_files .
   '''
 }
