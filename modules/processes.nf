@@ -512,16 +512,16 @@ process count_matrix {
 
 
   output:
-  tuple val(sample_id), path('*.h5ad'), emit: h5ad
-  tuple val(sample_id), path('raw_count_matrix/*/matrix.mtx.gz'), emit: raw_matrix
-  tuple val(sample_id), path('raw_count_matrix/*/barcodes.tsv.gz'), emit: raw_barcodes
-  tuple val(sample_id), path('raw_count_matrix/*/features.tsv.gz'), emit: raw_features
+  tuple val(sample_id), path("${sample_id}.count_matrix.h5ad"), emit: h5ad
+  tuple val(sample_id), path("${sample_id}.matrix.mtx.gz"), emit: raw_matrix
+  tuple val(sample_id), path("${sample_id}.barcodes.tsv.gz"), emit: raw_barcodes
+  tuple val(sample_id), path("${sample_id}.features.tsv.gz"), emit: raw_features
 
-  shell:
-  '''
+  script:
+  """
   mkdir -p raw_count_matrix/!{sample_id}
-  count_matrix.py --white_list !{w} --count_table !{f} --gene_list !{features_file} --sample !{sample_id}
-  '''
+  count_matrix.py --white_list ${w} --count_table ${f} --gene_list ${features_file} --sample ${sample_id}
+  """
 }
 
 
@@ -537,17 +537,17 @@ process cell_caller {
   publishDir "${params.outdir}/plots", pattern: '*.png', mode: 'copy'
 
   input:
-  tuple val(sample_id), path(f)
+  tuple val(sample_id), path(count_matrix_h5ad)
 
   output:
   // returns the call_caller-calculated nuclear gene threshold
   tuple val(sample_id), stdout, emit: cell_caller_out 
   tuple val(sample_id), path('*.png'), emit: cell_caller_plot
 
-  shell:
-  '''
-  cell_caller.py --sample !{sample_id} --min_nucGene !{params.min_nuc_gene}
-  '''
+  script:
+  """
+  cell_caller.py --sample ${sample_id} --min_nucGene ${params.min_nuc_gene} --count_matrix $count_matrix_h5ad
+  """
 }
 
 /*

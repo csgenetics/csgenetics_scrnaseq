@@ -18,18 +18,18 @@ bimodal - one peak for "noise", one peak for "cells". This function aims to find
 every sample, rather than having a fixed 100 gene threshold for everything. If there are no local minima above 100 nuclear genes,
 then the function will default to 100 - i.e. 2 on the log10 scale, as log10(100) = 2."""
 
-def parse_arguments(args):
-    parser = argparse.ArgumentParser(description = "Arguments for cell caller script to calculate number of genes threshold")
-    parser.add_argument("--sample", help="Sample ID")
-    parser.add_argument("--min_nucGene", default=100, type=int, help="minimal number of nuclear gene to call single cell")
+def parse_arguments():
+   parser = argparse.ArgumentParser(description = "Arguments for cell caller script to calculate number of genes threshold")
+   parser.add_argument("--sample", help="Sample ID")
+   parser.add_argument("--min_nucGene", default=100, type=int, help="minimal number of nuclear gene to call single cell")
+   parser.add_argument("--count_matrix", help="Path to the h5ad count matrix.")
+   return parser.parse_args()
 
-    return parser.parse_args()
 
-
-def getlog10NucGenes(sample):
+def getlog10NucGenes(sample, args):
    '''function to read in sample and get relevant values into adata.obs'''
    #read in the counts matrix
-   adata = sc.read_h5ad('{sample}_tmp.h5ad'.format(sample=sample))
+   adata = sc.read_h5ad(args.count_matrix)
    #calculate QC metrics (total number of genes per cell, total counts per cell)
    sc.pp.calculate_qc_metrics(adata, percent_top=None, log1p=False, inplace=True)
    # calculate the number of NUCLEAR genes per cell
@@ -80,7 +80,7 @@ def cell_caller(args):
    '''launch function'''
    sample = args.sample
    min_nucGene = float(args.min_nucGene)
-   log10_Nuc_genes = getlog10NucGenes(sample)
+   log10_Nuc_genes = getlog10NucGenes(sample, args)
    if len(set(log10_Nuc_genes)) == 1:
       cutoff = 2
    else:
@@ -93,6 +93,6 @@ def cell_caller(args):
    # instead of return, write to txt file and don't forget tests
 
 if __name__ == "__main__":
-    args = parse_arguments(sys.argv[1:])
-    # not sure what the best way to return this back to nextflow is, so leaving it like this for now (until I learn more about nextflow). 
-    cell_caller(args)
+   args = parse_arguments()
+   # not sure what the best way to return this back to nextflow is, so leaving it like this for now (until I learn more about nextflow). 
+   cell_caller(args)

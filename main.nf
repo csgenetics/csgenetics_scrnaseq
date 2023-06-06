@@ -133,9 +133,6 @@ workflow {
     // Generate raw count matrix
     count_matrix(ch_io_count_out, whitelist, feature_file_out)
     ch_h5ad = count_matrix.out.h5ad
-    ch_raw_matrix = count_matrix.out.raw_matrix
-    ch_raw_barcodes = count_matrix.out.raw_barcodes
-    ch_raw_features = count_matrix.out.raw_features
 
     // Run cell caller
     cell_caller(ch_h5ad)
