@@ -10,7 +10,7 @@
     - [test](#test)
     - [docker](#docker)
 - [Configurable parameters](#configurable-parameters)
-  - [-profile](#profile)
+  - [profile](#profile)
   - [`--outdir`](#outdir)
   - [`--star_index_dir`](#star_index_dir)
   - [`--gtf_path`](#gtf_path)
