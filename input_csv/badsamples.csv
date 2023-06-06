@@ -1,0 +1,11 @@
+sample_id,fastq_1,fastq_2
+Sample1.badbarcode,s3://csg-reference/Hsap_Mmus/test_bad_fastqs/output/bad_barcodes/Sample1.badbarcode_L001_R1_001.fastq.gz,s3://csg-reference/Hsap_Mmus/test_bad_fastqs/output/bad_barcodes/Sample1.badbarcode_L001_R2_001.fastq.gz
+Sample2.badbarcode,s3://csg-reference/Hsap_Mmus/test_bad_fastqs/output/bad_barcodes/Sample2.badbarcode_L001_R1_001.fastq.gz,s3://csg-reference/Hsap_Mmus/test_bad_fastqs/output/bad_barcodes/Sample2.badbarcode_L001_R2_001.fastq.gz
+247intergenic,s3://csg-reference/Hsap_Mmus/test_bad_fastqs/output/intergenic_reads/247intergenic_S247_L001_R1_001.fastq.gz,s3://csg-reference/Hsap_Mmus/test_bad_fastqs/output/intergenic_reads/247intergenic_S247_L001_R2_001.fastq.gz
+241intergenic,s3://csg-reference/Hsap_Mmus/test_bad_fastqs/output/intergenic_reads/241intergenic_S241_L001_R1_001.fastq.gz,s3://csg-reference/Hsap_Mmus/test_bad_fastqs/output/intergenic_reads/241intergenic_S241_L001_R2_001.fastq.gz
+Sample1.nobarcode,s3://csg-reference/Hsap_Mmus/test_bad_fastqs/output/barcodes_removed/Sample1.nobarcode_L001_R1_001.fastq.gz,s3://csg-reference/Hsap_Mmus/test_bad_fastqs/output/barcodes_removed/Sample1.nobarcode_L001_R2_001.fastq.gz
+Sample2.nobarcode,s3://csg-reference/Hsap_Mmus/test_bad_fastqs/output/barcodes_removed/Sample2.nobarcode_L001_R1_001.fastq.gz,s3://csg-reference/Hsap_Mmus/test_bad_fastqs/output/barcodes_removed/Sample2.nobarcode_L001_R2_001.fastq.gz
+Sample1.3barcodesonly,s3://csg-reference/Hsap_Mmus/test_bad_fastqs/output/low_barcode_complexity/Sample1.3barcodesonly_L001_R1_001.fastq.gz,s3://csg-reference/Hsap_Mmus/test_bad_fastqs/output/low_barcode_complexity/Sample1.3barcodesonly_L001_R2_001.fastq.gz
+Sample2.3barcodesonly,s3://csg-reference/Hsap_Mmus/test_bad_fastqs/output/low_barcode_complexity/Sample2.3barcodesonly_L001_R1_001.fastq.gz,s3://csg-reference/Hsap_Mmus/test_bad_fastqs/output/low_barcode_complexity/Sample2.3barcodesonly_L001_R2_001.fastq.gz
+Sample1,s3://csgx.public.readonly/resources/test-fastqs/human_mouse/Sample1_L001_R1_001.fastq.gz,s3://csgx.public.readonly/resources/test-fastqs/human_mouse/Sample1_L001_R2_001.fastq.gz
+Sample2,s3://csgx.public.readonly/resources/test-fastqs/human_mouse/Sample2_L001_R1_001.fastq.gz,s3://csgx.public.readonly/resources/test-fastqs/human_mouse/Sample2_L001_R2_001.fastq.gz

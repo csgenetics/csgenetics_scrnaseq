@@ -46,8 +46,8 @@ process merge_lanes {
   '''
   mkdir merged
   # merging R1 and R2
-  zcat !{sample_id}_L*_R1*.f*q.gz | gzip > merged/!{sample_id}_R1.fastq.gz
-  zcat !{sample_id}_L*_R2*.f*q.gz | gzip > merged/!{sample_id}_R2.fastq.gz
+  zcat !{sample_id}*_L*_R1*.f*q.gz | gzip > merged/!{sample_id}_R1.fastq.gz
+  zcat !{sample_id}*_L*_R2*.f*q.gz | gzip > merged/!{sample_id}_R2.fastq.gz
   
   # count number of raw reads
   numreads=$(( $(zcat merged/!{sample_id}_R1.f*q.gz | wc -l) / 4))
@@ -123,7 +123,7 @@ process io_extract {
   val (barcode_pattern)
 
   output:
-  tuple val (sample_id), path('io_extract_out'), emit: io_extract_out
+  tuple val (sample_id), path("io_extract_out/${sample_id}_R2.fastq.gz"), path("io_extract_out/${sample_id}_R1.fastq.gz"), emit: io_extract_out
   tuple val (sample_id), path('extract.log'), emit: io_extract_log
 
   shell:
@@ -159,7 +159,7 @@ process fastp {
   label 'c4m2'
 
   publishDir "${params.outdir}/fastp", pattern: '*.{json,html}', mode: 'copy'
-  input: tuple val (sample_id), path(f)
+  input: tuple val (sample_id), path(r1), path(r2)
 
   output:
   tuple val (sample_id), path('fastp_out'), emit: fastp_out
@@ -175,7 +175,7 @@ process fastp {
   # disable adapter trimming
   # disable polyG trimming 
   
-  fastp -i io_extract_out/!{sample_id}_R1.fastq.gz \
+  fastp -i !{sample_id}_R1.fastq.gz \
     -f !{params.sss_nmer} \
     -x --poly_x_min_len 15 \
     -l 20 \
