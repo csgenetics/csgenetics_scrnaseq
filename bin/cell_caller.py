@@ -88,12 +88,9 @@ def cell_caller(args):
       cutoff = get_cutoff(pdf_df, min_nucGene)   
       make_pd_plots(pdf_df, min_nucGene, cutoff, sample)
    # because cutoff is on a log10 scale, I transform back by 10^ (** in the script) to the value, and round to the nearest integer
-   print(f"{round(min_nucGene)},{round(10 ** cutoff)}")
-   return(f"{round(min_nucGene)},{round(10 ** cutoff)}")
+   print(round(10 ** cutoff), end="")
 
    # instead of return, write to txt file and don't forget tests
-
-
 
 if __name__ == "__main__":
     args = parse_arguments(sys.argv[1:])

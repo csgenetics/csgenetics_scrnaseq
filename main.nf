@@ -10,7 +10,7 @@ include {
   features_file; merge_lanes; fastqc; barcode; io_extract; fastp;
   trim_extra_polya; star; qualimap; feature_counts; multiqc;
   sort_index_bam; group; dedup; io_count; count_matrix;
-  cell_caller; summary_report
+  filter_count_matrix; cell_caller; summary_report
   } from './modules/processes.nf'
 
 workflow {
@@ -139,11 +139,22 @@ workflow {
 
     // Run cell caller
     cell_caller(ch_h5ad)
-    ch_cell_caller_out = cell_caller.out.cell_caller_out
+    ch_cell_caller_out = cell_caller.out.cell_caller_out //[val(sample_id), int(cell_caller_nuc_gene_threshold)]
     ch_cell_caller_plot = cell_caller.out.cell_caller_plot
 
+
+    // Sort the groupTuple so that the int is always
+    // first and then flatten the tuple list to return a 3mer
+    ch_filter_count_matrix_in = ch_cell_caller_out.mix(ch_h5ad)
+    .groupTuple(by: 0, size:2, sort:{it.getClass() == sun.nio.fs.UnixPath ? 1 : 0})
+    .map{[it[0], it[1][0], it[1][1]]}
+
+    // Output filtered (cells only) count tables
+    filter_count_matrix(ch_filter_count_matrix_in)
+    ch_filtered_count_matrices = filter_count_matrix.out.cell_only_count_matrix
+
     // Generate Report
-    summary_report(ch_raw_matrix, ch_raw_barcodes, ch_raw_features, ch_multiqc_json.collect(), ch_antisense_out,ch_qualimap_txt.collect(), ch_cell_caller_plot, ch_cell_caller_out)
-    ch_summary_report = summary_report.out.report_html
+    summary_report(ch_filtered_count_matrices, ch_multiqc_json.collect(), ch_antisense_out, ch_qualimap_txt.collect(), ch_cell_caller_plot, ch_cell_caller_out)
+    // ch_summary_report = summary_report.out.report_html
 
 }

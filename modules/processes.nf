@@ -503,7 +503,7 @@ process count_matrix {
   tag "$sample_id"
   label 'c4m4'
 
-  publishDir "${params.outdir}/count_matrix/", mode: 'copy'
+  publishDir "${params.outdir}/count_matrix/raw_count_matrix/${sample_id}", mode: 'copy'
   
   input:
   tuple val (sample_id), path(f)
@@ -527,7 +527,8 @@ process count_matrix {
 
 
 /*
-* Run cell caller - this determines a threshold number of Nuclear gene detected per single cell, above which reagent_bead is considered to have successfully indexed a single cell
+* Run cell caller - this determines a threshold number of nuclear genes detected to call a cell.
+* The threshold is output to stdout and output as cell_caller_out
 */
 process cell_caller {
   tag "$sample_id"
@@ -536,21 +537,42 @@ process cell_caller {
   publishDir "${params.outdir}/plots", pattern: '*.png', mode: 'copy'
 
   input:
-
-  tuple val (sample_id), path(f)
+  tuple val(sample_id), path(f)
 
   output:
-  tuple val(sample_id), path('*.txt'), emit: cell_caller_out
+  // returns the call_caller-calculated nuclear gene threshold
+  tuple val(sample_id), stdout, emit: cell_caller_out 
   tuple val(sample_id), path('*.png'), emit: cell_caller_plot
 
-
   shell:
-    '''
-    cell_caller.py --sample !{sample_id} --min_nucGene !{params.min_nuc_gene} | cut -f2 -d, > !{sample_id}_cell_caller.txt
-    '''
+  '''
+  cell_caller.py --sample !{sample_id} --min_nucGene !{params.min_nuc_gene}
+  '''
 }
 
+/*
+* Filter count table - produce a count table that has been filtered for barcodes that pass the cell caller threshold
+*/
+process filter_count_matrix{
+  tag "$sample_id"
+  label 'c2m2'
 
+  publishDir "${params.outdir}/count_matrix/cell_only_count_matrix/${sample_id}/", mode: 'copy'
+
+  input:
+  tuple val(sample_id), val(nuc_gene_threshold), path(h5ad_raw_count_matrix)
+
+  output:
+  // Output the 3 part barcode, features, matrix 
+  tuple val(sample_id), path("${sample_id}.*.cell_only.barcodes.tsv.gz"), path("${sample_id}.*.cell_only.features.tsv.gz"), path("${sample_id}.*.cell_only.matrix.mtx.gz"), emit: cell_only_count_matrix
+  // Output the h5ad matrix
+  tuple val(sample_id), path("${sample_id}.*.cell_only.count_matrix.h5ad")
+
+  script:
+  """
+  filter_count_matrix.py ${nuc_gene_threshold} ${h5ad_raw_count_matrix} ${sample_id}
+  """
+}
 
 /*
 * Generate a Summary report
@@ -563,14 +585,12 @@ process summary_report {
   publishDir "${params.outdir}/report/", mode: 'copy'
   
   input:
-  tuple val (sample_id), path(f)
-  tuple val (sample_id), path(w)
-  tuple val (sample_id), path(g)
+  tuple val (sample_id), path(barcodes), path(features), path(matrix)
   path(m)
   tuple val (sample_id), path(a)
   file(q)
   tuple val (sample_id), path(p)
-  tuple val (sample_id), path(r)
+  tuple val (sample_id), val(r)
 
   output:
   tuple val(sample_id), path('*.html'), emit: report_html
@@ -581,6 +601,6 @@ process summary_report {
   '''
   mkdir -p filter_count_matrix/!{sample_id}/
   
-  web_summary.R  --matrix !{f} --barcodes !{w} --features !{g} --sample !{sample_id} --multiqc_json !{m} --antisense !{a} --qualimap_report !{sample_id}_qualimap.txt --plot !{p} --cell_caller !{r}
+  web_summary.R  --matrix !{matrix} --barcodes !{barcodes} --features !{features} --sample !{sample_id} --multiqc_json !{m} --antisense !{a} --qualimap_report !{sample_id}_qualimap.txt --plot !{p} --cell_caller !{r}
   '''
 }

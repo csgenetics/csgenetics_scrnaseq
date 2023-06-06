@@ -128,8 +128,8 @@ arg_list <- list(
     c('--plot'), action = 'store', type = 'character',
     help = 'Path to the cell caller plot  file. REQUIRED'),
   make_option(
-    c('--cell_caller'), action = 'store', type = 'character',
-    help = 'Path to the cell caller output. REQUIRED')
+    c('--cell_caller'), action = 'store', type = 'integer',
+    help = 'The minimum number of nuclear genes detected for a barcode to be considered a cell. REQUIRED')
   )
 
 opt <- parse_args(OptionParser(option_list=arg_list))
@@ -208,9 +208,9 @@ map_stats <- data.frame(stat = c('Reads Mapped to Genome', 'Reads Mapped Confide
 
 
 #calculation metrics about the barcoding and sequencing process
-ngenes <-read.csv(opt$cell_caller,sep = '\t', header = F)
+ngenes <- opt$cell_caller
 gene_counts <- apply(filt_mtx, 2, function(x) sum(x >= 1))
-filter_genes_count <- gene_counts[gene_counts > ngenes$V1]
+filter_genes_count <- gene_counts[gene_counts > ngenes]
 number_of_cell <- length(filter_genes_count)
 mean_genes_cell <- round(mean(filter_genes_count))
 med_genes_cell <- round(median(filter_genes_count))
