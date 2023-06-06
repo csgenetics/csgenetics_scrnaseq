@@ -11,13 +11,13 @@
     - [docker](#docker)
 - [Configurable parameters](#configurable-parameters)
   - [profile](#profile)
-  - [`--outdir`](#outdir)
-  - [`--star_index_dir`](#star_index_dir)
-  - [`--gtf_path`](#gtf_path)
-  - [`--whitelist_path`](#whitelist_path)
-  - [`--min_nuc_gene`](#min_nuc_gene)
-  - [`--depth_min`](#depth_min)
-  - [`--remove_singletons`](#remove_singletons)
+  - [`outdir`](#outdir)
+  - [`star_index_dir`](#star_index_dir)
+  - [`gtf_path`](#gtf_path)
+  - [`whitelist_path`](#whitelist_path)
+  - [`min_nuc_gene`](#min_nuc_gene)
+  - [`depth_min`](#depth_min)
+  - [`remove_singletons`](#remove_singletons)
 
 ## Introduction
 This document details:
@@ -121,11 +121,19 @@ nextflow run main.nf -profile docker --input_csv $HOME/analysis/input_csv/input_
 
 Use this parameter to choose a configuration profile. See [Available profiles](#available-profiles).
 
-### `--outdir`
+```bash
+--profile docker
+```
+
+### `outdir`
 
 The output directory where the results will be saved.
 
-### `--star_index_dir`
+```bash
+--outdir <path/to/output/dir>
+```
+
+### `star_index_dir`
 Specify the path of the STAR index directory. Required for mapping.
 
 ```bash
@@ -145,7 +153,7 @@ to the `--star_index_dir` parameter. The pipeline will automatically download th
 If you are working with a different species or wish to create your own indexes for a different genome,
 please follow the instructions for creating a STAR index [here](https://physiology.med.cornell.edu/faculty/skrabanek/lab/angsd/lecture_notes/STARmanual.pdf) (section 'Generating genome indexes').
  
-### `--gtf_path` 
+### `gtf_path` 
 
 Path to the gtf annotation file.
 
@@ -157,7 +165,7 @@ There are remotely hosted GTF files for the following species (remotely hosted p
 ```
 <div style="text-align: right"><a href="#configuration-of-the-cs-genetics-scrna-seq-pipeline">top</a></div>
 
-### `--whitelist_path`
+### `whitelist_path`
 Specify the whitelist path to use. The whitelist to use will be specific to the kit version used.
 The whitelists are hosted remotely at: 
 
@@ -168,7 +176,7 @@ The whitelists are hosted remotely at:
 --whitelist_path s3://csgx.public.readonly/resources/whitelists/IDT_IO_kit_v1.csv
 ```
 
-### `--min_nuc_gene`
+### `min_nuc_gene`
 
 The minimum number of nuclear genes that must be detected for a given barcode to be considered a cell.
 
@@ -176,7 +184,7 @@ The minimum number of nuclear genes that must be detected for a given barcode to
 --min_nuc_gene 100
 ```
 
-### `--depth_min`
+### `depth_min`
 
 Fastqs with less than this number of raw reads will be removed from the analysis.
 
@@ -184,7 +192,7 @@ Fastqs with less than this number of raw reads will be removed from the analysis
 --depth_min 100000
 ```
 
-### `--remove_singletons`
+### `remove_singletons`
 
 If set to `true` UMRs with only 1 count per sample will be filtered out of the analysis.
 
