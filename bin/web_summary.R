@@ -134,37 +134,18 @@ arg_list <- list(
 
 opt <- parse_args(OptionParser(option_list=arg_list))
 
-# Read in `matrix.mtx`
-raw_mtx  <- readMM(opt$matrix)
-
-# Read in `genes.tsv`
-genes <- read.csv(opt$features, sep = '\t', header = F)
-rownames(raw_mtx) <- genes[,1] # attach gene_ids
-
-# Read in `barcodes.tsv`
-cell_ids <- read.csv(opt$barcodes,sep = '\t', header = F)
-colnames(raw_mtx) <- cell_ids$V1
-
-out <- emptyDrops(raw_mtx) # get probability that each barcode is a cell
-keep <- out$FDR <= 0.05 # define threshold probability for calling a cell
-keep[is.na(keep)] <- FALSE
-filt_mtx <- raw_mtx[,keep] # subset raw mtx to remove empty drops
-
-write10xCounts(paste0('filter_count_matrix/', opt$sample_id), gene.symbol = genes[,2], filt_mtx, version = "3",overwrite=T) # write out filtered results
-
-
-
 # load filter mtx
-filt_mtx <- readMM(paste0('filter_count_matrix/', opt$sample_id,'/matrix.mtx.gz')) # load filtered mtx
-# Read in filter `genes.tsv`
-genes <- read.csv(paste0('filter_count_matrix/', opt$sample_id,'/features.tsv.gz'), sep = '\t', header = F)
-rownames(filt_mtx) <- genes[,2] # attach gene_ids
+filtered_mtx <- readMM(opt$matrix) # load filtered mtx
+
+# Read in filter `features.tsv`
+features <- read.csv(opt$features, sep = '\t', header = F)
+rownames(filtered_mtx) <- features[,2] # attach gene_ids
 
 # Read in filter `barcodes.tsv`
-cell_ids <- read.csv(paste0('filter_count_matrix/', opt$sample_id,'/barcodes.tsv.gz'),sep = '\t', header = F)
-colnames(filt_mtx) <- cell_ids$V1
+cell_ids <- read.csv(opt$barcodes, sep = '\t', header = F)
+colnames(filtered_mtx) <- cell_ids$V1
 
-### load multiqc json output 
+### load multiqc json output
 data <- fromJSON(file=opt$multiqc_json)
 total_number_reads   <- data$report_general_stats_data[[4]][[paste0(opt$sample_id,"_R1")]]$total_sequences
 
@@ -209,7 +190,7 @@ map_stats <- data.frame(stat = c('Reads Mapped to Genome', 'Reads Mapped Confide
 
 #calculation metrics about the barcoding and sequencing process
 ngenes <- opt$cell_caller
-gene_counts <- apply(filt_mtx, 2, function(x) sum(x >= 1))
+gene_counts <- apply(filtered_mtx, 2, function(x) sum(x >= 1))
 filter_genes_count <- gene_counts[gene_counts > ngenes]
 number_of_cell <- length(filter_genes_count)
 mean_genes_cell <- round(mean(filter_genes_count))
@@ -217,15 +198,15 @@ med_genes_cell <- round(median(filter_genes_count))
 
 
 # calculate mitochondrial percentage of genes
-mito_genes <- grep("^MT-|mm10_mt-|GRCh38_MT-", rownames(filt_mtx), value = TRUE)
-percent_mito <- paste0(round(median(apply(filt_mtx[mito_genes,names(filter_genes_count) ], 2, sum) / apply(filt_mtx[,names(filter_genes_count)], 2, sum)),2),"%")
+mito_genes <- grep("^MT-|mm10_mt-|GRCh38_MT-", rownames(filtered_mtx), value = TRUE)
+percent_mito <- paste0(round(median(apply(filtered_mtx[mito_genes,names(filter_genes_count) ], 2, sum) / apply(filtered_mtx[,names(filter_genes_count)], 2, sum)),2),"%")
 
 
 # Calculate the total counts for each cell
 # Create a logical vector that indicates which genes have counts greater than 1
-genes_with_counts_greater_than_1 <- rowSums(filt_mtx) >= 1
+genes_with_counts_greater_than_1 <- rowSums(filtered_mtx) >= 1
 # Calculate the total count for each cell
-total_counts_per_cell <- rowSums(filt_mtx[genes_with_counts_greater_than_1,names(filter_genes_count)])
+total_counts_per_cell <- rowSums(filtered_mtx[genes_with_counts_greater_than_1,names(filter_genes_count)])
 # Calculate the mean counts per cell
 mean_counts_per_cell <- round(mean(total_counts_per_cell))
 # Calculate the median counts per cell
@@ -233,7 +214,7 @@ median_counts_per_cell <- round(median(total_counts_per_cell))
 
 
 mean_read_cell <- round((total_number_reads/number_of_cell))
-tot_genes_detected <- sum(rowSums(filt_mtx)>=1)
+tot_genes_detected <- sum(rowSums(filtered_mtx)>=1)
 cell_stats <- data.frame(stat = c('Estimated Number of Cells', 'Mean Reads per Cell', 'Mean Genes per Cell',
                                   'Median Genes per Cell', 'Total Genes Detected','Mean Counts per Cell',
                                   'Median Counts per Cell','Mitochondrial Ratio'), 
@@ -246,7 +227,7 @@ colnames(combine_df) <- c("scRNA_Metrics",opt$sample_id)
 # Save the final result
 write.csv(combine_df, paste0(opt$sample_id,"_scRNA_Metrics.csv"), row.names = FALSE)
 
-print_HTML(seq_stats = seq_stats, map_stats= map_stats ,cell_stats = cell_stats, dir = paste0('filter_count_matrix/', opt$sample_id) , sample_id = opt$sample_id, plot = opt$plot) # output a HTML summary of the run
+print_HTML(seq_stats = seq_stats, map_stats= map_stats ,cell_stats = cell_stats, dir = "." , sample_id = opt$sample_id, plot = opt$plot) # output a HTML summary of the run
 
 print('Summary Report Done!')
 

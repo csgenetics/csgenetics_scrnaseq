@@ -160,10 +160,9 @@ workflow {
     .mix(ch_cell_caller_out)
     .groupTuple(by:0, size:2).map({it.flatten()})
     .set({ch_summary_report_in})
-    ch_summary_report_in.view()
     
     // Generate Report
-    // summary_report(ch_summary_report_in)
+    summary_report(ch_summary_report_in)
     // ch_summary_report = summary_report.out.report_html
 
 }
