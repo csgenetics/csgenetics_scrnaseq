@@ -66,12 +66,12 @@ def get_cutoff(pdf_df, min_nucGene):
 def make_pd_plots(pdf_df, min_nucGene, cutoff, sample):
    '''function to plot probability density with the default cutoffs and cell caller cutoff, and save the plot as a png'''
    plt.plot(pdf_df['data_space'], pdf_df['evaluated'])
-   plt.axvline(cutoff, color = 'red',label = 'Nuclear genes'+'\n'+str(round(10 ** cutoff)))
+   plt.axvline(cutoff, color = 'red',label = 'Cell Caller'+'\n'+str(round(10 ** cutoff)))
    plt.axvline(np.log10(min_nucGene), color = 'black',label = 'Default'+'\n'+str(round(min_nucGene)))
-   plt.title("Cell Caller Plot", fontdict = {'family':'sans-serif','color':'black','size':20,'fontweight':'bold'})
+   plt.title("Cell Caller minimum nuclear\ngene threshold calculation", fontdict = {'family':'sans-serif','color':'black','size':12,'fontweight':'bold'})
    plt.xlabel("log10(nNuc_genes+1)")
    plt.ylabel("Density")
-   plt.legend(bbox_to_anchor = (1.0, 1), loc = 'upper right', title="Cells", fontsize=7)
+   plt.legend(bbox_to_anchor = (1.0, 1), loc = 'upper right', title="Method", fontsize=7)
    plt.savefig('{0}_pdf_with_cutoff.png'.format(sample), dpi=900)   # save the figure to file
    plt.close()    # close the figure window
 
