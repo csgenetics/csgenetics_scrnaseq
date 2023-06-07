@@ -556,6 +556,10 @@ process summary_report {
 
   output:
   tuple val(sample_id), path('*.html'), emit: report_html
+  tuple val(sample_id), path('filter_count_matrix/*/*.mtx.gz') 
+  tuple val(sample_id), path('filter_count_matrix/*/*.tsv.gz')
+  path('*scRNA_Metrics.csv'), emit: metrics_csv
+
 
   script:
   """
@@ -563,4 +567,25 @@ process summary_report {
   --sample $sample_id --multiqc_json $multiqc_data_json --antisense $antisense --qualimap_report $qualimap \
   --plot $cell_caller_png --cell_caller $min_nuc_gene_cutoff
   """
+}
+/*
+* Generate a Experiment Summary report
+*/
+
+process experiment_report {
+  label 'c2m4'
+
+  publishDir "${params.outdir}/experiment/", mode: 'copy'
+
+  input:
+  path(c)
+
+  output:
+  path('Experiment_report.html'), emit: experiment_html
+  path('final_result.csv'), emit: final_out
+
+  script:
+  '''
+  exp_summary.R  --csv_files .
+  '''
 }
