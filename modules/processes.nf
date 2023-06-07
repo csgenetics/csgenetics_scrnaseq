@@ -367,37 +367,6 @@ process group {
   tuple val(sample_id), path('*_group.log'), emit: io_group_log
 
   shell:
-
-  if (params.remove_singletons)
-  '''
-  # Originally this process was just umi_tools count.
-  # We had to change it to remove singleton reads from the bam file.
-  # We followed instructions from here:
-  # https://umi-tools.readthedocs.io/en/latest/Single_cell_tutorial.html#step-6-counting-molecules
-
-  # 1. run umi_tools group first
-  # remove --per-gene  --gene-tag=XT  --assigned-status-tag=XS  to group reads by start position only, not by gene
-  # add --read-length to group reads by start and end position
-
-  umi_tools group \
-    --read-length \
-    --per-cell \
-    -I !{sample_id}_sorted.bam \
-    --group-out=!{sample_id}_group.tsv \
-    --output-bam --out-sam -S !{sample_id}_group.sam \
-    --log=!{sample_id}_group.log
-
-    # 2. filter out singleton reads
-    # https://github.com/CGATOxford/UMI-tools/issues/274
-    grep @ !{sample_id}_group.sam > sam_header
-    grep -v @ !{sample_id}_group.sam > sam_reads
-    awk '$6 !~ /^1$/' !{sample_id}_group.tsv | awk '{print $1}' | tail -n+2 > selected_reads
-    awk 'NR==FNR{a[$0]; next} $1 in a' selected_reads sam_reads > sam_selected_reads
-    cat sam_header sam_selected_reads > !{sample_id}_group_filtered.sam
-
-  '''
-  else
-
   '''
   # Originally this process was just umi_tools count.
   # We had to change it to remove singleton reads from the bam file.

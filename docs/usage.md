@@ -17,7 +17,6 @@
   - [whitelist_path](#whitelist_path)
   - [min_nuc_gene](#min_nuc_gene)
   - [depth_min](#depth_min)
-  - [remove_singletons](#remove_singletons)
 
 ## Introduction
 This document details:
@@ -192,11 +191,4 @@ Fastqs with less than this number of raw reads will be removed from the analysis
 --depth_min 100000
 ```
 
-### `remove_singletons`
-
-If set to `true` UMRs with only 1 count per sample will be filtered out of the analysis.
-
-```bash
---remove_singletons false
-```
 <div style="text-align: right"><a href="#configuration-of-the-cs-genetics-scrna-seq-pipeline">top</a></div>
