@@ -556,10 +556,7 @@ process summary_report {
 
   output:
   tuple val(sample_id), path('*.html'), emit: report_html
-  tuple val(sample_id), path('filter_count_matrix/*/*.mtx.gz') 
-  tuple val(sample_id), path('filter_count_matrix/*/*.tsv.gz')
   path('*scRNA_Metrics.csv'), emit: metrics_csv
-
 
   script:
   """
