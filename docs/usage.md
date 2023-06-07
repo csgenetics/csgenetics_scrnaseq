@@ -10,14 +10,14 @@
     - [test](#test)
     - [docker](#docker)
 - [Configurable parameters](#configurable-parameters)
-  - [`-profile`](#profile)
-  - [`--outdir`](#outdir)
-  - [`--star_index_dir`](#star-index-dir)
-  - [`--gtf_path`](#gtf_path)
-  - [`--whitelist_path`](#whitelist_path)
-  - [`--min_nuc_gene`](#min_nuc_gene)
-  - [`--depth_min`](#depth_min)
-  - [`--remove_singletons`](#remove_singletons)
+  - [profile](#profile)
+  - [outdir](#outdir)
+  - [star_index_dir](#star_index_dir)
+  - [gtf_path](#gtf_path)
+  - [whitelist_path](#whitelist_path)
+  - [min_nuc_gene](#min_nuc_gene)
+  - [depth_min](#depth_min)
+  - [remove_singletons](#remove_singletons)
 
 ## Introduction
 This document details:
@@ -44,7 +44,7 @@ or directly from the GitHub repository:
 ```bash
 nextflow run csgenetics/csgenetics_scrnaseq -profile <optional profile> --input_csv $HOME/analysis/input_csv/input_csv.csv
 ```
-<div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
+<div style="text-align: right"><a href="#configuration-of-the-cs-genetics-scrna-seq-pipeline">top</a></div>
 
 ### Updating the pipeline
 When launching the pipeline from a local clone of the GitHub repository, you will need to keep the pipeline up-to-date by refularly pulling down updates:
@@ -56,7 +56,7 @@ When launching the pipeline by specifying the qualified name of the pipeline, Ne
 ```bash
 nextflow pull basepair/csgenetics
 ```
-<div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
+<div style="text-align: right"><a href="#configuration-of-the-cs-genetics-scrna-seq-pipeline">top</a></div>
 
 ### Specifying a pipeline version
 
@@ -70,7 +70,7 @@ The available tags can be displayed in a cloned repository using:
 Alternatively, the releases can be viewed [online](https://github.com/csgenetics/csgenetics_scrnaseq/releases).
 
 For reference, the version will be logged in reports when you run the pipeline.
-<div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
+<div style="text-align: right"><a href="#configuration-of-the-cs-genetics-scrna-seq-pipeline">top</a></div>
 
 ### Available profiles
 Nextflow pipeline configurable parameters can be set in groups by specifying profiles.
@@ -85,7 +85,7 @@ There are two profiles available for the CS Genetics scRNA-Seq pipeline:
   - A generic configuration profile that enables use of pre-configured Docker containers for each process
 
 If no profile is set, then the [local executor](https://www.nextflow.io/docs/latest/executor.html#local) will be used and software required for each process to run should be pre-installed on your local system.
-<div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
+<div style="text-align: right"><a href="#configuration-of-the-cs-genetics-scrna-seq-pipeline">top</a></div>
 
 #### test
 Launching the pipeline with this profile will set configuration parameters so that remotely hosted small, human fastq files and a remotely hosted GRCh38 set of resources are used. The pipeline will use docker containers for each of the processes.
@@ -104,7 +104,7 @@ nextflow run main.nf -profile test
 ```
 
 When running the test profile, do not supply the `--input-csv` argument. A remotely hosted input csv is used.
-<div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
+<div style="text-align: right"><a href="#configuration-of-the-cs-genetics-scrna-seq-pipeline">top</a></div>
 
 #### docker
 Launching the pipeline with this profile includes configures the pipeline to use pre-specified Docker containers for each of the processes. It is recommended to run the pipeline using this profile.
@@ -113,26 +113,33 @@ E.g.
 ```bash
 nextflow run main.nf -profile docker --input_csv $HOME/analysis/input_csv/input_csv.csv
 ```
-<div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
+<div style="text-align: right"><a href="#configuration-of-the-cs-genetics-scrna-seq-pipeline">top</a></div>
 
 ## Configurable parameters
 
-### `-profile`
-N.B. note the single hyphen
+### `profile`
 
 Use this parameter to choose a configuration profile. See [Available profiles](#available-profiles).
 
-### `--outdir`
+```bash
+-profile docker
+```
+
+### `outdir`
 
 The output directory where the results will be saved.
 
-### `--star_index_dir`
+```bash
+--outdir <path/to/output/dir>
+```
+
+### `star_index_dir`
 Specify the path of the STAR index directory. Required for mapping.
 
 ```bash
 --star_index_dir s3://csgx.public.readonly/resources/references/refdata-gex-GRCh38-and-mm10-2020-A/star/
 ```
-<div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
+<div style="text-align: right"><a href="#configuration-of-the-cs-genetics-scrna-seq-pipeline">top</a></div>
 
 #### Premade STAR indexes
 There are premade remotely hosted STAR indexes for the following species (remotely hosted path given):
@@ -140,13 +147,13 @@ There are premade remotely hosted STAR indexes for the following species (remote
 
 If you are working with one of these species, you can provide the remotely hosted directory
 to the `--star_index_dir` parameter. The pipeline will automatically download the resource.
-<div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
+<div style="text-align: right"><a href="#configuration-of-the-cs-genetics-scrna-seq-pipeline">top</a></div>
 
 #### Generating a STAR index
 If you are working with a different species or wish to create your own indexes for a different genome,
 please follow the instructions for creating a STAR index [here](https://physiology.med.cornell.edu/faculty/skrabanek/lab/angsd/lecture_notes/STARmanual.pdf) (section 'Generating genome indexes').
  
-### `--gtf_path` 
+### `gtf_path` 
 
 Path to the gtf annotation file.
 
@@ -156,9 +163,9 @@ There are remotely hosted GTF files for the following species (remotely hosted p
 ```bash
 --gtf_path s3://csgx.public.readonly/resources/references/refdata-gex-GRCh38-and-mm10-2020-A/genes/genes.gtf
 ```
-<div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
+<div style="text-align: right"><a href="#configuration-of-the-cs-genetics-scrna-seq-pipeline">top</a></div>
 
-### `--whitelist_path`
+### `whitelist_path`
 Specify the whitelist path to use. The whitelist to use will be specific to the kit version used.
 The whitelists are hosted remotely at: 
 
@@ -169,7 +176,7 @@ The whitelists are hosted remotely at:
 --whitelist_path s3://csgx.public.readonly/resources/whitelists/IDT_IO_kit_v1.csv
 ```
 
-### `--min_nuc_gene`
+### `min_nuc_gene`
 
 The minimum number of nuclear genes that must be detected for a given barcode to be considered a cell.
 
@@ -177,7 +184,7 @@ The minimum number of nuclear genes that must be detected for a given barcode to
 --min_nuc_gene 100
 ```
 
-### `--depth_min`
+### `depth_min`
 
 Fastqs with less than this number of raw reads will be removed from the analysis.
 
@@ -185,11 +192,11 @@ Fastqs with less than this number of raw reads will be removed from the analysis
 --depth_min 100000
 ```
 
-### `--remove_singletons`
+### `remove_singletons`
 
 If set to `true` UMRs with only 1 count per sample will be filtered out of the analysis.
 
 ```bash
 --remove_singletons false
 ```
-<div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
+<div style="text-align: right"><a href="#configuration-of-the-cs-genetics-scrna-seq-pipeline">top</a></div>

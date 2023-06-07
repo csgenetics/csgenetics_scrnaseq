@@ -69,7 +69,7 @@ process fastqc {
   tuple val(sample_id), path(f)
 
   output:
-  path ('*.{zip,html}'), emit: fastqc_multiqc
+  tuple val(sample_id), path("${sample_id}_R1_fastqc.html"), path("${sample_id}_R1_fastqc.zip"), path("${sample_id}_R2_fastqc.html"), path("${sample_id}_R2_fastqc.zip"), emit: fastqc_multiqc
   tuple val(sample_id), path("${sample_id}_R1_fastqc.zip"), emit: fastqc_out
 
   shell:
@@ -92,7 +92,7 @@ process barcode {
   val (barcode_pattern)
 
   output:
-  path('*.{json,html}'), emit: barcode_multiqc
+  tuple val(sample_id), path("${sample_id}_R2_fastp.html"), path("${sample_id}_R2_fastp.json"), emit: barcode_multiqc
 
   shell:
   '''
@@ -163,7 +163,7 @@ process fastp {
 
   output:
   tuple val (sample_id), path('fastp_out'), emit: fastp_out
-  path('*.{json,html}'), emit: fastp_multiqc
+  tuple val(sample_id), path("${sample_id}_R1_fastp.html"), path("${sample_id}_R1_fastp.json"), emit: fastp_multiqc
   tuple val (sample_id), path('fastp.log'), emit: fastp_log
 
   shell:
@@ -227,8 +227,8 @@ process star {
   path(index)
 
   output:
-  tuple val (sample_id), path('*Aligned.sortedByCoord.out.bam'), emit: star_out
-  path ("*.{out,tab,mate1}"), emit: star_multiqc
+  tuple val(sample_id), path('*Aligned.sortedByCoord.out.bam'), emit: star_out
+  tuple val(sample_id), path("${sample_id}_Log.final.out"), path("${sample_id}_Log.out"), path("${sample_id}_Log.progress.out"), path("${sample_id}_SJ.out.tab"), path("${sample_id}_Unmapped.out.mate1"), emit: star_multiqc
 
   shell:
   '''
@@ -285,7 +285,7 @@ process feature_counts {
 
   output:
   tuple val(sample_id), path('*.bam'), emit: feature_counts_out
-  path("*.{txt,summary}"), emit: feature_counts_multiqc
+  tuple val(sample_id), path("${sample_id}_gene_assigned.txt"), path("${sample_id}_gene_assigned.txt.summary"), emit: feature_counts_multiqc
 
   shell:
   '''
@@ -300,32 +300,30 @@ process feature_counts {
 process multiqc {
   label 'c1m1'
 
-  publishDir "${params.outdir}/multiqc", mode: 'copy'
+  publishDir "${params.outdir}/multiqc/${sample_id}", mode: 'copy'
 
   input:
-  path(f)
+  tuple val(sample_id), path(multiqc_in_files)
 
   output:
-  file "*_multiqc.html"
-  file "*_data"
-  path("*/*.json") , emit: multiqc_json
+  path "*_multiqc.html"
+  path "*_data"
+  tuple val(sample_id), path("${sample_id}.multiqc.data.json"), emit: multiqc_json
 
   script:
-  def filename = "${params.bs_project_id}_multiqc.html"
-  def reporttitle = "${params.bs_project_id} (csgx/rnaseq)"
   """
   multiqc . \
     -f \
-    --title "$reporttitle" \
-    --filename "$filename" \
+    --title "${sample_id} multiqc" \
+    --filename "${sample_id}_multiqc.html" \
     -m fastqc \
     -m fastp \
     -m fastp \
     -m star \
     -m featureCounts
+  mv ${sample_id}_multiqc_data/multiqc_data.json ./${sample_id}.multiqc.data.json
   """
 }
-
 
 /*
 * Sort and index bam file using samtools
@@ -503,7 +501,7 @@ process count_matrix {
   tag "$sample_id"
   label 'c4m4'
 
-  publishDir "${params.outdir}/count_matrix/", mode: 'copy'
+  publishDir "${params.outdir}/count_matrix/raw_count_matrix/${sample_id}", mode: 'copy'
   
   input:
   tuple val (sample_id), path(f)
@@ -512,22 +510,23 @@ process count_matrix {
 
 
   output:
-  tuple val(sample_id), path('*.h5ad'), emit: h5ad
-  tuple val(sample_id), path('raw_count_matrix/*/matrix.mtx.gz'), emit: raw_matrix
-  tuple val(sample_id), path('raw_count_matrix/*/barcodes.tsv.gz'), emit: raw_barcodes
-  tuple val(sample_id), path('raw_count_matrix/*/features.tsv.gz'), emit: raw_features
+  tuple val(sample_id), path("${sample_id}.count_matrix.h5ad"), emit: h5ad
+  tuple val(sample_id), path("${sample_id}.matrix.mtx.gz"), emit: raw_matrix
+  tuple val(sample_id), path("${sample_id}.barcodes.tsv.gz"), emit: raw_barcodes
+  tuple val(sample_id), path("${sample_id}.features.tsv.gz"), emit: raw_features
 
-  shell:
-  '''
+  script:
+  """
   mkdir -p raw_count_matrix/!{sample_id}
-  count_matrix.py --white_list !{w} --count_table !{f} --gene_list !{features_file} --sample !{sample_id}
-  '''
+  count_matrix.py --white_list ${w} --count_table ${f} --gene_list ${features_file} --sample ${sample_id}
+  """
 }
 
 
 
 /*
-* Run cell caller - this determines a threshold number of Nuclear gene detected per single cell, above which reagent_bead is considered to have successfully indexed a single cell
+* Run cell caller - this determines a threshold number of nuclear genes detected to call a cell.
+* The threshold is output to stdout and output as cell_caller_out
 */
 process cell_caller {
   tag "$sample_id"
@@ -536,21 +535,42 @@ process cell_caller {
   publishDir "${params.outdir}/plots", pattern: '*.png', mode: 'copy'
 
   input:
-
-  tuple val (sample_id), path(f)
+  tuple val(sample_id), path(count_matrix_h5ad)
 
   output:
-  tuple val(sample_id), path('*.txt'), emit: cell_caller_out
+  // returns the call_caller-calculated nuclear gene threshold
+  tuple val(sample_id), stdout, emit: cell_caller_out 
   tuple val(sample_id), path('*.png'), emit: cell_caller_plot
 
-
-  shell:
-    '''
-    cell_caller.py --sample !{sample_id} --min_nucGene !{params.min_nuc_gene} | cut -f2 -d, > !{sample_id}_cell_caller.txt
-    '''
+  script:
+  """
+  cell_caller.py --sample ${sample_id} --min_nucGene ${params.min_nuc_gene} --count_matrix $count_matrix_h5ad
+  """
 }
 
+/*
+* Filter count table - produce a count table that has been filtered for barcodes that pass the cell caller threshold
+*/
+process filter_count_matrix{
+  tag "$sample_id"
+  label 'c2m2'
 
+  publishDir "${params.outdir}/count_matrix/cell_only_count_matrix/${sample_id}/", mode: 'copy'
+
+  input:
+  tuple val(sample_id), val(nuc_gene_threshold), path(h5ad_raw_count_matrix)
+
+  output:
+  // Output the 3 part barcode, features, matrix 
+  tuple val(sample_id), path("${sample_id}.*.cell_only.barcodes.tsv.gz"), path("${sample_id}.*.cell_only.features.tsv.gz"), path("${sample_id}.*.cell_only.matrix.mtx.gz"), emit: cell_only_count_matrix
+  // Output the h5ad matrix
+  tuple val(sample_id), path("${sample_id}.*.cell_only.count_matrix.h5ad")
+
+  script:
+  """
+  filter_count_matrix.py ${nuc_gene_threshold} ${h5ad_raw_count_matrix} ${sample_id}
+  """
+}
 
 /*
 * Generate a Summary report
@@ -563,14 +583,7 @@ process summary_report {
   publishDir "${params.outdir}/report/", mode: 'copy'
   
   input:
-  tuple val (sample_id), path(f)
-  tuple val (sample_id), path(w)
-  tuple val (sample_id), path(g)
-  path(m)
-  tuple val (sample_id), path(a)
-  file(q)
-  tuple val (sample_id), path(p)
-  tuple val (sample_id), path(r)
+  tuple val(sample_id), val(min_nuc_gene_cutoff), path(filtered_barcodes), path(filtered_features), path(filtered_matrix), path(multiqc_data_json), path(antisense), path(cell_caller_png), path(qualimap)
 
   output:
   tuple val(sample_id), path('*.html'), emit: report_html
@@ -578,12 +591,13 @@ process summary_report {
   tuple val(sample_id), path('filter_count_matrix/*/*.tsv.gz')
   path('*scRNA_Metrics.csv'), emit: metrics_csv
 
-  shell:
-  '''
-  mkdir -p filter_count_matrix/!{sample_id}/
-  
-  web_summary.R  --matrix !{f} --barcodes !{w} --features !{g} --sample !{sample_id} --multiqc_json !{m} --antisense !{a} --qualimap_report !{sample_id}_qualimap.txt --plot !{p} --cell_caller !{r}
-  '''
+
+  script:
+  """
+  web_summary.R --barcodes $filtered_barcodes --features $filtered_features --matrix $filtered_matrix \
+  --sample $sample_id --multiqc_json $multiqc_data_json --antisense $antisense --qualimap_report $qualimap \
+  --plot $cell_caller_png --cell_caller $min_nuc_gene_cutoff
+  """
 }
 /*
 * Generate a Experiment Summary report
