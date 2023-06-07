@@ -7,8 +7,9 @@
 ## Contents
 - [Introduction](#introduction)
 - [Running the pipeline](#running-the-pipeline)
-    - [Dockerized](#dockerized)
-    - [Locally with dockerized processes](#locally-with-dockerized-processes)
+  - [Locally with dockerized processes](#locally-with-dockerized-processes) 
+  - [Dockerized](#dockerized)
+- [Running the pipeline on MacOS](#running-the-pipeline-on-macos)
 - [Specifying input sequencing files](#specifying-input-sequencing-files)
 - [Testing the pipeline](#testing-the-pipeline)
 - [Launching the pipeline directly from the Github repo](#launching-the-pipeline-directly-from-the-csgeneticcsgenetics_scrnaseq-github-repo)
@@ -117,6 +118,20 @@ where:
 
 For a full list of the configurable parameters that can be can be supplied to the pipeline
 and other options for configuration see [Configurable parameters](#configurable-parameters).
+<div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
+
+
+## Running the pipeline on MacOS
+While the pipeline can be launched on MacOS, some of the processes are RAM intensive.
+
+E.g. the STAR mapping process is currently configured to run in a container that is allocated 40GB of RAM.
+The qualimap process is configured to use 16GB of RAM.
+
+The actual resources utilized will depend on the charachter of the samples being analysed.
+
+However, resource allocations may exceed those available on a standard MacOS laptop/desktop.
+
+As such it is recommened to run the pipeline on an HPC system.
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
 ## Specifying input sequencing files
