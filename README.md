@@ -25,6 +25,19 @@
   - [whitelist_path](#whitelist_path)
   - [min_nuc_gene](#min_nuc_gene)
   - [depth_min](#depth_min)
+- [Outputs](#outputs)
+  - [count_matrix](#count_matrix)
+  - [report](#report)
+  - [pipeline_info](#pipeline_info)
+  - [fastp](#fastp)
+  - [fastqc](#fastqc)
+  - [featureCounts](#fastqc)
+  - [io_count](#io_count)
+  - [multiqc](#multiqc)
+  - [plots](#plots)
+  - [qualimap](#qualimap)
+  - [STAR](#star)
+- [Log files](#log-files)
 - [Examples](#examples)
   - [Example 1](#example-1)
   - [Example 2](#example-2)
@@ -33,7 +46,7 @@
 
 **CS Genetics' scRNA-Seq pipeline** is a bioinformatics best-practice analysis pipeline for processing single-cell RNA-Seq data from their single-cell RNA-Seq kits.
 
-It runs on a Unix-like operating system (Linux, macOS, etc)
+It runs on a Unix-like operating system (E.g. Linux).
 
 The pipeline is built using [Nextflow](https://www.nextflow.io), a workflow tool to run tasks across multiple compute infrastructures in a portable manner. The pipeline uses Docker containers to run the main pipeline instance and its constituent processes making installation trivial and results reproducible.
 
@@ -155,7 +168,7 @@ When launching the pipeline by specifying the qualified name of the pipeline, Ne
 ```bash
 nextflow pull csgenetics/csgenetics_scrnaseq
 ```
-<div style="text-align: right"><a href="#configuration-of-the-cs-genetics-scrna-seq-pipeline">top</a></div>
+<div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
 ### Specifying a pipeline version
 
@@ -169,7 +182,7 @@ The available tags can be displayed in a cloned repository using:
 Alternatively, the releases can be viewed [online](https://github.com/csgenetics/csgenetics_scrnaseq/releases).
 
 For reference, the version will be logged in reports when you run the pipeline.
-<div style="text-align: right"><a href="#configuration-of-the-cs-genetics-scrna-seq-pipeline">top</a></div>
+<div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
 ## Available profiles
 Nextflow pipeline configurable parameters can be set in groups by specifying profiles.
@@ -184,7 +197,7 @@ There are two profiles available for the CS Genetics scRNA-Seq pipeline:
   - A generic configuration profile that enables use of pre-configured Docker containers for each process
 
 If no profile is set, then the [local executor](https://www.nextflow.io/docs/latest/executor.html#local) will be used and software required for each process to run should be pre-installed on your local system.
-<div style="text-align: right"><a href="#configuration-of-the-cs-genetics-scrna-seq-pipeline">top</a></div>
+<div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
 ### test
 Launching the pipeline with this profile will set configuration parameters so that remotely hosted small, human fastq files and a remotely hosted GRCh38 set of resources are used. The pipeline will use docker containers for each of the processes.
@@ -203,7 +216,7 @@ nextflow run main.nf -profile test
 ```
 
 When running the test profile, do not supply the `--input-csv` argument. A remotely hosted input csv is used.
-<div style="text-align: right"><a href="#configuration-of-the-cs-genetics-scrna-seq-pipeline">top</a></div>
+<div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
 ### docker
 Launching the pipeline with this profile configures the pipeline to use pre-specified Docker containers for each of the processes. It is recommended to run the pipeline using this profile.
@@ -212,7 +225,7 @@ E.g.
 ```bash
 nextflow run main.nf -profile docker --input_csv $HOME/analysis/input_csv/input_csv.csv
 ```
-<div style="text-align: right"><a href="#configuration-of-the-cs-genetics-scrna-seq-pipeline">top</a></div>
+<div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
 ## Configurable parameters
 
@@ -226,6 +239,7 @@ Use this parameter to choose a configuration profile. See [Available profiles](#
 ```bash
 -profile docker
 ```
+N.B. note the single hyphen.
 
 ### `outdir`
 
@@ -244,7 +258,7 @@ By default the remotely hosted Human STAR index is used see [below](#premade-sta
 --star_index_dir s3://csgx.public.readonly/resources/references/refdata-gex-GRCh38-and-mm10-2020-A/star/
 ```
 
-<div style="text-align: right"><a href="#configuration-of-the-cs-genetics-scrna-seq-pipeline">top</a></div>
+<div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
 #### Premade STAR indexes
 There are premade remotely hosted STAR indexes for the following species (remotely hosted path given):
@@ -252,7 +266,7 @@ There are premade remotely hosted STAR indexes for the following species (remote
 
 If you are working with one of these species, you can provide the remotely hosted directory
 to the `--star_index_dir` parameter. The pipeline will automatically download the resource.
-<div style="text-align: right"><a href="#configuration-of-the-cs-genetics-scrna-seq-pipeline">top</a></div>
+<div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
 #### Generating a STAR index
 If you are working with a different species or wish to create your own indexes for a different genome,
@@ -270,7 +284,7 @@ By default the remotely hosted Human gtf is used.
 ```bash
 --gtf_path s3://csgx.public.readonly/resources/references/refdata-gex-GRCh38-and-mm10-2020-A/genes/genes.gtf
 ```
-<div style="text-align: right"><a href="#configuration-of-the-cs-genetics-scrna-seq-pipeline">top</a></div>
+<div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
 ### `whitelist_path`
 Specify the whitelist path to use.
@@ -299,7 +313,53 @@ Fastqs with less than this number of raw reads will be removed from the analysis
 --depth_min 100000
 ```
 
-<div style="text-align: right"><a href="#configuration-of-the-cs-genetics-scrna-seq-pipeline">top</a></div>
+<div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
+
+## Outputs
+The output directory is specified using the `--outdir` flag. In this directory the pipeline outputs a number of useful results files organised within the following subdirectories:
+
+### `count_matrix`
+Contains the count matrices. The matrices are output in two different formats:
+- .h5ad (compatible with scanpy in Python)
+- the tripartite barcodes.tsv.gz, features.tsv.gz and matrix.mtx.gz (compatible with Seurat in R)
+
+The matrices are output as 'raw' (containing all cellular barcodes) and 'cell_only' (containing a subset of the barcodes that were classified as cells through meeting the minimum nuclear genes detected threshold).
+
+### `report`
+Contains the per sample .html formatted reports detailing key statistics for each of the samples
+
+### `pipeline_info`
+Contains trace files related to the execution of the pipeline
+
+### `fastp`
+Contains the html and json files output from the fastp QC tasks per sample.
+
+### `fastqc`
+Contains the html and .zip files output from the fastqc QC tasks per sample.
+
+### `featureCounts`
+Contains the files output from the featureCounts process including .bam files and summaries of feature assignment.
+
+### `io_count`
+Contains the files associated with deduplication and grouping of reads.
+
+### `multiqc`
+Contains files related to the MultiQC output.
+
+### `plots`
+Plots of the Cell Caller profiles used to generate the minimum detected nuclear genes threshold
+for cell calling.
+
+### `qualimap`
+Contains the qualimap output logs used for assessing mapping metrics.
+
+### `STAR`
+Contains the bam files output from STAR and associated mapping log files.
+<div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
+
+## Log files
+As standard, Nextflow produces a `.nextflow.log` file in the directory from which the pipeline was run.
+<div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
 ## Examples
 Below are some examples of launching the pipeline with explanations of the commands.
