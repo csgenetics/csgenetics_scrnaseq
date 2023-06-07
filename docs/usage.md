@@ -122,7 +122,7 @@ nextflow run main.nf -profile docker --input_csv $HOME/analysis/input_csv/input_
 Use this parameter to choose a configuration profile. See [Available profiles](#available-profiles).
 
 ```bash
---profile docker
+-profile docker
 ```
 
 ### `outdir`
