@@ -341,8 +341,10 @@ Contains the count matrices. The matrices are output in two different formats:
 The matrices are output as 'raw' (containing all cellular barcodes) and 'cell_only' (containing a subset of the barcodes that were classified as cells through meeting the minimum nuclear genes detected threshold).
 
 ### `report`
-Contains the per sample .html formatted reports detailing key statistics for each of the samples
+Contains the per sample .html formatted reports detailing key statistics for each of the samples.
+Metrics are also provided in .csv format.
 
+### 
 ### `pipeline_info`
 Contains trace files related to the execution of the pipeline
 

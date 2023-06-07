@@ -31,7 +31,7 @@ merged_df <- Reduce(function(x, y) merge(x, y, by = "scRNA_Metrics"), data_frame
 colnames(merged_df) <- gsub("^X", "", colnames(merged_df))
 
 # Save the final result
-write.csv(merged_df, "final_result.csv", row.names = FALSE)
+write.csv(merged_df, "experiment_result.csv", row.names = FALSE)
 
 rmd_content <- paste(
   "---",
@@ -41,7 +41,7 @@ rmd_content <- paste(
   "",
   "# QC Report per Experiment",
   "",
-  "[Download CSV file](", "final_result.csv", ")",
+  "[Download CSV file](", "experiment_result.csv", ")",
   "",
   "```{r, echo=FALSE}",
   "knitr::kable(merged_df)",
@@ -50,8 +50,8 @@ rmd_content <- paste(
 )
 
 # Save R Markdown template file
-writeLines(rmd_content, "Experiment_report.Rmd")
+writeLines(rmd_content, "experiment_report.Rmd")
 
 # Generate HTML report
-rmarkdown::render("Experiment_report.Rmd", output_file = "Experiment_report.html")
+rmarkdown::render("experiment_report.Rmd", output_file = "experiment_report.html")
 

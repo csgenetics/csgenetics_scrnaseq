@@ -572,14 +572,14 @@ process summary_report {
 process experiment_report {
   label 'c2m4'
 
-  publishDir "${params.outdir}/experiment/", mode: 'copy'
+  publishDir "${params.outdir}/report/", mode: 'copy'
 
   input:
   path(c)
 
   output:
-  path('Experiment_report.html'), emit: experiment_html
-  path('final_result.csv'), emit: final_out
+  path('experiment_report.html'), emit: experiment_html
+  path('experiment_result.csv'), emit: final_out
 
   script:
   '''
