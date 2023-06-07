@@ -106,7 +106,7 @@ When running the test profile, do not supply the `--input-csv` argument. A remot
 <div style="text-align: right"><a href="#configuration-of-the-cs-genetics-scrna-seq-pipeline">top</a></div>
 
 #### docker
-Launching the pipeline with this profile includes configures the pipeline to use pre-specified Docker containers for each of the processes. It is recommended to run the pipeline using this profile.
+Launching the pipeline with this profile configures the pipeline to use pre-specified Docker containers for each of the processes. It is recommended to run the pipeline using this profile.
 
 E.g.
 ```bash
@@ -135,9 +135,12 @@ The output directory where the results will be saved.
 ### `star_index_dir`
 Specify the path of the STAR index directory. Required for mapping.
 
+By default the remotely hosted Human STAR index is used see [below](#premade-star-indexes).
+
 ```bash
 --star_index_dir s3://csgx.public.readonly/resources/references/refdata-gex-GRCh38-and-mm10-2020-A/star/
 ```
+
 <div style="text-align: right"><a href="#configuration-of-the-cs-genetics-scrna-seq-pipeline">top</a></div>
 
 #### Premade STAR indexes
@@ -159,20 +162,22 @@ Path to the gtf annotation file.
 There are remotely hosted GTF files for the following species (remotely hosted path given):
 - Human: s3://csgx.public.readonly/resources/references/refdata-gex-GRCh38-and-mm10-2020-A/genes/genes.gtf
 
+By default the remotely hosted Human gtf is used.
+
 ```bash
 --gtf_path s3://csgx.public.readonly/resources/references/refdata-gex-GRCh38-and-mm10-2020-A/genes/genes.gtf
 ```
 <div style="text-align: right"><a href="#configuration-of-the-cs-genetics-scrna-seq-pipeline">top</a></div>
 
 ### `whitelist_path`
-Specify the whitelist path to use. The whitelist to use will be specific to the kit version used.
-The whitelists are hosted remotely at: 
+Specify the whitelist path to use.
+The following whitelists are hosted remotely at: 
 
-- IDT_IO_kit_v1.csv: s3://csgx.public.readonly/resources/whitelists/IDT_IO_kit_v1.csv
-- IDT_IO_kit_v2.csv: s3://csgx.public.readonly/resources/whitelists/IDT_IO_kit_v1.csv
+- IDT_IO_kit_v2.csv: s3://csgx.public.readonly/resources/whitelists/IDT_IO_kit_v2.csv
 
+By default the IDT_IO_kit_v2.csv whitelist is used.
 ```bash
---whitelist_path s3://csgx.public.readonly/resources/whitelists/IDT_IO_kit_v1.csv
+--whitelist_path s3://csgx.public.readonly/resources/whitelists/IDT_IO_kit_v2.csv
 ```
 
 ### `min_nuc_gene`

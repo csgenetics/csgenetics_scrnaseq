@@ -12,7 +12,9 @@
 - [Specifying input sequencing files](#specifying-input-sequencing-files)
 - [Testing the pipeline](#testing-the-pipeline)
 - [Launching the pipeline directly the Github repo](#launching-the-pipeline-directly-from-the-csgeneticcsgenetics_scrnaseq-github-repo)
-
+- [Examples](#examples)
+  - [Example 1](#example-1)
+  - [Example 2](#example-2)
 
 ## Introduction
 
@@ -128,4 +130,38 @@ and the pipeline was launched specifying the main.nf Nextflow script.
 Alternatively the pipeline can be launched directly from the GitHub repository specifying its qualified name: `csgenetics/csgenetics_scrnaseq`.
 
 See the [Nextflow documentation on Pipeline sharing](https://www.nextflow.io/docs/latest/sharing.html) for further details.
+<div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
+
+## Examples
+Below are some examples of launching the pipeline with explanations of the commands.
+
+### Example 1
+```bash
+nextflow run main.nf -profile docker --input_csv <path/to/input/csv> --outdir ./results --star_index_dir </local/path/to/STAR_index/dir> --gtf_path </local/path/to/gtf> --whitelist s3://csgx.public.readonly/resources/whitelists/IDT_IO_kit_v2.csv
+```
+
+A pipeline is launched using a locally installed version of
+Nextflow from a locally cloned copy of the csgenetics/csgenetics_scrnaseq repository.
+
+A local path to the STAR index directory and a
+corresponding gtf are provided. The remotely hosted v2 whitelist is selected explicitly.
+
+The output directory is set to `./results`.
+
+The docker profile is selected, configuring the pipeline to use pre-specified Docker containers for each of the processes.
+
+The 'work' directory will by created by default at `./work`.
+<div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
+
+### Example 2
+```bash
+nextflow run csgenetics/csgenetics_scrnaseq -r 0.0.1 -profile docker --input_csv <path/to/input/csv>
+```
+
+A pipeline is launched by directly specifying the GitHub repository.
+Version 0.0.1 of the pipeline is used.
+
+The docker profile is selected, configuring the pipeline to use pre-specified Docker containers for each of the processes.
+
+The remotely hosted Human STAR index and gtf file are used by default. The remotely hosted v2 whitelist is used by default.
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
