@@ -11,13 +11,13 @@
     - [docker](#docker)
 - [Configurable parameters](#configurable-parameters)
   - [profile](#profile)
-  - [`outdir`](#outdir)
-  - [`star_index_dir`](#star_index_dir)
-  - [`gtf_path`](#gtf_path)
-  - [`whitelist_path`](#whitelist_path)
-  - [`min_nuc_gene`](#min_nuc_gene)
-  - [`depth_min`](#depth_min)
-  - [`remove_singletons`](#remove_singletons)
+  - [outdir](#outdir)
+  - [star_index_dir](#star_index_dir)
+  - [gtf_path](#gtf_path)
+  - [whitelist_path](#whitelist_path)
+  - [min_nuc_gene](#min_nuc_gene)
+  - [depth_min](#depth_min)
+  - [remove_singletons](#remove_singletons)
 
 ## Introduction
 This document details:
