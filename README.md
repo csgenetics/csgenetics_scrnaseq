@@ -73,6 +73,8 @@ git clone https://github.com/csgenetics/csgenetics_scrnaseq.git $HOME/analysis &
 
 The pipeline is then run using the Nextflow executable and the 'docker' profile.
 
+For specification of input sequences see [Specifying input sequencing files](#specifying-input-sequencing-files).
+
 ```bash
 nextflow run main.nf -profile docker --input_csv $HOME/analysis/input_csv/input_csv.csv
 ```
