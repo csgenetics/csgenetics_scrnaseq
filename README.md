@@ -149,6 +149,19 @@ E.g.
 ```bash
 nextflow run main.nf -profile docker --input_csv <path/to/csv_dir/input_csv.csv>
 ```
+
+Multiple sets of sequencing files (e.g. from multiple lanes of sequencing)
+can be merged by the pipeline and used for a single sample
+by supplying the same sample name but with different sequencing file sets
+on separate lines.
+
+E.g.
+```bash
+sample_id,fastq_1,fastq_2
+Sample1,/home/example_user/analysis/raw_reads/example_Sample1_L001_R1_001.fastq.gz,/home/example_user/analysis/raw_reads/example_Sample1_L001_R1_001.fastq.gz
+Sample1,/home/example_user/analysis/raw_reads/example_Sample1_L002_R1_001.fastq.gz,/home/example_user/analysis/raw_reads/example_Sample1_L002_R1_001.fastq.gz
+Sample2,/home/example_user/analysis/raw_reads/example_Sample2_L001_R1_001.fastq.gz,/home/example_user/analysis/raw_reads/example_Sample2_L001_R1_001.fastq.gz
+```
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
 ## Testing the pipeline
