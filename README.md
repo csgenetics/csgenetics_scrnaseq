@@ -100,6 +100,7 @@ it with commandline arguments. E.g.
 docker run -it --rm -e USER=$USER \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v $HOME/analysis:$HOME/analysis \
+  -w $HOME/analysis \
   public.ecr.aws/csgenetics/csgenetics_scrnaseq_base:0.0.1 \ 
   nextflow run main.nf -profile docker -w $HOME/analysis/work/ --outdir $HOME/analysis/results/ --input_csv $HOME/analysis/input_csv/input_csv.csv
 ```
@@ -113,6 +114,8 @@ where:
 - `-v /var/run/docker.sock:/var/run/docker.sock` mounts `/var/run/docker.sock` at `/var/run/docker.sock` enabling Docker to spawn sister containers.
 
 - `-v $HOME/analysis:$HOME/analysis` mounts `$HOME/analysis` at `$HOME/analysis` setting up a persistent working directory for the pipeline run.
+
+- `-w $HOME/analysis` specifies the working directory (where the main.nf script is located).
 
 - `nextflow run main.nf ...` is the command for launching the pipeline including commandline-suopplied arguments (...)
 
