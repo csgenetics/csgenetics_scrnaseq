@@ -573,25 +573,55 @@ process filter_count_matrix{
 }
 
 /*
-* Generate a Summary report
-* output filter_count_matrix and html summary report 
+* Generate a Summary statistics required for HTML report
 */
-process summary_report {
+process summary_statistics {
   tag "$sample_id"
   label 'c4m4'
 
-  publishDir "${params.outdir}/report/", mode: 'copy'
+  publishDir "${params.outdir}/report/${sample_id}", mode: 'copy', pattern: "*.csv"
   
   input:
   tuple val(sample_id), val(min_nuc_gene_cutoff), path(filtered_barcodes), path(filtered_features), path(filtered_matrix), path(multiqc_data_json), path(antisense), path(cell_caller_png), path(qualimap)
 
   output:
-  tuple val(sample_id), path('*.html'), emit: report_html
+  tuple val(sample_id),
+  path("${sample_id}_cell_stats.csv"),
+  path("${sample_id}_cell_stats_banner.tmp"),
+  path("${sample_id}_seq_stats.csv"),
+  path("${sample_id}_map_stats.csv"), emit: stats_files
 
   script:
   """
   web_summary.R --barcodes $filtered_barcodes --features $filtered_features --matrix $filtered_matrix \
   --sample $sample_id --multiqc_json $multiqc_data_json --antisense $antisense --qualimap_report $qualimap \
-  --plot $cell_caller_png --cell_caller $min_nuc_gene_cutoff
+  --cell_caller $min_nuc_gene_cutoff
+  """
+}
+
+/*
+* 
+*/
+process generate_report {
+  tag "$sample_id"
+  label 'c4m4'
+
+  publishDir "${params.outdir}/report/${sample_id}", mode: 'copy'
+  
+  input:
+  tuple val(sample_id), path(cell_stats), path(cell_stats_banner), path(seq_stats), path(map_stats), path(plot_png)
+  path(html_template)
+  path(cs_logo)
+  output:
+  tuple val(sample_id), path("${sample_id}_report.html")
+  path("imgs/*.png")
+
+
+  script:
+  """
+  mkdir -p imgs
+  mv ${plot_png} imgs/cell_caller_plot.png
+  mv ${cs_logo} imgs/${cs_logo}
+  create_sample_html.py ${sample_id} placeholder.png
   """
 }

@@ -3,100 +3,9 @@
 # load libraries
 library(Matrix, quietly=T)
 library(rjson, quietly=T)
-library(R2HTML, quietly=T)
 library(optparse)
 
-print_HTML <- function(seq_stats, map_stats, cell_stats, dir, sample_id, plot){
-  system(paste0('base64 ', plot ,' > ', dir, '/cell_caller.txt'))
-  b64_bc <- readChar(paste0(dir, '/cell_caller.txt'), file.info(paste0(dir, '/cell_caller.txt'))$size)
-  target <- HTMLInitFile("." ,filename=paste0(sample_id, '_summary'))
-  HTML('<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=sans-serif">', file=target)
-  HTML("<div class='title'>", file=target)
-  HTML.title('QC Report per Sample', HR=1, file = target)
-  HTML("</div>", file = target)
-  HTML.title(sample_id, HR=3, file=target)
-  HTML("<div id='wrapper'>", file=target) #start
-  HTML("<div class='boxed' id='left' align='center'>", file=target)
-  
-  HTML('<table style="width:100%">', file=target)
-  HTML(paste('<tr> <td align="center" style="font-size: 20px;" >', "Estimated Number of Cells", '</td> </tr> <tr> <td align="center" style="font-size: 18px;">', cell_stats$value[1] , '</td> </tr>'), file=target)
-  HTML('</table>', file=target)
-  
-  HTML('<table style="width:100%">', file=target)
-  HTML(paste('<tr> <td align="center" style="font-size: 20px;">', "Mean Reads per Cell", '</td> <td align="center" style="font-size: 20px;">', "Median Genes per Cell", '</td "> </tr>',
-             '<tr> <td align="center" style="font-size: 20px;">', cell_stats$value[2], '</td> <td align="center" style="font-size: 20px;">', cell_stats$value[3], '</td> </tr>'), file=target)
-  HTML('</table>', file=target)
-  
-  HTML.title('Sequencing', HR=2, file=target)
-  HTML('<table style="width:100%">', file=target)
-  HTML(paste('<tr> <td>', seq_stats$stat, '</td> <td align="right">', seq_stats$value, '</td>  </tr>'), file=target)
-  HTML('</table>', file=target)
-  
-  HTML.title('Mapping', HR=2, file=target)
-  HTML('<table style="width:100%">', file=target)
-  HTML(paste('<tr> <td  >', map_stats$stat, '</td> <td  align="right" >', map_stats$value, '</td>  </tr>'), file=target)
-  HTML('</table>', file=target)
-  HTML("</div>", file = target)
-  HTML("<div class='boxed' id='right' align='center'>", file=target)
-  
-  HTML('<table style="width:100%">', file=target)
-  HTML(paste0("<img src='data:image/png;base64,", b64_bc, "' width=90%>"), file=target)
-  HTML.title('Cells', HR=2, file=target)
-  HTML(paste('<tr> <td>', cell_stats$stat, '</td> <td align="right">', cell_stats$value, '</td> </tr>'), file=target)
-  HTML('</table>', file=target)
-
-  HTML("</div>", file = target)
-  HTML("</div>", file = target)
-  HTML('<style type="text/css">
-		.title {
-    			background-color: #000000;
-    			padding: 8px;
-    			color: white;
-    			top: 0;
-    			left: 0;
-    			z-index: 999;
-    			width: 100%;
-		}
-		.boxed {
-  			border: 1px solid #868D96;
-  			padding: 10px;
-  			margin: 10px;
-		}
-		h1 {
-			font-family: "sans-serif";
-			font-size: 33px;
-                        margin: 3px;
-		}
-		h2 {
-			font-family: "sans-serif";
-			font-size: 26px;
-			margin: 3px;
-		}
-		h3 {
-			font-family: "sans-serif";
-			font-size: 22px;
-                        margin: 3px;
-		}
-		#wrapper {
-  			display: flex;
-		}
-		#left {
-  			width: 50%;
-		}
-		#right {
-  			width: 50%;
-		}
-		table {
-  			font-family: "sans-serif";
-			font-size: 16px;
-			border: 1px solid #868D96;
-		}
-		#mathplayer{
-  			height: 0px;
-		}
-		</style>', file=target)
-  HTMLEndFile()
-}
+# ------------------------------ Parse Arguements
 
 arg_list <- list(
   make_option(
@@ -121,14 +30,13 @@ arg_list <- list(
     c('--qualimap_report'), action = 'store', type = 'character',
     help = 'Path to the qualimap report txt  file. REQUIRED'),
   make_option(
-    c('--plot'), action = 'store', type = 'character',
-    help = 'Path to the cell caller plot  file. REQUIRED'),
-  make_option(
     c('--cell_caller'), action = 'store', type = 'integer',
     help = 'The minimum number of nuclear genes detected for a barcode to be considered a cell. REQUIRED')
   )
 
 opt <- parse_args(OptionParser(option_list=arg_list))
+
+# ------------------------------ Load datasets
 
 # load filter mtx
 filtered_mtx <- readMM(opt$matrix) # load filtered mtx
@@ -144,6 +52,8 @@ colnames(filtered_mtx) <- cell_ids$V1
 ### load multiqc json output
 data <- fromJSON(file=opt$multiqc_json)
 total_number_reads   <- data$report_general_stats_data[[4]][[paste0(opt$sample_id,"_R1")]]$total_sequences
+
+# ------------------------------ Table formatting Mapping and Seq statistics
 
 valid_barcode <- data$report_general_stats_data[[3]][[paste0(opt$sample_id,"_R1")]]$before_filtering_total_reads
 
@@ -172,15 +82,19 @@ val_antisense <- read.csv(opt$antisense,sep = '\t', header = F)
 per_antisense <- round((as.numeric(val_antisense$V1)/ as.numeric(gsub(",", "", totalAlignments))) * 100,2)
 antisense <- paste0(val_antisense$V1," ","(",per_antisense,"%",")")
 
+# ------------------------------ Write table Mapping and Sequencing statistics
 
 seq_stats <- data.frame(stat = c('Total Number of Reads', 'Valid Barcodes / CSGX Cell Barcodes', 'Sequencing Saturation', # get sequencing/alignment stats 
                                   'Q30 Bases in Barcode','Q30 Bases in RNA Read'), 
                         value = prettyNum(c(total_number_reads, valid_barcode, seq_sat, q30_barcode,q30_read), big.mark = ','))
-
+write.table(seq_stats, paste0(opt$sample_id,"_seq_stats.csv"),quote = FALSE, row.names = FALSE, col.names = FALSE, sep="\t")
 
 map_stats <- data.frame(stat = c('Reads Mapped to Genome', 'Reads Mapped Confidently to Genome', 'Reads Mapped Confidently to Intergenic Regions',  
                                  'Reads Mapped Confidently to Intronic Regions','Reads Mapped Confidently to Exonic Regions','Reads Mapped Antisense to Gene'), 
                         value = prettyNum(c(read_mapped_genome, read_uniq_mapped_genome, intergenic, intronic,exonic,antisense), big.mark = ','))
+write.table(map_stats, paste0(opt$sample_id,"_map_stats.csv"),quote = FALSE, row.names = FALSE, col.names = FALSE, sep="\t")
+
+# ------------------------------ Calculate cell statistics
 
 # calculation metrics about the barcoding and sequencing
 gene_counts <- apply(filtered_mtx, 2, function(x) sum(x >= 1))
@@ -213,12 +127,11 @@ cell_stats <- data.frame(stat = c('Estimated Number of Cells', 'Mean Reads per C
                                         med_genes_cell, tot_genes_detected, mean_counts_per_cell,
                                         median_counts_per_cell, percent_mito
                                         ), big.mark = ','))
+                                        
+cell_stats_banner <- data.frame(stat = c('Estimated_Number_of_Cells', 'Mean_Reads_per_Cell', 'Total_genes_detected'),
+                        value = prettyNum(c(number_of_cell, mean_read_cell,tot_genes_detected), big.mark = ','))
 
-combine_df <- rbind(seq_stats,map_stats,cell_stats)
-colnames(combine_df) <- c("scRNA_Metrics", opt$sample_id)
-# Save the final result
-write.csv(combine_df, paste0(opt$sample_id,"_scRNA_Metrics.csv"), row.names = FALSE)
+# ------------------------------ Write cell statistics
+write.table(cell_stats, paste0(opt$sample_id,"_cell_stats.csv"),quote = FALSE, row.names = FALSE, col.names = FALSE, sep="\t")
+write.table(cell_stats_banner, paste0(opt$sample_id,"_cell_stats_banner.tmp"),quote = FALSE, row.names = FALSE, col.names = FALSE, sep="\t")
 
-print_HTML(seq_stats = seq_stats, map_stats= map_stats ,cell_stats = cell_stats, dir = "." , sample_id = opt$sample_id, plot = opt$plot) # output a HTML summary of the run
-
-print('Summary Report Done!')

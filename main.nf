@@ -10,7 +10,7 @@ include {
   features_file; merge_lanes; fastqc; barcode; io_extract; fastp;
   trim_extra_polya; star; qualimap; feature_counts; multiqc;
   sort_index_bam; group; dedup; io_count; count_matrix;
-  filter_count_matrix; cell_caller; summary_report
+  filter_count_matrix; cell_caller; summary_statistics; generate_report
   } from './modules/processes.nf'
 
 workflow {
@@ -26,6 +26,10 @@ workflow {
 
     // Create path object to the GTF
     gtf = file("${params.gtf_path}")
+
+    // Create path object to HTML template
+    html_template = file("${params.html_template_path}")
+    cs_logo = file("${params.cs_logo}")
 
     // Create the whitelist object
     whitelist = file("${params.whitelist_path}")
@@ -161,8 +165,11 @@ workflow {
     .groupTuple(by:0, size:2).map({it.flatten()})
     .set({ch_summary_report_in})
     
-    // Generate Report
-    summary_report(ch_summary_report_in)
-    // ch_summary_report = summary_report.out.report_html
+    // Generate summary statistics
+    summary_statistics(ch_summary_report_in)
+    ch_summary_stats = summary_statistics.out.stats_files
+    ch_summary_stats_plot = ch_summary_stats.join(ch_cell_caller_plot, by:0)
+    // Generate report
+    generate_report(ch_summary_stats_plot, html_template, cs_logo)
 
 }
