@@ -16,5 +16,10 @@ RUN cd /usr/local/bin && curl -s https://get.nextflow.io | bash
 RUN curl -fsSL https://get.docker.com -o get-docker.sh
 RUN sh get-docker.sh
 
+COPY entrypoint.sh /entrypoint.sh
+
+ENTRYPOINT [ "/entrypoint.sh" ]
+
+
 # Run nextflow 
-# CMD ["/bin/bash", "nextflow"]
+# CMD ["/bin/bash"]
