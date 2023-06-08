@@ -473,7 +473,7 @@ process count_matrix {
   publishDir "${params.outdir}/count_matrix/raw_count_matrix/${sample_id}", mode: 'copy'
   
   input:
-  tuple val (sample_id), path(f)
+  tuple val(sample_id), path(f)
   path(w)
   path(features_file)
 
@@ -486,7 +486,6 @@ process count_matrix {
 
   script:
   """
-  mkdir -p raw_count_matrix/!{sample_id}
   count_matrix.py --white_list ${w} --count_table ${f} --gene_list ${features_file} --sample ${sample_id}
   """
 }
