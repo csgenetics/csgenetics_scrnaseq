@@ -6,38 +6,40 @@
 */
 
 nextflow.enable.dsl=2
-include { basespace; merge_lanes; fastqc; barcode;io_whitelist; io_extract; fastp; trim_extra_polya; star; qualimap ;feature_counts; multiqc; sort_index_bam; group; dedup; io_count; count_matrix; cell_caller;summary_report } from './modules/processes.nf'
-
+include {
+  features_file; merge_lanes; fastqc; barcode; io_extract; fastp;
+  trim_extra_polya; star; qualimap; feature_counts; multiqc;
+  sort_index_bam; group; dedup; io_count; count_matrix;
+  filter_count_matrix; cell_caller; summary_report;experiment_report
+  } from './modules/processes.nf'
 
 workflow {
+  // Create channels from rows in CSV file
+  // tuples are grouped by sample_id so FQs from different lanes may be merged
+    Channel
+      .fromPath(params.input_csv)
+      .ifEmpty { exit 1, "Cannot find input file : ${params.input_csv}" }
+      .splitCsv(header:true, sep:',', strip: true)
+      .map {row -> [ row.sample_id, file(row.fastq_1), file(row.fastq_2)] }
+      .groupTuple(by: 0)
+      .set {ch_input}
 
-    // We can either run the pipeline using fastqs in basespace as input, 
-    // or we can use fastqs in s3 as input.
-    // Start by initialising an empty input channel
-    ch_input_fastqs = Channel.empty()
+    // Create path object to the GTF
+    gtf = file("${params.gtf_path}")
 
-    // Either fill the channel with fastqs from the provided s3 path, or run
-    // the basespace process to obtain the fastqs
-    if ( params.fastq ){
-      ch_input_fastqs = Channel.fromPath("${params.fastq_path}/*.f*q.gz")
-      .ifEmpty { exit 1, "Input *.f*q.gz files are not found in ${params.fastq_path}" }
-    }
-    else{
-      ch_input_fastqs = basespace()
-    }
-    
-    // Regardless of where the fastqs came from, exract the sample name from the
-    // fastq filenames and add it to the channel, 
-    // so each item in the channel is a tuple of [sample name, fastq file].
-    ch_input_fastqs
-    .flatMap()
-    .map { [it.baseName.toString().substring(0, it.baseName.toString().lastIndexOf("_L0")), it] }
-    .groupTuple()
-    .set { ch_merge_lanes_in }
+    // Create the whitelist object
+    whitelist = file("${params.whitelist_path}")
+
+    // Make a file object of the STAR dir
+    star_index = file("${params.star_index_dir}")
+
+    // Create feature file for count_matrix from GTF
+    features_file(gtf)
+    feature_file_out = features_file.out.modified_gtf
 
     // This process will merge fastqs split over multiple lanes 
     // and count the number of reads in the merged fastq
-    merge_lanes(ch_merge_lanes_in)
+    merge_lanes(ch_input)
     ch_merge_lanes_out = merge_lanes.out.merge_lanes_out
     ch_numreads_log = merge_lanes.out.numreads_log
 
@@ -58,19 +60,17 @@ workflow {
     barcode(ch_merge_lanes_out_filtered, barcode_pattern)
     ch_barcode_multiqc = barcode.out.barcode_multiqc
 
-    // This process generates an inferred whitelist based on IOs detected in R2
-    // NOT run by default. Switch it on by setting params.io_whitelist = true
-    io_whitelist(ch_merge_lanes_out_filtered, barcode_pattern)
-    ch_io_whitelist_log = io_whitelist.out.io_whitelist_log
-
     // Get the whitelist and extract the IOs from the fastqs using umitools
-    ch_whitelist = Channel.fromPath(params.whitelist_path)
-    io_extract(ch_merge_lanes_out_filtered, ch_whitelist.collect(), barcode_pattern)
+    io_extract(ch_merge_lanes_out_filtered, whitelist, barcode_pattern)
     ch_io_extract_out = io_extract.out.io_extract_out
+    // Filter out empty fastq files.
+    ch_io_extract_out_filtered = ch_io_extract_out
+      .filter { it[2].countFastq() > 0}
+
     ch_io_extract_log = io_extract.out.io_extract_log
 
     // Trim and remove low quality reads with fastp
-    fastp(ch_io_extract_out)
+    fastp(ch_io_extract_out_filtered)
     ch_fastp_out = fastp.out.fastp_out
     ch_fastp_multiqc = fastp.out.fastp_multiqc
     ch_fastp_log = fastp.out.fastp_log
@@ -82,33 +82,29 @@ workflow {
     ch_trim_extra_polya_log2 = trim_extra_polya.out.trim_extra_polya_log2
 
     // Align with STAR
-    ch_star_index = Channel.fromPath("${params.genome_path}")
-    star(ch_trim_extra_polya_out, ch_star_index.collect())
+    star(ch_trim_extra_polya_out, star_index)
     ch_star_out = star.out.star_out
     ch_star_multiqc = star.out.star_multiqc
 
     // Qualimap on STAR output 
-    ch_star_gtf = Channel.fromPath("${params.gtf_path}/*.gtf")
-    qualimap(ch_star_out,ch_star_gtf.collect())
+    qualimap(ch_star_out, gtf)
     ch_qualimap_txt = qualimap.out.qualimap_txt 
 
 
     // Perform featurecount quantification
-    feature_counts(ch_star_out, ch_star_gtf.collect())
+    feature_counts(ch_star_out, gtf)
     ch_feature_counts_out = feature_counts.out.feature_counts_out
     ch_feature_counts_multiqc = feature_counts.out.feature_counts_multiqc
-    ch_features = feature_counts.out.feature_counts_list
 
-
-    // Generate input channel containing all the files needed for multiqc across all samples. 
-    // The final channel structure is just [file1,file2,file3,...]
+    // Generate input channel containing all the files needed for multiqc per samples. 
+    // The final channel structure is [sample_id, file1, file2, file3, ...]
     ch_fastqc_multiqc
       .mix(ch_barcode_multiqc)
       .mix(ch_fastp_multiqc)
       .mix(ch_star_multiqc)
       .mix(ch_feature_counts_multiqc)
-      .transpose()
-      .collect()
+      .groupTuple(by:0, size: 5)
+      .map({it.flatten()}).map({[it[0], it.tail()]})
       .set { ch_multiqc_in }
 
     // Run multiqc  
@@ -128,7 +124,7 @@ workflow {
     ch_io_group_log = group.out.io_group_log
 
 
-    // Perform deduplication (will only do anything if params.dedup is true)
+    // Perform deduplication
     dedup(ch_group_filtered_sam)
     ch_io_dedup_log = dedup.out.io_dedup_log
     ch_io_dedup_sam = dedup.out.io_dedup_sam
@@ -140,19 +136,44 @@ workflow {
 
 
     // Generate raw count matrix
-    count_matrix(ch_io_count_out, ch_whitelist.collect(), ch_features.collect())
+    count_matrix(ch_io_count_out, whitelist, feature_file_out)
     ch_h5ad = count_matrix.out.h5ad
-    ch_raw_matrix = count_matrix.out.raw_matrix
-    ch_raw_barcodes = count_matrix.out.raw_barcodes
-    ch_raw_features = count_matrix.out.raw_features
 
     // Run cell caller
     cell_caller(ch_h5ad)
-    ch_cell_caller_out = cell_caller.out.cell_caller_out
+    ch_cell_caller_out = cell_caller.out.cell_caller_out //[val(sample_id), int(cell_caller_nuc_gene_threshold)]
     ch_cell_caller_plot = cell_caller.out.cell_caller_plot
 
-    // Generate Report
-    summary_report(ch_raw_matrix, ch_raw_barcodes, ch_raw_features, ch_multiqc_json.collect(), ch_antisense_out,ch_qualimap_txt.collect(), ch_cell_caller_plot, ch_cell_caller_out)
-    ch_summary_report = summary_report.out.report_html
 
+    // Sort the groupTuple so that the int is always
+    // first and then flatten the tuple list to return a 3mer
+    ch_filter_count_matrix_in = ch_cell_caller_out.mix(ch_h5ad)
+    .groupTuple(by: 0, size:2, sort:{it.getClass() == sun.nio.fs.UnixPath ? 1 : 0})
+    .map{[it[0], it[1][0], it[1][1]]}
+
+    // Output filtered (cells only) count tables
+    filter_count_matrix(ch_filter_count_matrix_in)
+    ch_filtered_count_matrices = filter_count_matrix.out.cell_only_count_matrix
+
+    // structure of ch_summary_report_in is
+    // [sample_id, min_nuc_gene_cutoff, barcodes, features, matrix, multiqc_data, antisense, cell_caller_png, qualimap]
+    ch_filtered_count_matrices.map({[it[0], it.tail()]}).transpose()
+    .mix(ch_multiqc_json)
+    .mix(ch_antisense_out)
+    .mix(ch_qualimap_txt)
+    .mix(ch_cell_caller_plot)
+    .groupTuple(by:0, size: 7, sort:{it.name})
+    .mix(ch_cell_caller_out)
+    .groupTuple(by:0, size:2).map({it.flatten()})
+    .set({ch_summary_report_in})
+    
+    // Generate Report
+    summary_report(ch_summary_report_in)
+    // ch_summary_report = summary_report.out.report_html
+
+
+    ch_metrics_csv = summary_report.out.metrics_csv
+ 
+    // Experiment Report
+    experiment_report(ch_metrics_csv.collect())
 }

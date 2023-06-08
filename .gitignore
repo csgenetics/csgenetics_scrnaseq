@@ -1,0 +1,6 @@
+*.nextflow
+*.nextflow*
+*.vscode
+results
+results_test
+work

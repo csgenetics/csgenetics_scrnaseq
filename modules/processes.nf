@@ -8,27 +8,22 @@ nextflow.enable.dsl=2
 
 
 /*
-* Run BaseSpace Download
+* Convert GTF into features file
 */
-process basespace {
-  label 'c1m4'
+process features_file {
+  label 'c2m8'
+
+  input:
+  path(gtf)
 
   output:
-  path('*.fastq.gz')
-
-  when:
-  !params.fastq
+  path("${gtf.baseName}_features_names.tsv"), emit: modified_gtf
 
   shell:
   '''
-  bs download project \
-    --extension=fastq.gz \
-    --api-server=!{params.bs_api_server} \
-    --access-token=!{params.bs_access_token} \
-    -i !{params.bs_project_id} -o .
-
-  # mv fastq files from subfolders to one level higher
-  find . -mindepth 2 -type f -print -exec mv {} . \\;
+  features_names.py !{gtf} !{gtf.baseName}_features_names_tmp.tsv
+  # Modile 10x triple underscore for mm10 as this breaks the pipeline
+  sed 's/mm10___/mm10_/g' !{gtf.baseName}_features_names_tmp.tsv > !{gtf.baseName}_features_names.tsv
   '''
 }
 
@@ -41,7 +36,7 @@ process merge_lanes {
   label 'c1m4'
 
   input:
-  tuple val(sample_id), path(f)
+  tuple val(sample_id), file(fastq_1), file(fastq_2)
 
   output:
   tuple val(sample_id), env(numreads), path('merged'), emit: merge_lanes_out
@@ -51,8 +46,8 @@ process merge_lanes {
   '''
   mkdir merged
   # merging R1 and R2
-  zcat !{sample_id}_L*_R1*.f*q.gz | gzip > merged/!{sample_id}_R1.fastq.gz
-  zcat !{sample_id}_L*_R2*.f*q.gz | gzip > merged/!{sample_id}_R2.fastq.gz
+  zcat !{sample_id}*_L*_R1*.f*q.gz | gzip > merged/!{sample_id}_R1.fastq.gz
+  zcat !{sample_id}*_L*_R2*.f*q.gz | gzip > merged/!{sample_id}_R2.fastq.gz
   
   # count number of raw reads
   numreads=$(( $(zcat merged/!{sample_id}_R1.f*q.gz | wc -l) / 4))
@@ -74,7 +69,7 @@ process fastqc {
   tuple val(sample_id), path(f)
 
   output:
-  path ('*.{zip,html}'), emit: fastqc_multiqc
+  tuple val(sample_id), path("${sample_id}_R1_fastqc.html"), path("${sample_id}_R1_fastqc.zip"), path("${sample_id}_R2_fastqc.html"), path("${sample_id}_R2_fastqc.zip"), emit: fastqc_multiqc
   tuple val(sample_id), path("${sample_id}_R1_fastqc.zip"), emit: fastqc_out
 
   shell:
@@ -97,7 +92,7 @@ process barcode {
   val (barcode_pattern)
 
   output:
-  path('*.{json,html}'), emit: barcode_multiqc
+  tuple val(sample_id), path("${sample_id}_R2_fastp.html"), path("${sample_id}_R2_fastp.json"), emit: barcode_multiqc
 
   shell:
   '''
@@ -116,42 +111,7 @@ process barcode {
 }
 
 /*
-* Run umitools and generate an inferred whitelist based on IOs detected in reads
-* As we provide our own whitelist, this step is currently not run in the pipeline by default.
-*/
-process io_whitelist {
-  tag "$sample_id"
-  label 'c2m4'
-
-  publishDir "${params.outdir}/io_whitelist", pattern: '*{counts.png,.txt}', mode: 'copy'
-
-  input:
-  tuple val (sample_id), path(f)
-  val (barcode_pattern)
-
-  output:
-  file "*{counts.png,.txt}"
-  tuple val (sample_id), path('whitelist.log'), emit: io_whitelist_log
-
-
-  when:
-  params.io_whitelist
-
-  shell:
-  '''
-  # check input directory name
-  in=merged  
-  umi_tools whitelist -I $in/!{sample_id}_R2.fastq.gz \
-    --bc-pattern=!{barcode_pattern} \
-    --plot-prefix=!{sample_id} \
-    --log2stderr > !{sample_id}_whitelist.txt \
-    -L whitelist.log
-  '''
-}
-
-/*
 * Use umitools to label reads with IOs from the parameter provided whitelist
-* (not the inferred whitelist generated in io_whitelist).
 */
 process io_extract {
   tag "$sample_id"
@@ -163,7 +123,7 @@ process io_extract {
   val (barcode_pattern)
 
   output:
-  tuple val (sample_id), path('io_extract_out'), emit: io_extract_out
+  tuple val (sample_id), path("io_extract_out/${sample_id}_R2.fastq.gz"), path("io_extract_out/${sample_id}_R1.fastq.gz"), emit: io_extract_out
   tuple val (sample_id), path('extract.log'), emit: io_extract_log
 
   shell:
@@ -199,11 +159,11 @@ process fastp {
   label 'c4m2'
 
   publishDir "${params.outdir}/fastp", pattern: '*.{json,html}', mode: 'copy'
-  input: tuple val (sample_id), path(f)
+  input: tuple val (sample_id), path(r1), path(r2)
 
   output:
   tuple val (sample_id), path('fastp_out'), emit: fastp_out
-  path('*.{json,html}'), emit: fastp_multiqc
+  tuple val(sample_id), path("${sample_id}_R1_fastp.html"), path("${sample_id}_R1_fastp.json"), emit: fastp_multiqc
   tuple val (sample_id), path('fastp.log'), emit: fastp_log
 
   shell:
@@ -215,7 +175,7 @@ process fastp {
   # disable adapter trimming
   # disable polyG trimming 
   
-  fastp -i io_extract_out/!{sample_id}_R1.fastq.gz \
+  fastp -i !{sample_id}_R1.fastq.gz \
     -f !{params.sss_nmer} \
     -x --poly_x_min_len 15 \
     -l 20 \
@@ -267,8 +227,8 @@ process star {
   path(index)
 
   output:
-  tuple val (sample_id), path('*Aligned.sortedByCoord.out.bam'), emit: star_out
-  path ("*.{out,tab,mate1}"), emit: star_multiqc
+  tuple val(sample_id), path('*Aligned.sortedByCoord.out.bam'), emit: star_out
+  tuple val(sample_id), path("${sample_id}_Log.final.out"), path("${sample_id}_Log.out"), path("${sample_id}_Log.progress.out"), path("${sample_id}_SJ.out.tab"), path("${sample_id}_Unmapped.out.mate1"), emit: star_multiqc
 
   shell:
   '''
@@ -325,14 +285,11 @@ process feature_counts {
 
   output:
   tuple val(sample_id), path('*.bam'), emit: feature_counts_out
-  path("*.{txt,summary}"), emit: feature_counts_multiqc
-  tuple val(sample_id), path('*_names.tsv'), emit: feature_counts_list
+  tuple val(sample_id), path("${sample_id}_gene_assigned.txt"), path("${sample_id}_gene_assigned.txt.summary"), emit: feature_counts_multiqc
 
   shell:
   '''
   featureCounts -a !{gtf} -o !{sample_id}_gene_assigned.txt -R BAM !{f} -T 4 -t exon,intron,intergenic -g gene_id --fracOverlap 0.5 --extraAttributes gene_name
-  cut -f 1,7 !{sample_id}_gene_assigned.txt > reduced.!{sample_id}_gene_assigned.txt   #  This reduces the file size from ~ 30M to ~1M
-  sed '1,2d' reduced.!{sample_id}_gene_assigned.txt | sed  '1i ensID\tgeneSym' > !{sample_id}_features_names.tsv # Get ensemblID and gene
   '''
 }
 
@@ -343,32 +300,30 @@ process feature_counts {
 process multiqc {
   label 'c1m1'
 
-  publishDir "${params.outdir}/multiqc", mode: 'copy'
+  publishDir "${params.outdir}/multiqc/${sample_id}", mode: 'copy'
 
   input:
-  path(f)
+  tuple val(sample_id), path(multiqc_in_files)
 
   output:
-  file "*_multiqc.html"
-  file "*_data"
-  path("*/*.json") , emit: multiqc_json
+  path "*_multiqc.html"
+  path "*_data"
+  tuple val(sample_id), path("${sample_id}.multiqc.data.json"), emit: multiqc_json
 
   script:
-  def filename = "${params.bs_project_id}_multiqc.html"
-  def reporttitle = "${params.bs_project_id} (csgx/rnaseq)"
   """
   multiqc . \
     -f \
-    --title "$reporttitle" \
-    --filename "$filename" \
+    --title "${sample_id} multiqc" \
+    --filename "${sample_id}_multiqc.html" \
     -m fastqc \
     -m fastp \
     -m fastp \
     -m star \
     -m featureCounts
+  mv ${sample_id}_multiqc_data/multiqc_data.json ./${sample_id}.multiqc.data.json
   """
 }
-
 
 /*
 * Sort and index bam file using samtools
@@ -412,37 +367,6 @@ process group {
   tuple val(sample_id), path('*_group.log'), emit: io_group_log
 
   shell:
-
-  if (params.remove_singletons)
-  '''
-  # Originally this process was just umi_tools count.
-  # We had to change it to remove singleton reads from the bam file.
-  # We followed instructions from here:
-  # https://umi-tools.readthedocs.io/en/latest/Single_cell_tutorial.html#step-6-counting-molecules
-
-  # 1. run umi_tools group first
-  # remove --per-gene  --gene-tag=XT  --assigned-status-tag=XS  to group reads by start position only, not by gene
-  # add --read-length to group reads by start and end position
-
-  umi_tools group \
-    --read-length \
-    --per-cell \
-    -I !{sample_id}_sorted.bam \
-    --group-out=!{sample_id}_group.tsv \
-    --output-bam --out-sam -S !{sample_id}_group.sam \
-    --log=!{sample_id}_group.log
-
-    # 2. filter out singleton reads
-    # https://github.com/CGATOxford/UMI-tools/issues/274
-    grep @ !{sample_id}_group.sam > sam_header
-    grep -v @ !{sample_id}_group.sam > sam_reads
-    awk '$6 !~ /^1$/' !{sample_id}_group.tsv | awk '{print $1}' | tail -n+2 > selected_reads
-    awk 'NR==FNR{a[$0]; next} $1 in a' selected_reads sam_reads > sam_selected_reads
-    cat sam_header sam_selected_reads > !{sample_id}_group_filtered.sam
-
-  '''
-  else
-
   '''
   # Originally this process was just umi_tools count.
   # We had to change it to remove singleton reads from the bam file.
@@ -481,9 +405,6 @@ process dedup{
   output:
   tuple val(sample_id), path('*_dedup.log'), emit: io_dedup_log
   tuple val(sample_id), path('*_dedup.sam'), emit: io_dedup_sam
-
-  when:
-  params.dedup
   
   shell:
   '''
@@ -531,7 +452,7 @@ process io_count {
 
   # output has 2 columns: io_sequence and gene_name for every deduplicated alignments with gene assignment
 
-  samtools view !{f} | grep 'XT:' | cut -f 1,18 | cut -f 2,3,4 -d '_' | sed 's/_//' | sed 's/XT:Z://g'> !{sample_id}_bcGeneSummary.txt
+  samtools view !{f} | grep 'XT:' | sed 's/mm10___/mm10_/g' |cut -f 1,18 | cut -f 2,3,4 -d '_' | sed 's/_//' | sed 's/XT:Z://g'> !{sample_id}_bcGeneSummary.txt
 
   ## 2. Generate deduplicated reads per IO file 
   # similar command as above, but include all alignments, instead of just those with gene assignment
@@ -549,31 +470,32 @@ process count_matrix {
   tag "$sample_id"
   label 'c4m4'
 
-  publishDir "${params.outdir}/count_matrix/", mode: 'copy'
+  publishDir "${params.outdir}/count_matrix/raw_count_matrix/${sample_id}", mode: 'copy'
   
   input:
   tuple val (sample_id), path(f)
   path(w)
-  file(g)
+  path(features_file)
 
 
   output:
-  tuple val(sample_id), path('*.h5ad'), emit: h5ad
-  tuple val(sample_id), path('raw_count_matrix/*/matrix.mtx.gz'), emit: raw_matrix
-  tuple val(sample_id), path('raw_count_matrix/*/barcodes.tsv.gz'), emit: raw_barcodes
-  tuple val(sample_id), path('raw_count_matrix/*/features.tsv.gz'), emit: raw_features
+  tuple val(sample_id), path("${sample_id}.count_matrix.h5ad"), emit: h5ad
+  tuple val(sample_id), path("${sample_id}.matrix.mtx.gz"), emit: raw_matrix
+  tuple val(sample_id), path("${sample_id}.barcodes.tsv.gz"), emit: raw_barcodes
+  tuple val(sample_id), path("${sample_id}.features.tsv.gz"), emit: raw_features
 
-  shell:
-  '''
+  script:
+  """
   mkdir -p raw_count_matrix/!{sample_id}
-  count_matrix.py --white_list !{w} --count_table !{f} --gene_list !{sample_id}_features_names.tsv --sample !{sample_id}
-  '''
+  count_matrix.py --white_list ${w} --count_table ${f} --gene_list ${features_file} --sample ${sample_id}
+  """
 }
 
 
 
 /*
-* Run cell caller - this determines a threshold number of Nuclear gene detected per single cell, above which reagent_bead is considered to have successfully indexed a single cell
+* Run cell caller - this determines a threshold number of nuclear genes detected to call a cell.
+* The threshold is output to stdout and output as cell_caller_out
 */
 process cell_caller {
   tag "$sample_id"
@@ -582,21 +504,42 @@ process cell_caller {
   publishDir "${params.outdir}/plots", pattern: '*.png', mode: 'copy'
 
   input:
-
-  tuple val (sample_id), path(f)
+  tuple val(sample_id), path(count_matrix_h5ad)
 
   output:
-  tuple val(sample_id), path('*.txt'), emit: cell_caller_out
+  // returns the call_caller-calculated nuclear gene threshold
+  tuple val(sample_id), stdout, emit: cell_caller_out 
   tuple val(sample_id), path('*.png'), emit: cell_caller_plot
 
-
-  shell:
-    '''
-    cell_caller.py --sample !{sample_id} --min_nucGene !{params.min_nuc_gene} | cut -f2 -d, > !{sample_id}_cell_caller.txt
-    '''
+  script:
+  """
+  cell_caller.py --sample ${sample_id} --min_nucGene ${params.min_nuc_gene} --count_matrix $count_matrix_h5ad
+  """
 }
 
+/*
+* Filter count table - produce a count table that has been filtered for barcodes that pass the cell caller threshold
+*/
+process filter_count_matrix{
+  tag "$sample_id"
+  label 'c2m2'
 
+  publishDir "${params.outdir}/count_matrix/cell_only_count_matrix/${sample_id}/", mode: 'copy'
+
+  input:
+  tuple val(sample_id), val(nuc_gene_threshold), path(h5ad_raw_count_matrix)
+
+  output:
+  // Output the 3 part barcode, features, matrix 
+  tuple val(sample_id), path("${sample_id}.*.cell_only.barcodes.tsv.gz"), path("${sample_id}.*.cell_only.features.tsv.gz"), path("${sample_id}.*.cell_only.matrix.mtx.gz"), emit: cell_only_count_matrix
+  // Output the h5ad matrix
+  tuple val(sample_id), path("${sample_id}.*.cell_only.count_matrix.h5ad")
+
+  script:
+  """
+  filter_count_matrix.py ${nuc_gene_threshold} ${h5ad_raw_count_matrix} ${sample_id}
+  """
+}
 
 /*
 * Generate a Summary report
@@ -609,24 +552,37 @@ process summary_report {
   publishDir "${params.outdir}/report/", mode: 'copy'
   
   input:
-  tuple val (sample_id), path(f)
-  tuple val (sample_id), path(w)
-  tuple val (sample_id), path(g)
-  path(m)
-  tuple val (sample_id), path(a)
-  file(q)
-  tuple val (sample_id), path(p)
-  tuple val (sample_id), path(r)
+  tuple val(sample_id), val(min_nuc_gene_cutoff), path(filtered_barcodes), path(filtered_features), path(filtered_matrix), path(multiqc_data_json), path(antisense), path(cell_caller_png), path(qualimap)
 
   output:
   tuple val(sample_id), path('*.html'), emit: report_html
-  tuple val(sample_id), path('filter_count_matrix/*/*.mtx.gz') 
-  tuple val(sample_id), path('filter_count_matrix/*/*.tsv.gz')
+  path('*scRNA_Metrics.csv'), emit: metrics_csv
 
-  shell:
+  script:
+  """
+  web_summary.R --barcodes $filtered_barcodes --features $filtered_features --matrix $filtered_matrix \
+  --sample $sample_id --multiqc_json $multiqc_data_json --antisense $antisense --qualimap_report $qualimap \
+  --plot $cell_caller_png --cell_caller $min_nuc_gene_cutoff
+  """
+}
+/*
+* Generate a Experiment Summary report
+*/
+
+process experiment_report {
+  label 'c2m4'
+
+  publishDir "${params.outdir}/report/", mode: 'copy'
+
+  input:
+  path(c)
+
+  output:
+  path('experiment_report.html'), emit: experiment_html
+  path('experiment_result.csv'), emit: final_out
+
+  script:
   '''
-  mkdir -p filter_count_matrix/!{sample_id}/
-  
-  web_summary.R  --matrix !{f} --barcodes !{w} --features !{g} --sample !{sample_id} --multiqc_json !{m} --antisense !{a} --qualimap_report !{sample_id}_qualimap.txt --plot !{p} --cell_caller !{r}
+  exp_summary.R  --csv_files .
   '''
 }

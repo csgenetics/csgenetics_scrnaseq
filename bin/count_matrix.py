@@ -18,8 +18,6 @@ def parse_arguments(args):
 
     return parser.parse_args()
 
-
-
 def make_count_matrix(args):
 
     # load CSGX whitelist of IOs
@@ -27,12 +25,13 @@ def make_count_matrix(args):
     wl.columns = ['cell', 'io','ioID']
     wl = wl.iloc[:,[0,1]]
 
-    # load feature (gene) names obtained from the genome GTF file
-    genes_all = read_table(args.gene_list)
-
     # load count table obtained using UMI-tools
     counts = read_table(args.count_table,header=None)
     counts.columns = ['io', 'ensID']
+
+     # load feature (gene) names obtained from the genome GTF file
+    genes_all_unfiltered = read_table(args.gene_list).drop_duplicates()
+    genes_all = genes_all_unfiltered[genes_all_unfiltered['ensID'].isin(counts['ensID'])]    
 
     # first merge by IOs
     counts = merge(wl, counts)
@@ -70,16 +69,16 @@ def make_count_matrix(args):
 
 
     # write AnnData object into H5 file
-    adata.write(args.sample + '_tmp.h5ad')
+    adata.write(f"{args.sample}.count_matrix.h5ad")
 
     # Write sparse matrix format
-    mtx_file = gzip.open(f'raw_count_matrix/{args.sample}/matrix.mtx.gz', 'w')
+    mtx_file = gzip.open(f'{args.sample}.matrix.mtx.gz', 'w')
     mmwrite(mtx_file, a = sparse_matrix.T, comment='', field='integer', precision=None, symmetry='general')
     # Write feature table
     ft_names['feature_type'] = 'Gene Expression'
-    ft_names.to_csv(f'raw_count_matrix/{args.sample}/features.tsv.gz', sep="\t",compression={'method': 'gzip', 'compresslevel': 1, 'mtime': 1},header=None, index=False)
+    ft_names.to_csv(f'{args.sample}.features.tsv.gz', sep="\t",compression={'method': 'gzip', 'compresslevel': 1, 'mtime': 1},header=None, index=False)
     # Write barcode table
-    adata.obs.index.to_frame().to_csv(f'raw_count_matrix/{args.sample}/barcodes.tsv.gz',sep='\t',compression={'method': 'gzip', 'compresslevel': 1, 'mtime': 1},header=None, index=False)
+    adata.obs.index.to_frame().to_csv(f'{args.sample}.barcodes.tsv.gz',sep='\t',compression={'method': 'gzip', 'compresslevel': 1, 'mtime': 1},header=None, index=False)
 
 
 if __name__ == "__main__":

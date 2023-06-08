@@ -18,18 +18,18 @@ bimodal - one peak for "noise", one peak for "cells". This function aims to find
 every sample, rather than having a fixed 100 gene threshold for everything. If there are no local minima above 100 nuclear genes,
 then the function will default to 100 - i.e. 2 on the log10 scale, as log10(100) = 2."""
 
-def parse_arguments(args):
-    parser = argparse.ArgumentParser(description = "Arguments for cell caller script to calculate number of genes threshold")
-    parser.add_argument("--sample", help="Sample ID")
-    parser.add_argument("--min_nucGene", default=100, type=int, help="minimal number of nuclear gene to call single cell")
+def parse_arguments():
+   parser = argparse.ArgumentParser(description = "Arguments for cell caller script to calculate number of genes threshold")
+   parser.add_argument("--sample", help="Sample ID")
+   parser.add_argument("--min_nucGene", default=100, type=int, help="minimal number of nuclear gene to call single cell")
+   parser.add_argument("--count_matrix", help="Path to the h5ad count matrix.")
+   return parser.parse_args()
 
-    return parser.parse_args()
 
-
-def getlog10NucGenes(sample):
+def getlog10NucGenes(sample, args):
    '''function to read in sample and get relevant values into adata.obs'''
    #read in the counts matrix
-   adata = sc.read_h5ad('{sample}_tmp.h5ad'.format(sample=sample))
+   adata = sc.read_h5ad(args.count_matrix)
    #calculate QC metrics (total number of genes per cell, total counts per cell)
    sc.pp.calculate_qc_metrics(adata, percent_top=None, log1p=False, inplace=True)
    # calculate the number of NUCLEAR genes per cell
@@ -66,12 +66,12 @@ def get_cutoff(pdf_df, min_nucGene):
 def make_pd_plots(pdf_df, min_nucGene, cutoff, sample):
    '''function to plot probability density with the default cutoffs and cell caller cutoff, and save the plot as a png'''
    plt.plot(pdf_df['data_space'], pdf_df['evaluated'])
-   plt.axvline(cutoff, color = 'red',label = 'Nuclear genes'+'\n'+str(round(10 ** cutoff)))
+   plt.axvline(cutoff, color = 'red',label = 'Cell Caller'+'\n'+str(round(10 ** cutoff)))
    plt.axvline(np.log10(min_nucGene), color = 'black',label = 'Default'+'\n'+str(round(min_nucGene)))
-   plt.title("Cell Caller Plot", fontdict = {'family':'sans-serif','color':'black','size':20,'fontweight':'bold'})
+   plt.title("Cell Caller minimum nuclear\ngene threshold calculation", fontdict = {'family':'sans-serif','color':'black','size':12,'fontweight':'bold'})
    plt.xlabel("log10(nNuc_genes+1)")
    plt.ylabel("Density")
-   plt.legend(bbox_to_anchor = (1.0, 1), loc = 'upper right', title="Cells", fontsize=7)
+   plt.legend(bbox_to_anchor = (1.0, 1), loc = 'upper right', title="Method", fontsize=7)
    plt.savefig('{0}_pdf_with_cutoff.png'.format(sample), dpi=900)   # save the figure to file
    plt.close()    # close the figure window
 
@@ -80,7 +80,7 @@ def cell_caller(args):
    '''launch function'''
    sample = args.sample
    min_nucGene = float(args.min_nucGene)
-   log10_Nuc_genes = getlog10NucGenes(sample)
+   log10_Nuc_genes = getlog10NucGenes(sample, args)
    if len(set(log10_Nuc_genes)) == 1:
       cutoff = 2
    else:
@@ -88,14 +88,11 @@ def cell_caller(args):
       cutoff = get_cutoff(pdf_df, min_nucGene)   
       make_pd_plots(pdf_df, min_nucGene, cutoff, sample)
    # because cutoff is on a log10 scale, I transform back by 10^ (** in the script) to the value, and round to the nearest integer
-   print(f"{round(min_nucGene)},{round(10 ** cutoff)}")
-   return(f"{round(min_nucGene)},{round(10 ** cutoff)}")
+   print(round(10 ** cutoff), end="")
 
    # instead of return, write to txt file and don't forget tests
 
-
-
 if __name__ == "__main__":
-    args = parse_arguments(sys.argv[1:])
-    # not sure what the best way to return this back to nextflow is, so leaving it like this for now (until I learn more about nextflow). 
-    cell_caller(args)
+   args = parse_arguments()
+   # not sure what the best way to return this back to nextflow is, so leaving it like this for now (until I learn more about nextflow). 
+   cell_caller(args)

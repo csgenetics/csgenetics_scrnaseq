@@ -1,6 +1,10 @@
-## Build a image from this dockerfile for having nextflow and docker already installed in container used it for dockerized running version
-FROM adoptopenjdk/openjdk11:ubuntu-jre-nightly
-# Docker Image having Java tool as base image along with nextflow and docker installed inside the container
+################## BASE IMAGE #####################
+FROM adoptopenjdk/openjdk11:ubuntu-jre-nightly 
+
+################## METADATA #######################
+
+LABEL base_image="adoptopenjdk/openjdk11:ubuntu-jre-nightly"
+LABEL about.summary="Ubuntu image with Nextflow and Docker installed. Used to run the CS Genetics scRNA-Seq pipelin.e"
 
 # Install required bash tools
 RUN apt-get update && apt-get install -y apt-utils nano curl wget git awscli
@@ -11,4 +15,6 @@ RUN cd /usr/local/bin && curl -s https://get.nextflow.io | bash
 # Install Docker
 RUN curl -fsSL https://get.docker.com -o get-docker.sh
 RUN sh get-docker.sh
-CMD ["/bin/bash", "nextflow"]
+
+# Run nextflow 
+# CMD ["/bin/bash", "nextflow"]
