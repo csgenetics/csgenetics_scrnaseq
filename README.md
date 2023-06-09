@@ -196,7 +196,7 @@ If no profile is set, then the [local executor](https://www.nextflow.io/docs/lat
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
 ### test
-Launching the pipeline with this profile will set configuration parameters so that remotely hosted small, human fastq files and a remotely hosted GRCh38 set of resources are used. The pipeline will use docker containers for each of the processes.
+Launching the pipeline with this profile will set configuration parameters so that remotely hosted small, human fastq files and a remotely hosted GRCh38/mm10 set of resources are used. The pipeline will use docker containers for each of the processes.
 
 Note that the pipeline will create the following files in your working directory:
 
@@ -254,7 +254,7 @@ The output directory where the results will be saved.
 ### `star_index_dir`
 Specify the path of the STAR index directory. Required for mapping.
 
-By default the remotely hosted Human STAR index is used see [below](#premade-star-indexes).
+By default the remotely hosted Human/Mouse STAR index is used see [below](#premade-star-indexes).
 
 ```bash
 --star_index_dir s3://csgx.public.readonly/resources/references/refdata-gex-GRCh38-and-mm10-2020-A/star/
@@ -264,7 +264,7 @@ By default the remotely hosted Human STAR index is used see [below](#premade-sta
 
 #### Premade STAR indexes
 There are premade remotely hosted STAR indexes for the following species (remotely hosted path given):
-- Human: s3://csgx.public.readonly/resources/references/refdata-gex-GRCh38-and-mm10-2020-A/star/
+- Human/Mouse: s3://csgx.public.readonly/resources/references/refdata-gex-GRCh38-and-mm10-2020-A/star/
 
 If you are working with one of these species, you can provide the remotely hosted directory
 to the `--star_index_dir` parameter. The pipeline will automatically download the resource.
@@ -279,9 +279,9 @@ please follow the instructions for creating a STAR index [here](https://physiolo
 Path to the gtf annotation file.
 
 There are remotely hosted GTF files for the following species (remotely hosted path given):
-- Human: s3://csgx.public.readonly/resources/references/refdata-gex-GRCh38-and-mm10-2020-A/genes/genes.gtf
+- Human/Mouse: s3://csgx.public.readonly/resources/references/refdata-gex-GRCh38-and-mm10-2020-A/genes/genes.gtf
 
-By default the remotely hosted Human gtf is used.
+By default the remotely hosted Human/Mouse gtf is used.
 
 ```bash
 --gtf_path s3://csgx.public.readonly/resources/references/refdata-gex-GRCh38-and-mm10-2020-A/genes/genes.gtf
@@ -397,5 +397,5 @@ Version 0.0.1 of the pipeline is used.
 
 The docker profile is selected, configuring the pipeline to use pre-specified Docker containers for each of the processes.
 
-The remotely hosted Human STAR index and gtf file are used by default. The remotely hosted v2 whitelist is used by default.
+The remotely hosted Human/Mouse STAR index and gtf file are used by default. The remotely hosted v2 whitelist is used by default.
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
