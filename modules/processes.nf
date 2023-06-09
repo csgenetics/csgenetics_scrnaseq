@@ -554,8 +554,8 @@ process summary_report {
   tuple val(sample_id), val(min_nuc_gene_cutoff), path(filtered_barcodes), path(filtered_features), path(filtered_matrix), path(multiqc_data_json), path(antisense), path(cell_caller_png), path(qualimap)
 
   output:
-  tuple val(sample_id), path('*.html'), emit: report_html
-  path('*scRNA_Metrics.csv'), emit: metrics_csv
+  tuple val(sample_id), path("${sample_id}_summary.html"), emit: report_html
+  path("${sample_id}_metrics.csv"), emit: metrics_csv
 
   script:
   """

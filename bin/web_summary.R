@@ -217,7 +217,7 @@ cell_stats <- data.frame(stat = c('Estimated Number of Cells', 'Mean Reads per C
 combine_df <- rbind(seq_stats,map_stats,cell_stats)
 colnames(combine_df) <- c("scRNA_Metrics", opt$sample_id)
 # Save the final result
-write.csv(combine_df, paste0(opt$sample_id,"_scRNA_Metrics.csv"), row.names = FALSE)
+write.csv(combine_df, paste0(opt$sample_id,"_metrics.csv"), row.names = FALSE)
 
 print_HTML(seq_stats = seq_stats, map_stats= map_stats ,cell_stats = cell_stats, dir = "." , sample_id = opt$sample_id, plot = opt$plot) # output a HTML summary of the run
 
