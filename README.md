@@ -174,12 +174,16 @@ Nextflow pipeline configurable parameters can be set in groups by specifying pro
 
 See the [Config profiles](https://www.nextflow.io/docs/latest/config.html#config-profiles) section of the Netflow documentation for further details.
 
-There are two profiles available for the CS Genetics scRNA-Seq pipeline:
+There are three profiles available for the CS Genetics scRNA-Seq pipeline:
 - `test`
   - A profile with a complete configuration for automated testing
   - Includes links to test data so needs no other parameters
+  - Runs Docker containers for each process using Docker
 - `docker`
-  - A generic configuration profile that enables use of pre-configured Docker containers for each process
+  - A generic configuration profile that enables use of pre-configured Docker containers for each process run using Docker.
+- `singularity`
+  - A generic configuration profile that enables use of pre-configured Docker containers for each process run using Singularity.
+  - See the Nextflow documentation on [Singularity](https://www.nextflow.io/docs/latest/container.html#singularity) for further details.
 
 If no profile is set, then the [local executor](https://www.nextflow.io/docs/latest/executor.html#local) will be used and software required for each process to run should be pre-installed on your local system.
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
