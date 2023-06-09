@@ -174,11 +174,15 @@ Nextflow pipeline configurable parameters can be set in groups by specifying pro
 
 See the [Config profiles](https://www.nextflow.io/docs/latest/config.html#config-profiles) section of the Netflow documentation for further details.
 
-There are three profiles available for the CS Genetics scRNA-Seq pipeline:
+There are four profiles available for the CS Genetics scRNA-Seq pipeline:
 - `test`
   - A profile with a complete configuration for automated testing
   - Includes links to test data so needs no other parameters
   - Runs Docker containers for each process using Docker
+- `test_singularity`
+  - A profile with a complete configuration for automated testing
+  - Includes links to test data so needs no other parameters
+  - Runs Docker containers for each process using Singularity
 - `docker`
   - A generic configuration profile that enables use of pre-configured Docker containers for each process run using Docker.
 - `singularity`
@@ -207,6 +211,12 @@ nextflow run main.nf -profile test
 When running the test profile, do not supply the `--input-csv` argument. A remotely hosted input csv is used.
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
+To run the `test` profile using Singualrity to launch the Docker containers use the profile `test_singularity`
+
+E.g.
+```bash
+nextflow run main.nf -profile singularity_test
+```
 ### docker
 Launching the pipeline with this profile configures the pipeline to use pre-specified Docker containers for each of the processes. It is recommended to run the pipeline using this profile.
 
