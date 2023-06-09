@@ -2,43 +2,39 @@
 
 set -e
 
-# use specified user name or use `default` if not specified
-MY_USERNAME="${MY_USERNAME:-default}"
-echo "MY_USERNAME is set to ${MY_USERNAME}"
+# Use specified LOCAL_USER_ID to create a new user
+# that matches the USER ID of the user launching the container
+# See https://denibertovic.com/posts/handling-permissions-with-docker-volumes/
+# for further details on motives to work with the local user's UID.
+USER_ID=${LOCAL_USER_ID:-9001}
 
-# use specified group name or use the same user name also as the group name
-MY_GROUP="${MY_GROUP:-${MY_USERNAME}}"
-echo "MY_GROUP is set to ${MY_GROUP}"
+# We also need the gid of the docker group so that we can
+# add the user to that grop so that they still have access to
+# the docker.sock file in
+DOCKER_GID=${DOCKER_GID}
 
-# use the specified UID for the user
-MY_UID="${MY_UID:-1000}"
-echo "MY_UID is set to ${MY_UID}"
+echo "Starting with UID : $USER_ID"
 
-# use the specified GID for the user
-MY_GID="${MY_GID:-${MY_UID}}"
-echo "MY_GID is set to ${MY_GID}"
+# Create the user's group
+addgroup --gid $USER_ID user
 
-# check to see if group exists; if not, create it
-if grep -q -E "^${MY_GROUP}:" /etc/group > /dev/null 2>&1
-then
-  echo "INFO: Group exists; skipping creation"
-else
-  echo "INFO: Group doesn't exist; creating..."
-  # create the group
-  addgroup --gid $MY_GID $MY_GROUP || (echo "INFO: Group exists but with a different name; renaming..."; groupmod -g "${MY_GID}" -n "${MY_GROUP}" "$(awk -F ':' '{print $1":"$3}' < /etc/group | grep ":${MY_GID}$" | awk -F ":" '{print $1}')")
-fi
+# Create the user and associate to the group
+useradd --shell /bin/bash -u $USER_ID -o -c "" -g $USER_ID -m user
 
+# get the docker group id that we need to add the user to
+DOCKER_GID=$(ls -l /var/run/docker.sock | cut -d" " -f4)
 
-# check to see if user exists; if not, create it
-if id -u "${MY_USERNAME}" > /dev/null 2>&1
-then
-  echo "INFO: User exists; skipping creation"
-else
-  echo "INFO: User doesn't exist; creating..."
-  # create the user
-  adduser --uid $MY_UID --gid $MY_GID --home "/home/${MY_USERNAME}" --shell /bin/bash --disabled-password --gecos "" $MY_USERNAME
-fi
+# Try to add the user to that group
+# If group doesn't exist, create the group and call it docker_sock
+# Then add the user to that group
+usermod -aG $DOCKER_GID user || (addgroup --gid $DOCKER_GID docker_sock; echo "Creating group docker_sock with gid ${DOCKER_GID}"; usermod -aG $DOCKER_GID user; echo "Added user to group docker_sock")
 
-# exec and run the actual process specified in the CMD of the Dockerfile (which gets passed as ${@})
-exec "$@"
+# usermod -aG docker user
+export HOME=/home/user
 
+# exec and run the actual process specified in the
+# CMD of the Dockerfile (which gets passed as ${@})
+# using gosu so that it is run as the user.
+# The user should have the required groups to run the /var/run/docker.sock
+# so that subsequent docker containers can be created
+exec gosu user "$@"
