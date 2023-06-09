@@ -99,11 +99,11 @@ The pipeline is then run by starting a docker container and supplying
 it with commandline arguments. E.g.
 
 ```bash
-docker run -it --rm -e USER=$USER \
+docker run -it --rm -e LOCAL_USER_ID=$(id -u) \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v $HOME/analysis:$HOME/analysis \
   -w $HOME/analysis \
-  public.ecr.aws/csgenetics/csgenetics_scrnaseq_base:0.0.1 \ 
+  public.ecr.aws/csgenetics/csgenetics_scrnaseq_base:0.0.2 \ 
   nextflow run main.nf -profile docker -w $HOME/analysis/work/ --outdir $HOME/analysis/results/ --input_csv $HOME/analysis/input_csv/input_csv.csv
 ```
 
@@ -111,7 +111,7 @@ where:
 
 - `-it --rm ` runs the container interactively and cleans up after exiting.
 
-- `-e USER=$USER` makes your USER environmental variable visible instide the container.
+- `-e LOCAL_USER_ID=$(id -u)` passes your user uid as an environmental variable.
 
 - `-v /var/run/docker.sock:/var/run/docker.sock` mounts `/var/run/docker.sock` at `/var/run/docker.sock` enabling Docker to spawn sister containers.
 
@@ -120,6 +120,12 @@ where:
 - `-w $HOME/analysis` specifies the working directory (where the main.nf script is located).
 
 - `nextflow run main.nf ...` is the command for launching the pipeline including commandline-suopplied arguments (...)
+
+The csgenetics_scrnaseq_base:0.0.2 has an entry point script that creates a local user called `user`
+that matches your local uid, detects the required group gid to execute `/var/run/docker.sock`
+and adds the user to that group and finally runs the nextflow command as `user`.
+This means that output files will be owned by the specified user uid, while still enabling
+the base docker image to spawn additional docker containers.
 
 For a full list of the configurable parameters that can be can be supplied to the pipeline
 and other options for configuration see [Configurable parameters](#configurable-parameters).
