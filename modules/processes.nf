@@ -46,8 +46,8 @@ process merge_lanes {
   '''
   mkdir merged
   # merging R1 and R2
-  zcat *_L*_R1*.f*q.gz | gzip > merged/!{sample_id}_R1.fastq.gz
-  zcat *_L*_R2*.f*q.gz | gzip > merged/!{sample_id}_R2.fastq.gz
+  cat *_L*_R1*.f*q.gz > merged/!{sample_id}_R1.fastq.gz
+  cat *_L*_R2*.f*q.gz > merged/!{sample_id}_R2.fastq.gz
   
   # count number of raw reads
   numreads=$(( $(zcat merged/!{sample_id}_R1.f*q.gz | wc -l) / 4))
