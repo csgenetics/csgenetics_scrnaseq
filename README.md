@@ -254,17 +254,18 @@ The output directory where the results will be saved.
 ### `star_index_dir`
 Specify the path of the STAR index directory. Required for mapping.
 
-By default the remotely hosted Human/Mouse STAR index is used see [below](#premade-star-indexes).
+By default the remotely hosted Human STAR index is used see [below](#premade-star-indexes).
 
 ```bash
---star_index_dir s3://csgx.public.readonly/resources/references/refdata-gex-GRCh38-and-mm10-2020-A/star/
+--star_index_dir s3://csgx.public.readonly/resources/references/refdata-gex-GRCh38-2020-A/star/
 ```
 
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
 #### Premade STAR indexes
 There are premade remotely hosted STAR indexes for the following species (remotely hosted path given):
-- Human/Mouse: s3://csgx.public.readonly/resources/references/refdata-gex-GRCh38-and-mm10-2020-A/star/
+- Human: s3://csgx.public.readonly/resources/references/refdata-gex-GRCh38-2020-A/star/
+- Mouse: s3://csgx.public.readonly/resources/references/refdata-gex-mm10-2020-A/star/
 
 If you are working with one of these species, you can provide the remotely hosted directory
 to the `--star_index_dir` parameter. The pipeline will automatically download the resource.
@@ -279,12 +280,13 @@ please follow the instructions for creating a STAR index [here](https://physiolo
 Path to the gtf annotation file.
 
 There are remotely hosted GTF files for the following species (remotely hosted path given):
-- Human/Mouse: s3://csgx.public.readonly/resources/references/refdata-gex-GRCh38-and-mm10-2020-A/genes/genes.gtf
+- Human: s3://csgx.public.readonly/resources/references/refdata-gex-GRCh38-2020-A/genes/genes.gtf
+- Mouse: s3://csgx.public.readonly/resources/references/refdata-gex-mm10-2020-A/genes/genes.gtf
 
-By default the remotely hosted Human/Mouse gtf is used.
+By default the remotely hosted Human gtf is used.
 
 ```bash
---gtf_path s3://csgx.public.readonly/resources/references/refdata-gex-GRCh38-and-mm10-2020-A/genes/genes.gtf
+--gtf_path s3://csgx.public.readonly/resources/references/refdata-gex-GRCh38-2020-A/genes/genes.gtf
 ```
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
