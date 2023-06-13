@@ -408,15 +408,10 @@ process dedup{
   
   shell:
   '''
-  # If we are NOT using unique IOs, remove the --per-gene and --gene-tag flags.
   # The effect of this will be to deduplicate based on the combination of cell
-  # barcode and SSS start site. This has the caveat that we expect multiple SSS
-  # products per input mRNA, so this will inflate some counts. Additionally, the
-  # maximum counts detectable per gene will be equal to the gene length. This
-  # is problematic for highly expressed genes, which will have deflated counts.
+  # barcode and SSS start site.
 
   umi_tools dedup \
-    --read-length \
     --per-cell \
     --in-sam -I !{f} \
     --out-sam -S !{sample_id}_dedup.sam \
