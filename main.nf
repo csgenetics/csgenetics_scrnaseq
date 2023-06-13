@@ -36,6 +36,9 @@ workflow {
     // Create the whitelist object
     whitelist = file("${params.whitelist_path}")
 
+    // Make a file object of the STAR dir
+    star_index = file("${params.star_index_dir}")
+
     // Create feature file for count_matrix from GTF
     features_file(gtf)
     feature_file_out = features_file.out.modified_gtf
@@ -66,10 +69,14 @@ workflow {
     // Get the whitelist and extract the IOs from the fastqs using umitools
     io_extract(ch_merge_lanes_out_filtered, whitelist, barcode_pattern)
     ch_io_extract_out = io_extract.out.io_extract_out
+    // Filter out empty fastq files.
+    ch_io_extract_out_filtered = ch_io_extract_out
+      .filter { it[2].countFastq() > 0}
+
     ch_io_extract_log = io_extract.out.io_extract_log
 
     // Trim and remove low quality reads with fastp
-    fastp(ch_io_extract_out)
+    fastp(ch_io_extract_out_filtered)
     ch_fastp_out = fastp.out.fastp_out
     ch_fastp_multiqc = fastp.out.fastp_multiqc
     ch_fastp_log = fastp.out.fastp_log
@@ -81,8 +88,7 @@ workflow {
     ch_trim_extra_polya_log2 = trim_extra_polya.out.trim_extra_polya_log2
 
     // Align with STAR
-    ch_star_index = Channel.fromPath("${params.star_index_dir}")
-    star(ch_trim_extra_polya_out, ch_star_index.collect())
+    star(ch_trim_extra_polya_out, star_index)
     ch_star_out = star.out.star_out
     ch_star_multiqc = star.out.star_multiqc
 
@@ -184,4 +190,9 @@ workflow {
 
     experiment_report(ch_experiment_stats_collect,multisample_template)
 
+
+    ch_metrics_csv = summary_report.out.metrics_csv
+ 
+    // Experiment Report
+    experiment_report(ch_metrics_csv.collect())
 }

@@ -135,3 +135,4 @@ cell_stats_banner <- data.frame(stat = c('Estimated_Number_of_Cells', 'Mean_Read
 write.table(cell_stats, paste0(opt$sample_id,"_cell_stats.csv"),quote = FALSE, row.names = FALSE, col.names = FALSE, sep="\t")
 write.table(cell_stats_banner, paste0(opt$sample_id,"_cell_stats_banner.tmp"),quote = FALSE, row.names = FALSE, col.names = FALSE, sep="\t")
 
+

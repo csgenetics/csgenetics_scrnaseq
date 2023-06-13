@@ -46,8 +46,8 @@ process merge_lanes {
   '''
   mkdir merged
   # merging R1 and R2
-  zcat !{sample_id}_L*_R1*.f*q.gz | gzip > merged/!{sample_id}_R1.fastq.gz
-  zcat !{sample_id}_L*_R2*.f*q.gz | gzip > merged/!{sample_id}_R2.fastq.gz
+  cat *_L*_R1*.f*q.gz > merged/!{sample_id}_R1.fastq.gz
+  cat *_L*_R2*.f*q.gz > merged/!{sample_id}_R2.fastq.gz
   
   # count number of raw reads
   numreads=$(( $(zcat merged/!{sample_id}_R1.f*q.gz | wc -l) / 4))
@@ -123,7 +123,7 @@ process io_extract {
   val (barcode_pattern)
 
   output:
-  tuple val (sample_id), path('io_extract_out'), emit: io_extract_out
+  tuple val (sample_id), path("io_extract_out/${sample_id}_R2.fastq.gz"), path("io_extract_out/${sample_id}_R1.fastq.gz"), emit: io_extract_out
   tuple val (sample_id), path('extract.log'), emit: io_extract_log
 
   shell:
@@ -159,7 +159,7 @@ process fastp {
   label 'c4m2'
 
   publishDir "${params.outdir}/fastp", pattern: '*.{json,html}', mode: 'copy'
-  input: tuple val (sample_id), path(f)
+  input: tuple val (sample_id), path(r1), path(r2)
 
   output:
   tuple val (sample_id), path('fastp_out'), emit: fastp_out
@@ -175,7 +175,7 @@ process fastp {
   # disable adapter trimming
   # disable polyG trimming 
   
-  fastp -i io_extract_out/!{sample_id}_R1.fastq.gz \
+  fastp -i !{sample_id}_R1.fastq.gz \
     -f !{params.sss_nmer} \
     -x --poly_x_min_len 15 \
     -l 20 \
@@ -367,37 +367,6 @@ process group {
   tuple val(sample_id), path('*_group.log'), emit: io_group_log
 
   shell:
-
-  if (params.remove_singletons)
-  '''
-  # Originally this process was just umi_tools count.
-  # We had to change it to remove singleton reads from the bam file.
-  # We followed instructions from here:
-  # https://umi-tools.readthedocs.io/en/latest/Single_cell_tutorial.html#step-6-counting-molecules
-
-  # 1. run umi_tools group first
-  # remove --per-gene  --gene-tag=XT  --assigned-status-tag=XS  to group reads by start position only, not by gene
-  # add --read-length to group reads by start and end position
-
-  umi_tools group \
-    --read-length \
-    --per-cell \
-    -I !{sample_id}_sorted.bam \
-    --group-out=!{sample_id}_group.tsv \
-    --output-bam --out-sam -S !{sample_id}_group.sam \
-    --log=!{sample_id}_group.log
-
-    # 2. filter out singleton reads
-    # https://github.com/CGATOxford/UMI-tools/issues/274
-    grep @ !{sample_id}_group.sam > sam_header
-    grep -v @ !{sample_id}_group.sam > sam_reads
-    awk '$6 !~ /^1$/' !{sample_id}_group.tsv | awk '{print $1}' | tail -n+2 > selected_reads
-    awk 'NR==FNR{a[$0]; next} $1 in a' selected_reads sam_reads > sam_selected_reads
-    cat sam_header sam_selected_reads > !{sample_id}_group_filtered.sam
-
-  '''
-  else
-
   '''
   # Originally this process was just umi_tools count.
   # We had to change it to remove singleton reads from the bam file.
@@ -504,7 +473,7 @@ process count_matrix {
   publishDir "${params.outdir}/count_matrix/raw_count_matrix/${sample_id}", mode: 'copy'
   
   input:
-  tuple val (sample_id), path(f)
+  tuple val(sample_id), path(f)
   path(w)
   path(features_file)
 
@@ -517,7 +486,6 @@ process count_matrix {
 
   script:
   """
-  mkdir -p raw_count_matrix/!{sample_id}
   count_matrix.py --white_list ${w} --count_table ${f} --gene_list ${features_file} --sample ${sample_id}
   """
 }
@@ -591,6 +559,7 @@ process summary_statistics {
   path("${sample_id}_map_stats.csv"),
   path("${sample_id}_cell_stats_banner.tmp"), emit: stats_files
 
+
   script:
   """
   web_summary.R --barcodes $filtered_barcodes --features $filtered_features --matrix $filtered_matrix \
@@ -599,6 +568,7 @@ process summary_statistics {
   """
 }
 /*
+
 * 
 */
 process generate_report {
@@ -621,6 +591,7 @@ process generate_report {
 }
 
 /*
+
 * Generate a Experiment Summary report
 */
 
