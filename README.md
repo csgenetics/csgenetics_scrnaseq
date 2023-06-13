@@ -38,6 +38,8 @@
   - [plots](#plots)
   - [qualimap](#qualimap)
   - [STAR](#star)
+- [Resource allocation](#resource-allocation)
+  - [Error handling](#error-handling)
 - [Log files](#log-files)
 - [Examples](#examples)
   - [Example 1](#example-1)
@@ -366,6 +368,46 @@ Contains the bam files output from STAR and associated mapping log files.
 
 ## Log files
 As standard, Nextflow produces a `.nextflow.log` file in the directory from which the pipeline was run.
+<div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
+
+## Resource allocation
+Resource allocation is acheived through the labelling of processes.
+
+E.g. the process
+```nextflow
+process features_file {
+  label 'c2m8'
+
+  ...
+}
+```
+
+The labels relate to resource allocation in the [base.config](conf/base.config) configuration file.
+
+E.g.
+
+```
+withLabel: c2m8 {
+    cpus = { check_max (2, 'cpus')}
+    memory = { check_max( 8.GB * task.attempt, 'memory' ) }
+  }
+```
+
+Default resource allocations have been made that suit a wide variety of sample types (e.g. number of barcodes, number of reads). However, you may wish to adjust the resources allocated.
+
+To do this, you will need to either change the label of the process, the ```withLabel``` configureation in [base.config](conf/base.config), or provide an additional configuration file that overwrites the [base.config](conf/base.config) configurations using the `-c` flag. See the [Nextflow documantation on configuration](https://www.nextflow.io/docs/latest/config.html) for more details on pipeline configuration. NF-core also provide [useful documentation](https://nf-co.re/docs/usage/configuration#tuning-workflow-resources) on resource allocation through configuration files.
+
+<div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
+
+### Error handling
+By default when a task fails it will be retried (a maximum of 5 times) with increased RAM (<base RAM> * task.attempt). Both RAM and num_cpus will not be increased beyond `max_memory` (default `256.GB`) and `max_cpus` (default `16`).
+
+`max_memory` and `max_cpus` can be set on the command line like any other parameter:
+
+```
+--max_memory 128.GB --max_cpus 8
+```
+
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
 ## Examples
