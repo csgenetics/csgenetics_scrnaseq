@@ -378,7 +378,6 @@ process group {
   # add --read-length to group reads by start and end position
 
   umi_tools group \
-    --read-length \
     --per-cell \
     -I !{sample_id}_sorted.bam \
     --group-out=!{sample_id}_group.tsv \
