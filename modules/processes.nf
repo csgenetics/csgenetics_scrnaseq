@@ -587,9 +587,9 @@ process summary_statistics {
   output:
   tuple val(sample_id),
   path("${sample_id}_cell_stats.csv"),
-  path("${sample_id}_cell_stats_banner.tmp"),
   path("${sample_id}_seq_stats.csv"),
-  path("${sample_id}_map_stats.csv"), emit: stats_files
+  path("${sample_id}_map_stats.csv"),
+  path("${sample_id}_cell_stats_banner.tmp"), emit: stats_files
 
   script:
   """
@@ -598,7 +598,6 @@ process summary_statistics {
   --cell_caller $min_nuc_gene_cutoff
   """
 }
-
 /*
 * 
 */
@@ -614,14 +613,32 @@ process generate_report {
   path(cs_logo)
   output:
   tuple val(sample_id), path("${sample_id}_report.html")
-  path("imgs/*.png")
-
 
   script:
   """
-  mkdir -p imgs
-  mv ${plot_png} imgs/cell_caller_plot.png
-  mv ${cs_logo} imgs/${cs_logo}
-  create_sample_html.py ${sample_id} placeholder.png
+  create_sample_html.py ${sample_id} ${plot_png}
   """
 }
+
+/*
+* Generate a Experiment Summary report
+*/
+
+process experiment_report {
+  label 'c2m4'
+
+  publishDir "${params.outdir}/report/", mode: 'copy'
+
+  input:
+  path(csvs)
+  path(template)
+  output:
+  path('multisample_report.html')
+  path('multisample_out.json')
+  path('multisample_out.csv')
+  script:
+  """
+  multisample_report.py 
+  """
+}
+

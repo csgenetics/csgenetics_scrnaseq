@@ -10,7 +10,8 @@ include {
   features_file; merge_lanes; fastqc; barcode; io_extract; fastp;
   trim_extra_polya; star; qualimap; feature_counts; multiqc;
   sort_index_bam; group; dedup; io_count; count_matrix;
-  filter_count_matrix; cell_caller; summary_statistics; generate_report
+  filter_count_matrix; cell_caller; summary_statistics; generate_report;
+  experiment_report
   } from './modules/processes.nf'
 
 workflow {
@@ -28,7 +29,8 @@ workflow {
     gtf = file("${params.gtf_path}")
 
     // Create path object to HTML template
-    html_template = file("${params.html_template_path}")
+    html_ss_template = file("${params.ss_template_path}")
+    multisample_template = file("${params.multisample_template_path}")
     cs_logo = file("${params.cs_logo}")
 
     // Create the whitelist object
@@ -168,8 +170,18 @@ workflow {
     // Generate summary statistics
     summary_statistics(ch_summary_report_in)
     ch_summary_stats = summary_statistics.out.stats_files
+
+    // Extract only CSVs for collect function
+    summary_statistics.out.stats_files
+          .map({[it[1], it[2], it[3]]})
+          .collect()
+          .set({ch_experiment_stats_collect})
+
     ch_summary_stats_plot = ch_summary_stats.join(ch_cell_caller_plot, by:0)
-    // Generate report
-    generate_report(ch_summary_stats_plot, html_template, cs_logo)
+    // Generate single sample report
+    generate_report(ch_summary_stats_plot, html_ss_template, cs_logo)
+    // Experiment Report
+
+    experiment_report(ch_experiment_stats_collect,multisample_template)
 
 }
