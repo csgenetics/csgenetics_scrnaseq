@@ -119,13 +119,12 @@ workflow {
     // Run umi tools group (basically assign reads to cells) and save a lot of output channels
     group(ch_sort_index_bam_out)
     ch_io_group_sam = group.out.io_group_sam
-    ch_group_filtered_sam = group.out.io_group_filtered_sam
     ch_group_tsv = group.out.io_group_tsv
     ch_io_group_log = group.out.io_group_log
 
 
     // Perform deduplication
-    dedup(ch_group_filtered_sam)
+    dedup(ch_io_group_sam)
     ch_io_dedup_log = dedup.out.io_dedup_log
     ch_io_dedup_sam = dedup.out.io_dedup_sam
 

@@ -362,29 +362,17 @@ process group {
 
   output:
   tuple val(sample_id), path('*_group.sam'), emit: io_group_sam
-  tuple val(sample_id), path('*_group_filtered.sam'), emit: io_group_filtered_sam
   tuple val(sample_id), path('*_group.tsv'), emit: io_group_tsv
   tuple val(sample_id), path('*_group.log'), emit: io_group_log
 
   shell:
   '''
-  # Originally this process was just umi_tools count.
-  # We had to change it to remove singleton reads from the bam file.
-  # We followed instructions from here:
-  # https://umi-tools.readthedocs.io/en/latest/Single_cell_tutorial.html#step-6-counting-molecules
-
-  # run umi_tools group first
-  # remove --per-gene  --gene-tag=XT  --assigned-status-tag=XS  to group reads by start position only, not by gene
-  # add --read-length to group reads by start and end position
-
   umi_tools group \
     --per-cell \
     -I !{sample_id}_sorted.bam \
     --group-out=!{sample_id}_group.tsv \
     --output-bam --out-sam -S !{sample_id}_group.sam \
     --log=!{sample_id}_group.log
-
-  cp !{sample_id}_group.sam !{sample_id}_group_filtered.sam
   '''
 
 }
