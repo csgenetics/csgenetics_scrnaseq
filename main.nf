@@ -8,7 +8,7 @@
 nextflow.enable.dsl=2
 include {
   features_file; merge_lanes; fastqc; barcode; io_extract; fastp;
-  trim_extra_polya; star; qualimap; feature_counts; multiqc;
+  trim_extra_polya; star; filter; qualimap; feature_counts; multiqc;
   sort_index_bam; group; dedup; io_count; count_matrix;
   filter_count_matrix; cell_caller; summary_report;experiment_report
   } from './modules/processes.nf'
@@ -83,16 +83,20 @@ workflow {
 
     // Align with STAR
     star(ch_trim_extra_polya_out, star_index)
-    ch_star_out = star.out.star_out
+    ch_star_out_qualimap = star.out.star_out_qualimap
+    ch_star_out_filtering = star.out.star_out_filtering
     ch_star_multiqc = star.out.star_multiqc
 
+    // Filter the mapped reads for reads with 1 alignment and max 3 mismatch
+    filter(ch_star_out_filtering)
+
     // Qualimap on STAR output 
-    qualimap(ch_star_out, gtf)
+    qualimap(ch_star_out_qualimap, gtf)
     ch_qualimap_txt = qualimap.out.qualimap_txt 
 
-
     // Perform featurecount quantification
-    feature_counts(ch_star_out, gtf)
+    ch_feature_counts_in = filter.out.filtered_bam
+    feature_counts(ch_feature_counts_in, gtf)
     ch_feature_counts_out = feature_counts.out.feature_counts_out
     ch_feature_counts_multiqc = feature_counts.out.feature_counts_multiqc
 

@@ -227,7 +227,9 @@ process star {
   path(index)
 
   output:
-  tuple val(sample_id), path('*Aligned.sortedByCoord.out.bam'), emit: star_out
+  tuple val(sample_id), path("${sample_id}_Aligned.sortedByCoord.out.bam"), emit: star_out_qualimap
+  tuple val(sample_id), path("${sample_id}_Aligned.sortedByCoord.out.bam"), emit: star_out_filtering
+
   tuple val(sample_id), path("${sample_id}_Log.final.out"), path("${sample_id}_Log.out"), path("${sample_id}_Log.progress.out"), path("${sample_id}_SJ.out.tab"), path("${sample_id}_Unmapped.out.mate1"), emit: star_multiqc
 
   shell:
@@ -244,6 +246,26 @@ process star {
     --outSAMattributes Standard
   '''
 
+}
+
+/*
+* Filter for reads with 1 alignment and max of 3 differences from reference seq.
+*/
+process filter{
+tag "$sample_id"
+
+label "c2m2"
+
+input:
+tuple val(sample_id), path(star_out_bam)
+
+output:
+tuple val(sample_id), path("${sample_id}.mapped.sorted.filtered.bam"), emit: filtered_bam
+
+script:
+"""
+samtools view -h -e '[NH]==1 && ([nM]==0 || [nM]==1 || [nM]==2 || [nM]==3)' -b $star_out_bam > ${sample_id}.mapped.sorted.filtered.bam 
+"""
 }
 
 /*
@@ -269,7 +291,6 @@ process qualimap {
   '''
 }
 
-
 /*
 * Quantify genes using feature counts
 */
@@ -280,7 +301,7 @@ process feature_counts {
   publishDir "${params.outdir}/featureCounts", mode: 'copy'
 
   input:
-  tuple val (sample_id), path(f)
+  tuple val(sample_id), path(bam)
   path(gtf)
 
   output:
@@ -288,11 +309,10 @@ process feature_counts {
   tuple val(sample_id), path("${sample_id}_gene_assigned.txt"), path("${sample_id}_gene_assigned.txt.summary"), emit: feature_counts_multiqc
 
   shell:
-  '''
-  featureCounts -a !{gtf} -o !{sample_id}_gene_assigned.txt -R BAM !{f} -T 4 -t exon,intron,intergenic -g gene_id --fracOverlap 0.5 --extraAttributes gene_name
-  '''
+  """
+  featureCounts -a $gtf -o ${sample_id}_gene_assigned.txt -R BAM $bam -T 4 -t exon,intron,intergenic -g gene_id --fracOverlap 0.5 --extraAttributes gene_name
+  """
 }
-
 
 /*
 * Run multiqc
