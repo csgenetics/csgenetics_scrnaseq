@@ -88,7 +88,7 @@ process barcode {
   label 'c4m2'
 
   input:
-  tuple val (sample_id), path(f)
+  tuple val(sample_id), path(f)
   val (barcode_pattern)
 
   output:
@@ -118,13 +118,13 @@ process io_extract {
   label 'c2m4'
 
   input:
-  tuple val (sample_id), path(f)
+  tuple val(sample_id), path(f)
   path(w)
-  val (barcode_pattern)
+  val(barcode_pattern)
 
   output:
-  tuple val (sample_id), path("io_extract_out/${sample_id}_R2.fastq.gz"), path("io_extract_out/${sample_id}_R1.fastq.gz"), emit: io_extract_out
-  tuple val (sample_id), path('extract.log'), emit: io_extract_log
+  tuple val(sample_id), path("io_extract_out/${sample_id}_R2.fastq.gz"), path("io_extract_out/${sample_id}_R1.fastq.gz"), emit: io_extract_out
+  tuple val(sample_id), path('extract.log'), emit: io_extract_log
 
   shell:
   '''
@@ -159,12 +159,12 @@ process fastp {
   label 'c4m2'
 
   publishDir "${params.outdir}/fastp", pattern: '*.{json,html}', mode: 'copy'
-  input: tuple val (sample_id), path(r1), path(r2)
+  input: tuple val(sample_id), path(r1), path(r2)
 
   output:
-  tuple val (sample_id), path('fastp_out'), emit: fastp_out
+  tuple val(sample_id), path('fastp_out'), emit: fastp_out
   tuple val(sample_id), path("${sample_id}_R1_fastp.html"), path("${sample_id}_R1_fastp.json"), emit: fastp_multiqc
-  tuple val (sample_id), path('fastp.log'), emit: fastp_log
+  tuple val(sample_id), path('fastp.log'), emit: fastp_log
 
   shell:
   '''
@@ -200,12 +200,12 @@ process trim_extra_polya {
   label 'c2m4'
 
   input:
-  tuple val (sample_id), path('fastp_out')
+  tuple val(sample_id), path('fastp_out')
 
   output:
-  tuple val (sample_id), path('*.fastq.gz'), emit: trim_extra_polya_out
-  tuple val (sample_id), path('trim_polyA_metrics.csv'), emit: trim_extra_polya_log1
-  tuple val (sample_id), path('read_lengths_post_trimming.csv'), emit:trim_extra_polya_log2
+  tuple val(sample_id), path('*.fastq.gz'), emit: trim_extra_polya_out
+  tuple val(sample_id), path('trim_polyA_metrics.csv'), emit: trim_extra_polya_log1
+  tuple val(sample_id), path('read_lengths_post_trimming.csv'), emit:trim_extra_polya_log2
 
   shell:
   '''
@@ -269,7 +269,6 @@ process qualimap {
   '''
 }
 
-
 /*
 * Quantify genes using feature counts
 */
@@ -292,7 +291,6 @@ process feature_counts {
   featureCounts -a !{gtf} -o !{sample_id}_gene_assigned.txt -R BAM !{f} -T 4 -t exon,intron,intergenic -g gene_id --fracOverlap 0.5 --extraAttributes gene_name
   '''
 }
-
 
 /*
 * Run multiqc
@@ -424,7 +422,6 @@ process dedup{
   '''
 }
 
-
 /*
 * Generate various count file precursors
 */
@@ -461,7 +458,6 @@ process io_count {
 
 }
 
-
 /*
 * Generate a h5ad count matrix
 * output raw_count_matrix (unfiltered for single-cells only)
@@ -489,7 +485,6 @@ process count_matrix {
   count_matrix.py --white_list ${w} --count_table ${f} --gene_list ${features_file} --sample ${sample_id}
   """
 }
-
 
 /*
 * Run cell caller - this determines a threshold number of nuclear genes detected to call a cell.
@@ -540,7 +535,7 @@ process filter_count_matrix{
 }
 
 /*
-* Generate a Summary statistics required for HTML report
+* Generate the summary statistics required for HTML report
 */
 process summary_statistics {
   tag "$sample_id"
@@ -568,7 +563,7 @@ process summary_statistics {
 }
 
 /*
-
+* Generate a per sample html report 
 */
 process single_summary_report {
   tag "$sample_id"
@@ -591,7 +586,7 @@ process single_summary_report {
 }
 
 /*
-* Generate a Experiment Summary report
+* Generate an experiment summary report containing statistics for multiple samples
 */
 process multi_sample_report {
   label 'c2m4'
@@ -600,11 +595,13 @@ process multi_sample_report {
 
   input:
   path(csvs)
-  path(template)
+  path(template) 
+
   output:
   path('multisample_report.html')
   path('multisample_out.json')
   path('multisample_out.csv')
+
   script:
   """
   multisample_report.py 
