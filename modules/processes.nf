@@ -491,7 +491,6 @@ process count_matrix {
 }
 
 
-
 /*
 * Run cell caller - this determines a threshold number of nuclear genes detected to call a cell.
 * The threshold is output to stdout and output as cell_caller_out
@@ -567,9 +566,9 @@ process summary_statistics {
   --cell_caller $min_nuc_gene_cutoff
   """
 }
+
 /*
 
-* 
 */
 process generate_report {
   tag "$sample_id"
@@ -581,20 +580,19 @@ process generate_report {
   tuple val(sample_id), path(cell_stats), path(cell_stats_banner), path(seq_stats), path(map_stats), path(plot_png)
   path(html_template)
   path(cs_logo)
+
   output:
   tuple val(sample_id), path("${sample_id}_report.html")
 
   script:
   """
-  create_sample_html.py ${sample_id} ${plot_png}
+  create_sample_html.py $sample_id $plot_png $map_stats $cell_stats $cell_stats_banner $seq_stats $html_template
   """
 }
 
 /*
-
 * Generate a Experiment Summary report
 */
-
 process experiment_report {
   label 'c2m4'
 
