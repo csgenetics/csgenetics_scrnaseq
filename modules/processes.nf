@@ -570,7 +570,7 @@ process summary_statistics {
 /*
 
 */
-process generate_report {
+process single_summary_report {
   tag "$sample_id"
   label 'c4m4'
 
@@ -593,7 +593,7 @@ process generate_report {
 /*
 * Generate a Experiment Summary report
 */
-process experiment_report {
+process multi_sample_report {
   label 'c2m4'
 
   publishDir "${params.outdir}/report/", mode: 'copy'

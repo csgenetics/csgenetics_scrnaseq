@@ -10,8 +10,8 @@ include {
   features_file; merge_lanes; fastqc; barcode; io_extract; fastp;
   trim_extra_polya; star; qualimap; feature_counts; multiqc;
   sort_index_bam; group; dedup; io_count; count_matrix;
-  filter_count_matrix; cell_caller; summary_statistics; generate_report;
-  experiment_report
+  filter_count_matrix; cell_caller; summary_statistics; single_summary_report;
+  multi_sample_report
   } from './modules/processes.nf'
 
 workflow {
@@ -185,14 +185,11 @@ workflow {
 
     ch_summary_stats_plot = ch_summary_stats.join(ch_cell_caller_plot, by:0)
     // Generate single sample report
-    generate_report(ch_summary_stats_plot, html_ss_template, cs_logo)
+    single_summary_report(ch_summary_stats_plot, html_ss_template, cs_logo)
     // Experiment Report
 
-    experiment_report(ch_experiment_stats_collect,multisample_template)
-
+    multi_sample_report(ch_experiment_stats_collect, multisample_template)
 
     ch_metrics_csv = summary_report.out.metrics_csv
  
-    // Experiment Report
-    experiment_report(ch_metrics_csv.collect())
 }
