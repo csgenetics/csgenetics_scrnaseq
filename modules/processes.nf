@@ -581,7 +581,7 @@ process single_summary_report {
 
   script:
   """
-  create_sample_html.py $sample_id $plot_png $map_stats $cell_stats $cell_stats_banner $seq_stats $html_template
+  create_single_sample_report.py $sample_id $plot_png $map_stats $cell_stats $cell_stats_banner $seq_stats $html_template
   """
 }
 
