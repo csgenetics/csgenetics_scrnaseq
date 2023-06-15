@@ -550,8 +550,7 @@ process summary_statistics {
   tuple val(sample_id),
   path("${sample_id}_cell_stats.csv"),
   path("${sample_id}_seq_stats.csv"),
-  path("${sample_id}_map_stats.csv"),
-  path("${sample_id}_cell_stats_banner.tmp"), emit: stats_files
+  path("${sample_id}_map_stats.csv"), emit: stats_files
 
 
   script:
@@ -572,7 +571,7 @@ process single_summary_report {
   publishDir "${params.outdir}/report/${sample_id}", mode: 'copy'
   
   input:
-  tuple val(sample_id), path(cell_stats), path(cell_stats_banner), path(seq_stats), path(map_stats), path(plot_png)
+  tuple val(sample_id), path(cell_stats), path(seq_stats), path(map_stats), path(plot_png)
   path(html_template)
   path(cs_logo)
 
@@ -581,7 +580,7 @@ process single_summary_report {
 
   script:
   """
-  cat $map_stats $cell_stats $cell_stats_banner $seq_stats > ${sample_id}.metrics.csv
+  cat $map_stats $cell_stats $seq_stats > ${sample_id}.metrics.csv
   create_single_sample_report.py $sample_id $plot_png ${sample_id}.metrics.csv $html_template
   """
 }

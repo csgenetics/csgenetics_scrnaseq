@@ -128,11 +128,5 @@ cell_stats <- data.frame(stat = c('Estimated Number of Cells', 'Mean Reads per C
                                         median_counts_per_cell, percent_mito
                                         ), big.mark = ','))
                                         
-cell_stats_banner <- data.frame(stat = c('Estimated_Number_of_Cells', 'Mean_Reads_per_Cell', 'Total_genes_detected'),
-                        value = prettyNum(c(number_of_cell, mean_read_cell,tot_genes_detected), big.mark = ','))
-
 # ------------------------------ Write cell statistics
 write.table(cell_stats, paste0(opt$sample_id,"_cell_stats.csv"),quote = FALSE, row.names = FALSE, col.names = FALSE, sep="\t")
-write.table(cell_stats_banner, paste0(opt$sample_id,"_cell_stats_banner.tmp"),quote = FALSE, row.names = FALSE, col.names = FALSE, sep="\t")
-
-
