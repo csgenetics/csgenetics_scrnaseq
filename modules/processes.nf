@@ -595,7 +595,7 @@ process multi_sample_report {
 
   input:
   path(csvs)
-  path(template) 
+  path(template)
 
   output:
   path('multisample_report.html')
@@ -604,7 +604,7 @@ process multi_sample_report {
 
   script:
   """
-  multisample_report.py 
+  create_multi_sample_report.py 
   """
 }
 

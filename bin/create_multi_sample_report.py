@@ -1,105 +1,129 @@
 #!/usr/bin/python3
+
+"""
+Create a multi sample report html.
+Takes as input a set of .csv files (one per sample)
+to be found in the current directory.
+
+TODO check if we can simply stack the existing csv files.
+"""
+
 import pandas as pd
-import sys
 from glob import glob
-from pathlib import Path
 import json
 from jinja2 import Template
 
+class SingleSampleHTMLReport:
+    def __init__(self):
+        self.table_template = self.return_table_template()
+        self.make_multisample_df()
+        self.json_data = self.create_write_final_df_json()
 
-# ------------------ Load CSVs and concat
-path = "."
-csv_files = Path(path).glob('*.csv') 
-dfs = list()
+    def create_html_report(self):
+        """
+        Inject the json data into the html template
+        and output the report
+        """
 
-for file in csv_files:
-    dat = pd.read_csv(file, sep = "\t", index_col=None, header=None)
-    dat['Path'] = file.stem.split("_")[0]
-    dfs.append(dat)
+        # Create the html to be inserted by injecting the json into
+        # the table_template
+        insert_html = self.table_template.render(users = self.json_data)
 
+        # Generate a Jinja2 Template from the outer template html
+        with open("multisample_template.html", "r") as html_txt:
+            CS_template_html = Template(html_txt.read())
 
-concat_dat = pd.concat(dfs,
-                       ignore_index=True)
+        # Insert table
+        # TODO rewrite so that we are not doing a nested render.
+        final_report = CS_template_html.render(table_insert=insert_html)
 
-concat_dat = concat_dat.rename({0:"Statistics", 1:"value"}, axis=1)
+        # Write out the rendered template.
+        with open(f"multisample_report.html", "w") as f_output:
+            f_output.write(final_report)
 
-# Pivot table
-pivot_table = concat_dat.pivot(index = "Statistics",
-                               columns="Path",
-                               values="value")
-
-# Remove pivot indices
-rename_pivot_table = pivot_table.rename_axis(None, axis=0) 
-
-
-# Make Sample ID the first row
-rename_pivot_table.loc['Sample ID'] = rename_pivot_table.columns
-index_no_sample = list(rename_pivot_table.index)
-index_no_sample.remove('Sample ID')
-new_index = ['Sample ID'] + index_no_sample
-final_df = rename_pivot_table.loc[new_index]
-# Write CSV file
-final_df.to_csv("multisample_out.csv", sep=",")
-
-# Write JSON file
-final_df.to_json("multisample_out.json",orient="index")
-json_file = open("multisample_out.json")
-json_data = json.load(json_file)
-
-# ------------------ HTML manipulation
-
-# --- create jinja template for html table
-
-# This loops through the values in the merged table and creates 
-# table tags for values
-
-table_template = Template("""
-
-{% for key,value in users.items() %}
-{% if key == "Sample ID" %}
-<tr>
-    <th >
+    def make_multisample_df(self):
+        """
+        Create a single csv from the input csvs.
+        """
+        self.concatenated_df = self.make_concatenated_df()
+        self.final_df = self.curate_concat_df()
+        self.wite_final_df_csv()
         
-     </th>
+    def wite_final_df_csv(self):
+        self.final_df.to_csv("multisample_out.csv", sep=",")
 
-    {% for id,value2 in value.items() %}
+    @staticmethod
+    def make_concatenated_df():
+        """
+        Load in a df for each input csv
+        and concatenate them together into a single dataframe
+        """
+        dfs = list()
+        for file in glob('./*.csv'):
+            dat = pd.read_csv(file, sep = "\t", index_col=None, header=None)
+            dat['Path'] = file.stem.split("_")[0]
+            dfs.append(dat)
 
-     <td style="font-weight: bold">
-      {{value2}}
-     </td>
+        return pd.concat(dfs, ignore_index=True)
 
-    {% endfor %}
+    def curate_concat_df(self):
+        self.concatenated_df = self.concatenated_df.rename({0:"Statistic", 1:"value"}, axis=1)
 
-{% else %}
-<tr>
-    <th >
-        {{key}}
-     </th>
+        # Pivot table
+        self.concatenated_df = self.concatenated_df.pivot(index = "Statistic",
+                                    columns="Path",
+                                    values="value")
 
-{% for id,value2 in value.items() %}
+        # Remove pivot indices
+        self.concatenated_df = self.concatenated_df.rename_axis(None, axis=0) 
 
-     <td>
-      {{value2}}
-     </td>
+        # Make Sample ID the first row
+        self.concatenated_df.loc['Sample ID'] = self.concatenated_df.columns
+        index_no_sample = list(self.concatenated_df.index)
+        index_no_sample.remove('Sample ID')
+        new_index = ['Sample ID'] + index_no_sample
+        return self.concatenated_df.loc[new_index]
 
-    {% endfor %}
-{% endif %}
-</tr>
+    def create_write_final_df_json(self):
+        # Write JSON file
+        self.final_df.to_json("multisample_out.json", orient="index")
+        with open("multisample_out.json", "r") as jsonhandle:
+            return json.load(jsonhandle)
+        
+    @staticmethod
+    def return_table_template():
+        return Template("""
 
-{% endfor %}
-""")
+            {% for key,value in users.items() %}
+            {% if key == "Sample ID" %}
+            <tr>
+                <th >
+                    
+                </th>
 
-# --- insert json data into table template
-insert_html = table_template.render(users = json_data)
+                {% for id,value2 in value.items() %}
 
-# ------- Open CS html to insert table and save
+                <td style="font-weight: bold">
+                {{value2}}
+                </td>
 
-html_txt = open("multisample_template.html", "r").read()
-CS_template_html = Template(html_txt)
+                {% endfor %}
 
-# --- Insert table
-final_report = CS_template_html.render(table_insert=insert_html)
+            {% else %}
+            <tr>
+                <th >
+                    {{key}}
+                </th>
 
-#  --- write
-with open(f"multisample_report.html", "w") as f_output:
-    f_output.write(final_report)
+            {% for id,value2 in value.items() %}
+
+                <td>
+                {{value2}}
+                </td>
+
+                {% endfor %}
+            {% endif %}
+            </tr>
+
+            {% endfor %}
+            """)
