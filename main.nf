@@ -188,7 +188,5 @@ workflow {
 
     // Generate multi sample report
     multi_sample_report(ch_experiment_stats_collect, multi_sample_report_template)
-
-    ch_metrics_csv = summary_report.out.metrics_csv
  
 }
