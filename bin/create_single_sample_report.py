@@ -1,7 +1,4 @@
 #!/usr/bin/python3
-from bs4 import BeautifulSoup as bs
-import re
-import pandas as pd
 import sys
 from jinja2 import Template
 import base64
@@ -16,57 +13,39 @@ class SingleSampleHTMLReport:
         We also inserts a premade png for cell caller
     """
     def __init__(self):
+        
         self.sample_id = sys.argv[1]
         self.plot_path = sys.argv[2]
 
-        self.mapping_data = pd.read_csv(f"{sys.argv[3]}",
-                                sep="\t",
-                                header=None)
-        
-        self.cell_data = pd.read_csv(f"{sys.argv[4]}",
-                                sep="\t",
-                                header=None)
+        self.metric_name_to_jinja_var_name_dict = self.get_metric_name_to_jinja_var_name_dict()
 
-        self.cell_banner_data = pd.read_csv(f"{sys.argv[5]}",
-                                sep="\t",
-                                header=None)
-        
-        self.seq_data = pd.read_csv(f"{sys.argv[6]}",
-                                sep="\t",
-                                header=None)
+        with open(sys.argv[3]) as metrics_handle:
+            self.metrics_dict = {line.split("\t")[0]: line.split("\t")[1].rstrip() for line in metrics_handle}
 
-        with open(sys.argv[7]) as html_template_path:
-            self.soup = bs(html_template_path, 'html.parser')
+        self.metrics_dict = {self.metric_name_to_jinja_var_name_dict[k]: v for k, v in self.metrics_dict.items()}
 
-        self.jinja_template = Template(str(self.soup))
+        self.metrics_dict["sample_id"] = self.sample_id
 
-        self.cell_caller_html = self.generate_cell_caller_plot_html()
+        with open(sys.argv[4]) as html_template:
+            self.jinja_template = Template(html_template.read())
 
-    def generate_cell_caller_plot_html(self):
-        with open(f"{self.plot_path}", "rb") as image_file:
-            encoded_png_str = base64.b64encode(image_file.read()).decode("utf-8")
-            return f"<img alt='...' class='img-fluid' src='data:image/png;base64,{encoded_png_str}'/>"
+        self.encoded_png_str = self.generate_encoded_png_str()
 
-    def generate_html_report(self):
-        self.insert_sample_id()
-        self.insert_cell_caller_plot()
-        self.insert_stats()
+        self.metrics_dict["encoded_png_str"] = self.encoded_png_str
+
+        self.report = self.jinja_template.render(self.metrics_dict)
+
         self.write_report()
 
+    def generate_encoded_png_str(self):
+        with open(f"{self.plot_path}", "rb") as image_file:
+            return base64.b64encode(image_file.read()).decode("utf-8")
+        
     def insert_sample_id(self):
         self.insert_id("sample_id", self.sample_id, "h2")
 
-    def insert_cell_caller_plot(self):
-        self.report = self.jinja_template.render(cell_caller_img=self.cell_caller_html)
-
-    def insert_stats(self):
-        self.insert_mapping_data()
-        self.insert_cell_data()
-        self.insert_sequencing_data()
-        self.insert_cell_banner_data()
-
     def insert_mapping_data(self):
-        self.loop_dat(self.mapping_dat, "td")
+        self.loop_dat(self.mapping_data, "td")
 
     def insert_cell_data(self):
         self.loop_dat(self.cell_data, "td")
@@ -80,28 +59,37 @@ class SingleSampleHTMLReport:
     def write_report(self):
         with open(f"{self.sample_id}_report.html", "w") as report_out:
             report_out.write(self.report)
-        
-    def insert_id(self, id, insert, tag1):
-        """
-        Function will look for the td ID and insert a string
-        """
-        old_text = self.soup.find(f"{tag1}", {"id": f"{id}"})
-        # Replace all existing values with insert
-        new_text = old_text.find(text=re.compile(
-        '.*.')).replace_with(f"{insert}")
 
-    # --- This function will loop through the dataframe.
-    # The td ids are identical to the dataframe row indices.
-    # Therefore row indices are used as id, and corresponsing string is inserted
-    def loop_dat(self, dat: pd.DataFrame, tag: str):
+    def get_metric_name_to_jinja_var_name_dict(self):
         """
-        TODO document what form the df is in.
+        Return a dictionary that is used to convert the metric
+        names in the .metrics.csv input file to the 
+        Jinja variable names in the report template.
         """
-        for index, row in dat.iterrows():
-            print(row[0]) # rowname / td id
-            print(row[1]) # string to insert
-            print(f"{tag}")
-            self.insert_id(row[0], row[1], f"{tag}")
+        return {
+            "Reads Mapped to Genome": "mapped_reads",
+            "Reads Mapped Confidently to Genome": "confidently_mapped_reads",
+            "Reads Mapped Confidently to Intergenic Regions": "confidently_mapped_reads_intergenic",
+            "Reads Mapped Confidently to Intronic Regions": "confidently_mapped_reads_intronic",
+            "Reads Mapped Confidently to Exonic Regions": "confidently_mapped_reads_exonic",
+            "Reads Mapped Antisense to Gene": "mapped_reads_antisense",
+            "Estimated Number of Cells": "estimated_number_of_cells",
+            "Estimated_Number_of_Cells": "estimated_number_of_cells",
+            "Mean Reads per Cell": "mean_reads_per_cell",
+            "Mean Genes per Cell": "mean_genes_per_cell",
+            "Median Genes per Cell": "median_genes_per_cell",
+            "Total Genes Detected": "total_genes_detected",
+            "Mean Counts per Cell": "mean_counts_per_cell",
+            "Median Counts per Cell": "median_counts_per_cell",
+            "Mitochondrial Ratio": "mito_ratio",
+            "Mean_Reads_per_Cell": "mean_reads_per_cell",
+            "Total_genes_detected": "total_genes_detected",
+            "Total Number of Reads": "total_num_reads",
+            "Valid Barcodes / CSGX Cell Barcodes": "valid_barcodes",
+            "Sequencing Saturation": "sequencing_saturation",
+            "Q30 Bases in Barcode": "q30_barcode",
+            "Q30 Bases in RNA Read": "q30_rna"
+            }
 
 if __name__ == "__main__":
-    SingleSampleHTMLReport().generate_html_report()
+    SingleSampleHTMLReport()

@@ -25,7 +25,7 @@
   </div>
   <div class="container-sm w-75" id="container1">
    <h2 class="text-left mt-3" id="sample_id">
-    Sample_placeholder
+    {{ sample_id }}
    </h2>
    <div class="row">
     <!-- Total Cell Number -->
@@ -35,7 +35,7 @@
        <div class="row no-gutters align-items-left">
         <div class="col mr-2 col-md-6">
          <div class="text-xs font-weight-bold mb-1" style="font-size:25px; color:rgb(54, 186, 0)" id="Estimated_Number_of_Cells">
-          Not calculated
+          {{ estimated_number_of_cells }}
          </div>
          <div class="h5 mb-0 font-weight-bold text-gray-800" style="font-size:12px">
           Estimated number of cells
@@ -56,7 +56,7 @@
        <div class="row no-gutters align-items-centre">
         <div class="col mr-2 col-md-6">
          <div class="text-xs font-weight-bold mb-1" style="font-size:25px; color:rgb(54, 186, 0)" id="Mean_Reads_per_Cell">
-          Not calculated
+          {{ mean_reads_per_cell }}
          </div>
          <div class="h5 mb-0 font-weight-bold text-gray-800" style="font-size:12px">
           Mean reads per cell
@@ -77,7 +77,7 @@
        <div class="row no-gutters align-items-left">
         <div class="col mr-2 col-md-6">
          <div class="text-xs font-weight-bold mb-1" style="font-size:25px; color:rgb(54, 186, 0) " id="Total_genes_detected">
-          Not calculated
+          {{ total_genes_detected }}
          </div>
          <div class="h5 mb-0 font-weight-bold text-gray-800" style="font-size:12px">
           Estimated number of genes per cell
@@ -97,7 +97,7 @@
     <div class="row" id="container2">
      <!-- Cell counter plot -->
      <div class="col-6", id="cell_caller_plot">
-        {{cell_caller_img}}
+        <img alt='...' class='img-fluid' src='data:image/png;base64,{{ encoded_png_str }}'/>
      </div>
      <div class="text-left col-md-6 mt-4">
       <h2 class="text-xs font-weight-bold me-5 ms-3" style="font-size: 21px; line-height: 1.5">
@@ -111,7 +111,7 @@
           Reads Mapped to Genome
          </th>
          <td id="Reads Mapped to Genome">
-          Not calculated
+          {{ mapped_reads }}
          </td>
         </tr>
 
@@ -120,7 +120,7 @@
           Reads Mapped Confidently to Genome
          </th>
          <td id="Reads Mapped Confidently to Genome">
-          Not calculated
+          {{ confidently_mapped_reads }}
          </td>
         </tr>
 
@@ -129,7 +129,7 @@
           Reads Mapped Confidently to Intergenic regions
          </th>
          <td id="Reads Mapped Confidently to Intergenic Regions">
-          Not calculated
+          {{ confidently_mapped_reads_intergenic }}
          </td>
         </tr>
 
@@ -138,7 +138,7 @@
           Reads Mapped Confidently to Intronic Regions
          </th>
          <td id="Reads Mapped Confidently to Intronic Regions">
-          Not calculated
+          {{ confidently_mapped_reads_intronic }}
          </td>
         </tr>
 
@@ -147,16 +147,16 @@
           Reads Mapped Confidently to Exonic Regions
          </th>
          <td id="Reads Mapped Confidently to Exonic Regions">
-          Not calculated
+          {{ confidently_mapped_reads_exonic }}
          </td>
         </tr>
 
         <tr>
          <th scope="row" id="Reads Mapped Antisense to Gene">
-          Reads Mapped Confidently to Exonic Regions
+          Reads Mapped Antisense to Gene
          </th>
          <td id="Reads Mapped Antisense to Gene">
-          Not calculated
+          {{ mapped_reads_antisense }}
          </td>
         </tr>
 
@@ -179,7 +179,7 @@
           Total number of Reads
          </th>
          <td id="Total Number of Reads">
-          Not calculated
+          {{ total_num_reads }}
          </td>
         </tr>
         <tr>
@@ -187,7 +187,7 @@
           Valid Barcodes / CSGX cell barcodes
          </th>
          <td id="Valid Barcodes / CSGX Cell Barcodes">
-          Not calculated
+          {{ valid_barcodes }}
          </td>
         </tr>
         <tr>
@@ -195,7 +195,7 @@
          Sequencing Saturation
          </th>
          <td id="Sequencing Saturation">
-          Not calculated
+          {{ sequencing_saturation }}
          </td>
         </tr>
         <tr>
@@ -203,7 +203,7 @@
          Q30 Bases in Barcode
          </th>
          <td id="Q30 Bases in Barcode">
-          Not calculated
+          {{ q30_barcode }}
          </td>
         </tr>
         <tr>
@@ -211,7 +211,7 @@
          Q30 Bases in RNA Read
          </th>
          <td id="Q30 Bases in RNA Read">
-          Not calculated
+          {{ q30_rna }}
          </td>
         </tr>
        </tbody>
@@ -223,13 +223,12 @@
       </h2>
       <table class="table" style="font-size:13px; color:grey">
        <tbody>
-
         <tr>
          <th scope="row" id="Estimated Number of Cells">
           Estimated number of cells
          </th>
          <td id="Estimated Number of Cells">
-          Not calculated
+          {{ estimated_number_of_cells }}
          </td>
         </tr>
         <tr>
@@ -238,7 +237,7 @@
           Mean Reads per Cell
          </th>
          <td id="Mean Reads per Cell">
-          Not calculated
+          {{ mean_reads_per_cell }}
          </td>
         </tr>
 
@@ -247,7 +246,7 @@
           Median genes per cell
          </th>
          <td id="Median Genes per Cell">
-          Not calculated
+          {{ median_genes_per_cell }}
          </td>
         </tr>
 
@@ -256,34 +255,34 @@
           Total genes detected
          </th>
          <td id="Total Genes Detected">
-          Not calculated
+          {{ total_genes_detected }}
          </td>
         </tr>
 
         <tr>
          <th scope="row" id="Mean Counts per Cell">
-          Total genes detected
+          Mean Counts per Cell
          </th>
          <td id="Mean Counts per Cell">
-          Not calculated
+          {{ mean_counts_per_cell }}
          </td>
         </tr>
 
         <tr>
          <th scope="row" id="Median Counts per Cell">
-          Total genes detected
+          Median Counts per Cell
          </th>
          <td id="Median Counts per Cell">
-          Not calculated
+          {{ median_counts_per_cell }}
          </td>
         </tr>
 
         <tr>
          <th scope="row" id="Mitochondrial Ratio">
-          Total genes detected
+          Mitochondrial Ratio
          </th>
          <td id="Mitochondrial Ratio">
-          Not calculated
+          {{ mito_ratio }}
          </td>
         </tr>
 
@@ -292,7 +291,7 @@
           Mean genes per cell
          </th>
          <td id="Mean Genes per Cell">
-          Not calculated
+          {{ mean_genes_per_cell }}
          </td>
         </tr>
 

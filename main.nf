@@ -29,8 +29,8 @@ workflow {
     gtf = file("${params.gtf_path}")
 
     // Create path objects to HTML report templates
-    single_sample_report_template = file("templates/multi_sample_report_template.html.jinja2")
-    multi_sample_report_template = file("templates/single_sample_report_template.html.jinja2")
+    single_sample_report_template = file("templates/single_sample_report_template.html.jinja2")
+    multi_sample_report_template = file("templates/multi_sample_report_template.html.jinja2")
     cs_logo = file("templates/csgenetics_logo.png")
 
     // Create the whitelist object
