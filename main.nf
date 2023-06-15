@@ -10,7 +10,8 @@ include {
   features_file; merge_lanes; fastqc; barcode; io_extract; fastp;
   trim_extra_polya; star; filter; qualimap; feature_counts; multiqc;
   sort_index_bam; group; dedup; io_count; count_matrix;
-  filter_count_matrix; cell_caller; summary_report;experiment_report
+  filter_count_matrix; cell_caller; summary_statistics; single_summary_report;
+  multi_sample_report
   } from './modules/processes.nf'
 
 workflow {
@@ -26,6 +27,11 @@ workflow {
 
     // Create path object to the GTF
     gtf = file("${params.gtf_path}")
+
+    // Create path objects to HTML report templates
+    single_sample_report_template = file("templates/single_sample_report_template.html.jinja2")
+    multi_sample_report_template = file("templates/multi_sample_report_template.html.jinja2")
+    cs_logo = file("templates/csgenetics_logo.png")
 
     // Create the whitelist object
     whitelist = file("${params.whitelist_path}")
@@ -45,7 +51,6 @@ workflow {
 
     // Remove fastqs with less than params.depth_min reads
     // and generate a channel where each items is a list of [sample id, filename]
-
     ch_merge_lanes_out_filtered = ch_merge_lanes_out
           .filter { (it[1].toInteger() >= params.depth_min) }
           .map { [it[0], it[2]] }
@@ -164,19 +169,21 @@ workflow {
     .mix(ch_multiqc_json)
     .mix(ch_antisense_out)
     .mix(ch_qualimap_txt)
-    .mix(ch_cell_caller_plot)
-    .groupTuple(by:0, size: 7, sort:{it.name})
+    .groupTuple(by:0, size: 6, sort:{it.name})
     .mix(ch_cell_caller_out)
     .groupTuple(by:0, size:2).map({it.flatten()})
     .set({ch_summary_report_in})
     
-    // Generate Report
-    summary_report(ch_summary_report_in)
-    // ch_summary_report = summary_report.out.report_html
+    // Generate summary statistics
+    summary_statistics(ch_summary_report_in)
+    ch_summary_stats = summary_statistics.out.stats_files
 
+    ch_summary_stats_plot = ch_summary_stats.join(ch_cell_caller_plot, by:0)
 
-    ch_metrics_csv = summary_report.out.metrics_csv
+    // Generate single sample report
+    single_summary_report(ch_summary_stats_plot, single_sample_report_template, cs_logo)
+
+    // Generate multi sample report
+    multi_sample_report(single_summary_report.out.single_sample_metric_out.collect(), multi_sample_report_template)
  
-    // Experiment Report
-    experiment_report(ch_metrics_csv.collect())
 }
