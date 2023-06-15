@@ -544,7 +544,7 @@ process summary_statistics {
   publishDir "${params.outdir}/report/${sample_id}", mode: 'copy', pattern: "*.csv"
   
   input:
-  tuple val(sample_id), val(min_nuc_gene_cutoff), path(filtered_barcodes), path(filtered_features), path(filtered_matrix), path(multiqc_data_json), path(antisense), path(cell_caller_png), path(qualimap)
+  tuple val(sample_id), val(min_nuc_gene_cutoff), path(filtered_barcodes), path(filtered_features), path(filtered_matrix), path(multiqc_data_json), path(antisense), path(qualimap)
 
   output:
   tuple val(sample_id),

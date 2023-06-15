@@ -29,8 +29,8 @@ workflow {
     gtf = file("${params.gtf_path}")
 
     // Create path object to HTML template
-    html_ss_template = file("${params.ss_template_path}")
-    multisample_template = file("${params.multisample_template_path}")
+    single_sample_report_template = file("templates/multi_sample_report_template.html.jinja2")
+    multi_sample_report_template = file("templates/single_sample_report_template.html.jinja2")
     cs_logo = file("${params.cs_logo}")
 
     // Create the whitelist object
@@ -167,8 +167,7 @@ workflow {
     .mix(ch_multiqc_json)
     .mix(ch_antisense_out)
     .mix(ch_qualimap_txt)
-    .mix(ch_cell_caller_plot)
-    .groupTuple(by:0, size: 7, sort:{it.name})
+    .groupTuple(by:0, size: 6, sort:{it.name})
     .mix(ch_cell_caller_out)
     .groupTuple(by:0, size:2).map({it.flatten()})
     .set({ch_summary_report_in})
@@ -184,11 +183,12 @@ workflow {
           .set({ch_experiment_stats_collect})
 
     ch_summary_stats_plot = ch_summary_stats.join(ch_cell_caller_plot, by:0)
-    // Generate single sample report
-    single_summary_report(ch_summary_stats_plot, html_ss_template, cs_logo)
-    // Experiment Report
 
-    multi_sample_report(ch_experiment_stats_collect, multisample_template)
+    // Generate single sample report
+    single_summary_report(ch_summary_stats_plot, single_sample_report_template, cs_logo)
+
+    // Generate multi sample report
+    multi_sample_report(ch_experiment_stats_collect, multi_sample_report_template)
 
     ch_metrics_csv = summary_report.out.metrics_csv
  
