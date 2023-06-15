@@ -106,7 +106,6 @@ med_genes_cell <- round(median(gene_counts))
 mito_genes <- grep("^MT-|mm10_mt-|GRCh38_MT-", rownames(filtered_mtx), value = TRUE)
 percent_mito <- paste0(round(median(apply(filtered_mtx[mito_genes,names(gene_counts) ], 2, sum) / apply(filtered_mtx[,names(gene_counts)], 2, sum)),2),"%")
 
-
 # Calculate the total counts for each cell
 # Create a logical vector that indicates which genes have counts greater than 1
 genes_with_counts_greater_than_1 <- rowSums(filtered_mtx) >= 1
@@ -117,7 +116,6 @@ mean_counts_per_cell <- round(mean(total_counts_per_cell))
 # Calculate the median counts per cell
 median_counts_per_cell <- round(median(total_counts_per_cell))
 
-
 mean_read_cell <- round((total_number_reads/number_of_cell))
 tot_genes_detected <- sum(rowSums(filtered_mtx)>=1)
 cell_stats <- data.frame(stat = c('Estimated Number of Cells', 'Mean Reads per Cell', 'Mean Genes per Cell',
@@ -127,6 +125,6 @@ cell_stats <- data.frame(stat = c('Estimated Number of Cells', 'Mean Reads per C
                                         med_genes_cell, tot_genes_detected, mean_counts_per_cell,
                                         median_counts_per_cell, percent_mito
                                         ), big.mark = ','))
-                                        
+
 # ------------------------------ Write cell statistics
 write.table(cell_stats, paste0(opt$sample_id,"_cell_stats.csv"),quote = FALSE, row.names = FALSE, col.names = FALSE, sep="\t")

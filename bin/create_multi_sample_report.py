@@ -1,129 +1,80 @@
 #!/usr/bin/python3
 
 """
-Create a multi sample report html.
-Takes as input a set of .csv files (one per sample)
-to be found in the current directory.
+Creates a multi sample report that summarises the single summary report metrics
+for each sample.
 
-TODO check if we can simply stack the existing csv files.
+It reads in a single csv per sample that contains the metrics.
+
+The metrics are then converted into a dictionary where k=metric name
+and v=a list of metric values, where the metric values are reported in
+order of a sample_names list that is also used to render the template.
 """
 
-import pandas as pd
 from glob import glob
-import json
 from jinja2 import Template
+from pathlib import Path
+from collections import defaultdict
+import sys
 
-class SingleSampleHTMLReport:
+class MultipleSampleHTMLReport:
     def __init__(self):
-        self.table_template = self.return_table_template()
-        self.make_multisample_df()
-        self.json_data = self.create_write_final_df_json()
+        with open(sys.argv[1], "r") as html:
+            self.template = Template(html.read())
 
-    def create_html_report(self):
+        self.sample_name_list, self.metrics_dict = self.make_metrics_dict_and_sample_list()
+        self.render_and_write_report()
+        self.write_out_tsv()
+
+    def write_out_tsv(self):
         """
-        Inject the json data into the html template
-        and output the report
+        write out the metrics as a tsv
         """
+        # open a stream to write to
+        with open("multisample_out.tsv", "w") as tsv_out:
+            tsv_out.write("\t")
+            tsv_out.write("\t".join(self.sample_name_list) + "\n")
+            for metric_name, metric_val_list in self.metrics_dict.items():
+                tsv_out.write(f"{metric_name}\t")
+                tsv_out.write("\t".join(metric_val_list) + "\n")
 
-        # Create the html to be inserted by injecting the json into
-        # the table_template
-        insert_html = self.table_template.render(users = self.json_data)
-
-        # Generate a Jinja2 Template from the outer template html
-        with open("multisample_template.html", "r") as html_txt:
-            CS_template_html = Template(html_txt.read())
-
-        # Insert table
-        # TODO rewrite so that we are not doing a nested render.
-        final_report = CS_template_html.render(table_insert=insert_html)
+    def render_and_write_report(self):
+        # Render the template.
+        final_report = self.template.render(sample_name_list=self.sample_name_list, metrics_dict=self.metrics_dict)
 
         # Write out the rendered template.
         with open(f"multisample_report.html", "w") as f_output:
             f_output.write(final_report)
 
-    def make_multisample_df(self):
+    def make_metrics_dict_and_sample_list(self):
         """
-        Create a single csv from the input csvs.
+        Create the two data structures that will be used to render the template.
+        self.sample_list is simply a list that contains the names of the samples
+        sorted in some sort of order.
+        self.metrics_dict is a defaultdict(list) key is metric name, value is list
+        containing the values for that metrics for each of the samples in the
+        same sample order as self.sample_list.
         """
-        self.concatenated_df = self.make_concatenated_df()
-        self.final_df = self.curate_concat_df()
-        self.wite_final_df_csv()
-        
-    def wite_final_df_csv(self):
-        self.final_df.to_csv("multisample_out.csv", sep=",")
 
-    @staticmethod
-    def make_concatenated_df():
-        """
-        Load in a df for each input csv
-        and concatenate them together into a single dataframe
-        """
-        dfs = list()
-        for file in glob('./*.csv'):
-            dat = pd.read_csv(file, sep = "\t", index_col=None, header=None)
-            dat['Path'] = file.stem.split("_")[0]
-            dfs.append(dat)
+        self.metrics_dict = defaultdict(list)
+        self.sample_name_list = []
 
-        return pd.concat(dfs, ignore_index=True)
+        # Get all the csv paths and sort them
+        # so that the samples will be reported in
+        # a logical order
+        csvs = [_ for _ in Path(".").glob('./*.csv')]
+        csvs.sort()
 
-    def curate_concat_df(self):
-        self.concatenated_df = self.concatenated_df.rename({0:"Statistic", 1:"value"}, axis=1)
+        # For each sample csv in the sorted paths
+        for csv_path in csvs:
+            self.sample_name_list.append(csv_path.stem.replace(".metrics", ""))
+            with open(csv_path, "r") as csv_f:
+                for line in [_.rstrip() for _ in csv_f]:
+                    # read in the metrics and add them to the defaultdict
+                    metric_name, metric_val = line.split("\t")
+                    self.metrics_dict[metric_name].append(metric_val.strip())
 
-        # Pivot table
-        self.concatenated_df = self.concatenated_df.pivot(index = "Statistic",
-                                    columns="Path",
-                                    values="value")
+        return self.sample_name_list, self.metrics_dict
 
-        # Remove pivot indices
-        self.concatenated_df = self.concatenated_df.rename_axis(None, axis=0) 
-
-        # Make Sample ID the first row
-        self.concatenated_df.loc['Sample ID'] = self.concatenated_df.columns
-        index_no_sample = list(self.concatenated_df.index)
-        index_no_sample.remove('Sample ID')
-        new_index = ['Sample ID'] + index_no_sample
-        return self.concatenated_df.loc[new_index]
-
-    def create_write_final_df_json(self):
-        # Write JSON file
-        self.final_df.to_json("multisample_out.json", orient="index")
-        with open("multisample_out.json", "r") as jsonhandle:
-            return json.load(jsonhandle)
-        
-    @staticmethod
-    def return_table_template():
-        return Template("""
-
-            {% for key,value in users.items() %}
-            {% if key == "Sample ID" %}
-            <tr>
-                <th >
-                    
-                </th>
-
-                {% for id,value2 in value.items() %}
-
-                <td style="font-weight: bold">
-                {{value2}}
-                </td>
-
-                {% endfor %}
-
-            {% else %}
-            <tr>
-                <th >
-                    {{key}}
-                </th>
-
-            {% for id,value2 in value.items() %}
-
-                <td>
-                {{value2}}
-                </td>
-
-                {% endfor %}
-            {% endif %}
-            </tr>
-
-            {% endfor %}
-            """)
+if __name__ == "__main__":
+    MultipleSampleHTMLReport()

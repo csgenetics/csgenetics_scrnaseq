@@ -577,10 +577,11 @@ process single_summary_report {
 
   output:
   tuple val(sample_id), path("${sample_id}_report.html")
+  path("${sample_id}.metrics.csv"), emit: single_sample_metric_out
 
   script:
   """
-  cat $map_stats $cell_stats $seq_stats > ${sample_id}.metrics.csv
+  cat $cell_stats $map_stats $seq_stats > ${sample_id}.metrics.csv
   create_single_sample_report.py $sample_id $plot_png ${sample_id}.metrics.csv $html_template
   """
 }
@@ -599,12 +600,11 @@ process multi_sample_report {
 
   output:
   path('multisample_report.html')
-  path('multisample_out.json')
-  path('multisample_out.csv')
+  path('multisample_out.tsv')
 
   script:
   """
-  create_multi_sample_report.py 
+  create_multi_sample_report.py $template
   """
 }
 

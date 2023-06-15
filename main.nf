@@ -175,18 +175,12 @@ workflow {
     summary_statistics(ch_summary_report_in)
     ch_summary_stats = summary_statistics.out.stats_files
 
-    // Extract only CSVs for collect function
-    summary_statistics.out.stats_files
-          .map({[it[1], it[2], it[3]]})
-          .collect()
-          .set({ch_experiment_stats_collect})
-
     ch_summary_stats_plot = ch_summary_stats.join(ch_cell_caller_plot, by:0)
 
     // Generate single sample report
     single_summary_report(ch_summary_stats_plot, single_sample_report_template, cs_logo)
 
     // Generate multi sample report
-    multi_sample_report(ch_experiment_stats_collect, multi_sample_report_template)
+    multi_sample_report(single_summary_report.out.single_sample_metric_out.collect(), multi_sample_report_template)
  
 }
