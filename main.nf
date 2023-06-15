@@ -28,10 +28,10 @@ workflow {
     // Create path object to the GTF
     gtf = file("${params.gtf_path}")
 
-    // Create path object to HTML template
+    // Create path objects to HTML report templates
     single_sample_report_template = file("templates/multi_sample_report_template.html.jinja2")
     multi_sample_report_template = file("templates/single_sample_report_template.html.jinja2")
-    cs_logo = file("${params.cs_logo}")
+    cs_logo = file("templates/csgenetics_logo.png")
 
     // Create the whitelist object
     whitelist = file("${params.whitelist_path}")
@@ -51,7 +51,6 @@ workflow {
 
     // Remove fastqs with less than params.depth_min reads
     // and generate a channel where each items is a list of [sample id, filename]
-
     ch_merge_lanes_out_filtered = ch_merge_lanes_out
           .filter { (it[1].toInteger() >= params.depth_min) }
           .map { [it[0], it[2]] }
