@@ -556,7 +556,7 @@ process summary_statistics {
 
   script:
   """
-  web_summary.R --barcodes $filtered_barcodes --features $filtered_features --matrix $filtered_matrix \
+  summary_statistics.R --barcodes $filtered_barcodes --features $filtered_features --matrix $filtered_matrix \
   --sample $sample_id --multiqc_json $multiqc_data_json --antisense $antisense --qualimap_report $qualimap \
   --cell_caller $min_nuc_gene_cutoff
   """
