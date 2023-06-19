@@ -8,7 +8,7 @@
 nextflow.enable.dsl=2
 include {
   features_file; merge_lanes; merged_fastp; io_extract; io_extract_fastp;
-  trim_extra_polya; post_polyA_fastp; star; filter; qualimap; feature_counts; multiqc;
+  trim_extra_polya; post_polyA_fastp; star; raw_qualimap; filter; filtered_qualimap; feature_counts; multiqc;
   sort_index_bam; group; dedup; io_count; count_matrix;
   filter_count_matrix; cell_caller; summary_statistics; single_summary_report;
   multi_sample_report
@@ -92,12 +92,16 @@ workflow {
     ch_star_out_filtering = star.out.star_out_bams
     ch_star_multiqc = star.out.star_multiqc
 
+    // Qualimap on STAR output
+    raw_qualimap(ch_star_out_qualimap, gtf)
+    ch_raw_qualimap_txt = raw_qualimap.out.qualimap_txt
+
     // Filter the mapped reads for reads with 1 alignment and max 3 mismatch
     filter(ch_star_out_filtering)
 
-    // Qualimap on STAR output 
-    raw_qualimap(ch_star_out_qualimap, gtf)
-    ch_qualimap_txt = qualimap.out.qualimap_txt 
+    // Qualimap on filtered bam
+    filtered_qualimap(filter.out.filtered_bam, gtf)
+    ch_filtered_qualimap_txt = filtered_qualimap.out.qualimap_txt
 
     // Perform featurecount quantification
     ch_feature_counts_in = filter.out.filtered_bam
@@ -107,6 +111,9 @@ workflow {
 
     // Generate input channel containing all the files needed for multiqc per samples. 
     // The final channel structure is [sample_id, [file1, file2, file3, ...]]
+    // NB fastqc currently does not integrate multip qualimap
+    // outputs successfuly so they are manually carried through
+    // to the summary_statistics
     ch_merged_fastp_multiqc
       .mix(ch_post_polyA_fastp_multiqc)
       .mix(ch_io_extract_fastp_multiqc)
@@ -161,13 +168,14 @@ workflow {
     ch_filtered_count_matrices = filter_count_matrix.out.cell_only_count_matrix
 
     // structure of ch_summary_report_in is
-    // [sample_id, min_nuc_gene_cutoff, h5ad, multiqc_data, antisense, dedup.log, qualimap]
+    // [sample_id, min_nuc_gene_cutoff, h5ad, multiqc_data, antisense, dedup.log, filtered_qualimap, raw_qualimap]
     ch_filtered_count_matrices
     .mix(ch_multiqc_json)
     .mix(ch_antisense_out)
-    .mix(ch_qualimap_txt)
+    .mix(ch_raw_qualimap_txt)
+    .mix(ch_filtered_qualimap_txt)
     .mix(ch_io_dedup_log)
-    .groupTuple(by:0, size: 5, sort:{it.name})
+    .groupTuple(by:0, size: 6, sort:{it.name})
     .mix(ch_cell_caller_out)
     .groupTuple(by:0, size:2, sort:{sort:{it.getClass() == nextflow.util.ArrayBag ? 1 : 0}})
     .map({it.flatten()})

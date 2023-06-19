@@ -250,6 +250,29 @@ process star {
 }
 
 /*
+* Run Qualimap, generates a report, also useful for getting related mapping composition statistics
+*/
+process raw_qualimap {
+  tag "$sample_id"
+  label 'c8m16'
+
+  publishDir "${params.outdir}/qualimap", mode: 'copy'
+
+  input:
+  tuple val (sample_id), path(bam)
+  path(gtf)
+
+  output:
+  tuple val (sample_id), path("${sample_id}.raw_qualimap.txt"), emit: qualimap_txt
+
+  shell:
+  '''
+  qualimap rnaseq -outdir !{sample_id}_raw_qualimap -a proportional -bam !{bam} -p strand-specific-forward -gtf !{gtf} --java-mem-size=16G 
+  mv !{sample_id}_raw_qualimap/rnaseq_qc_results.txt !{sample_id}.raw_qualimap.txt
+  '''
+}
+
+/*
 * Filter for reads with 1 alignment and max of 3 differences from reference seq.
 */
 process filter{
@@ -269,27 +292,27 @@ samtools view -h -e '[NH]==1 && ([nM]==0 || [nM]==1 || [nM]==2 || [nM]==3)' -b $
 """
 }
 
+
 /*
 * Run Qualimap, generates a report, also useful for getting related mapping composition statistics
 */
-process raw_qualimap {
+process filtered_qualimap {
   tag "$sample_id"
   label 'c8m16'
 
   publishDir "${params.outdir}/qualimap", mode: 'copy'
 
   input:
-  tuple val (sample_id), path(f)
+  tuple val (sample_id), path(bam)
   path(gtf)
 
   output:
-  tuple val (sample_id), path("*_qualimap.txt"), emit: qualimap_txt
+  tuple val (sample_id), path("${sample_id}.filtered_qualimap.txt"), emit: qualimap_txt
 
   shell:
   '''
-  qualimap rnaseq -outdir !{sample_id} -a proportional -bam !{f} -p strand-specific-forward -gtf !{gtf} --java-mem-size=16G 
-  mv !{sample_id}/rnaseq_qc_results.txt !{sample_id}_qualimap.txt
-  cp 
+  qualimap rnaseq -outdir !{sample_id}_filtered_qualimap -a proportional -bam !{bam} -p strand-specific-forward -gtf !{gtf} --java-mem-size=16G 
+  mv !{sample_id}_filtered_qualimap/rnaseq_qc_results.txt !{sample_id}.filtered_qualimap.txt
   '''
 }
 
@@ -548,7 +571,7 @@ process summary_statistics {
   publishDir "${params.outdir}/report/${sample_id}", mode: 'copy', pattern: "*.csv"
   
   input:
-  tuple val(sample_id), val(min_nuc_gene_cutoff), path(h5ad), path(multiqc_data_json), path(antisense), path(dedup), path(qualimap)
+  tuple val(sample_id), val(min_nuc_gene_cutoff), path(h5ad), path(multiqc_data_json), path(antisense), path(dedup), path(filtered_qualimap), path(raw_qualimap)
 
   output:
   tuple val(sample_id),
@@ -558,7 +581,7 @@ process summary_statistics {
 
   script:
   """
-  summary_statistics.py $sample_id $h5ad $multiqc_data_json $antisense $dedup $qualimap
+  summary_statistics.py $sample_id $h5ad $multiqc_data_json $antisense $dedup $filtered_qualimap $raw_qualimap
   """
 }
 
