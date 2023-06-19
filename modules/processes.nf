@@ -36,7 +36,7 @@ process merge_lanes {
   label 'c1m4'
 
   input:
-  tuple val(sample_id), file(fastq_1), file(fastq_2)
+  tuple val(sample_id), path(fastq_1), path(fastq_2)
 
   output:
   tuple val(sample_id), env(numreads), path('merged'), emit: merge_lanes_out
@@ -46,11 +46,11 @@ process merge_lanes {
   '''
   mkdir merged
   # merging R1 and R2
-  cat *_L*_R1*.f*q.gz > merged/!{sample_id}_R1.fastq.gz
-  cat *_L*_R2*.f*q.gz > merged/!{sample_id}_R2.fastq.gz
+  cat !{fastq_1} > merged/!{sample_id}_R1.fastq.gz
+  cat !{fastq_2} > merged/!{sample_id}_R2.fastq.gz
   
   # count number of raw reads
-  numreads=$(( $(zcat merged/!{sample_id}_R1.f*q.gz | wc -l) / 4))
+  numreads=$(( $(zcat merged/!{sample_id}_R1.fastq.gz | wc -l) / 4))
   echo $numreads > numreads.txt
   '''
 }
