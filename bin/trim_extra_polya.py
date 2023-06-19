@@ -16,8 +16,10 @@ polyA_andASP = 0
 r1_asp = 0
 readLen = list()
 
+# TODO remove read length output is not used.
+
 outf2 = open('read_lengths_post_trimming.csv','a+')
-outf = gzip.open(sample + '_trimmed.fastq.gz','a+')
+outf = gzip.open(sample + '_R1.polyA_trimmed.fastq.gz','a+')
 
 with gzip.open(fastpOut, 'rb') as f:
     
@@ -80,5 +82,5 @@ with gzip.open(fastpOut, 'rb') as f:
 outf2.close()
 outf.close()
 
-with open('trim_polyA_metrics.csv','w') as f:                
+with open(f'{sample}_trim_polyA_metrics.csv','w') as f:                
     f.write(str(good_reads)+'\n'+ str(mean(readLen)) + '\n' + str(median(readLen)))

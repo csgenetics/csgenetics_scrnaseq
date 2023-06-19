@@ -7,8 +7,8 @@
 
 nextflow.enable.dsl=2
 include {
-  features_file; merge_lanes; fastqc; barcode; io_extract; fastp;
-  trim_extra_polya; star; filter; qualimap; feature_counts; multiqc;
+  features_file; merge_lanes; merged_fastp; io_extract; io_extract_fastp;
+  trim_extra_polya; post_polyA_fastp; star; filter; qualimap; feature_counts; multiqc;
   sort_index_bam; group; dedup; io_count; count_matrix;
   filter_count_matrix; cell_caller; summary_statistics; single_summary_report;
   multi_sample_report
@@ -53,17 +53,13 @@ workflow {
     // and generate a channel where each items is a list of [sample id, filename]
     ch_merge_lanes_out_filtered = ch_merge_lanes_out
           .filter { (it[1].toInteger() >= params.depth_min) }
-          .map { [it[0], it[2]] }
+          .map { [it[0], it[2], it[3]] }
 
-    // Generate a fastqc report
-    fastqc(ch_merge_lanes_out_filtered)
-    ch_fastqc_multiqc = fastqc.out.fastqc_multiqc
-    ch_fastqc_out = fastqc.out.fastqc_out
 
     // Set the barcode_pattern 
     barcode_pattern="CCCCCCCCCCCCC"
-    barcode(ch_merge_lanes_out_filtered, barcode_pattern)
-    ch_barcode_multiqc = barcode.out.barcode_multiqc
+    merged_fastp(ch_merge_lanes_out_filtered, barcode_pattern)
+    ch_merged_fastp_multiqc = merged_fastp.out.merged_fastp_multiqc
 
     // Get the whitelist and extract the IOs from the fastqs using umitools
     io_extract(ch_merge_lanes_out_filtered, whitelist, barcode_pattern)
@@ -75,19 +71,23 @@ workflow {
     ch_io_extract_log = io_extract.out.io_extract_log
 
     // Trim and remove low quality reads with fastp
-    fastp(ch_io_extract_out_filtered)
-    ch_fastp_out = fastp.out.fastp_out
-    ch_fastp_multiqc = fastp.out.fastp_multiqc
-    ch_fastp_log = fastp.out.fastp_log
+    io_extract_fastp(ch_io_extract_out_filtered)
+    ch_io_extract_fastp_out = io_extract_fastp.out.fastp_out
+    ch_io_extract_fastp_multiqc = io_extract_fastp.out.fastp_multiqc
 
     // Trim extra polyA
-    trim_extra_polya(ch_fastp_out)
+    trim_extra_polya(ch_io_extract_fastp_out)
     ch_trim_extra_polya_out = trim_extra_polya.out.trim_extra_polya_out
-    ch_trim_extra_polya_log1 = trim_extra_polya.out.trim_extra_polya_log1
-    ch_trim_extra_polya_log2 = trim_extra_polya.out.trim_extra_polya_log2
+
+    // Send the polyA trimmed reads back through
+    // fastp to get total number post QC reads
+    // and Q30 percentages.
+    post_polyA_fastp(ch_trim_extra_polya_out)
+    ch_post_polyA_fastp_out = post_polyA_fastp.out.fastp_out
+    ch_post_polyA_fastp_multiqc = post_polyA_fastp.out.fastp_multiqc
 
     // Align with STAR
-    star(ch_trim_extra_polya_out, star_index)
+    star(ch_post_polyA_fastp_out, star_index)
     ch_star_out_qualimap = star.out.star_out_qualimap
     ch_star_out_filtering = star.out.star_out_filtering
     ch_star_multiqc = star.out.star_multiqc
@@ -106,10 +106,10 @@ workflow {
     ch_feature_counts_multiqc = feature_counts.out.feature_counts_multiqc
 
     // Generate input channel containing all the files needed for multiqc per samples. 
-    // The final channel structure is [sample_id, file1, file2, file3, ...]
-    ch_fastqc_multiqc
-      .mix(ch_barcode_multiqc)
-      .mix(ch_fastp_multiqc)
+    // The final channel structure is [sample_id, [file1, file2, file3, ...]]
+    ch_merged_fastp_multiqc
+      .mix(ch_post_polyA_fastp_multiqc)
+      .mix(ch_io_extract_fastp_multiqc)
       .mix(ch_star_multiqc)
       .mix(ch_feature_counts_multiqc)
       .groupTuple(by:0, size: 5)
@@ -131,7 +131,6 @@ workflow {
     ch_group_tsv = group.out.io_group_tsv
     ch_io_group_log = group.out.io_group_log
 
-
     // Perform deduplication
     dedup(ch_io_group_sam)
     ch_io_dedup_log = dedup.out.io_dedup_log
@@ -142,7 +141,6 @@ workflow {
     ch_io_count_out = io_count.out.io_count_out
     ch_io_goodumr_count = io_count.out.io_goodumr_count
 
-
     // Generate raw count matrix
     count_matrix(ch_io_count_out, whitelist, feature_file_out)
     ch_h5ad = count_matrix.out.h5ad
@@ -151,7 +149,6 @@ workflow {
     cell_caller(ch_h5ad)
     ch_cell_caller_out = cell_caller.out.cell_caller_out //[val(sample_id), int(cell_caller_nuc_gene_threshold)]
     ch_cell_caller_plot = cell_caller.out.cell_caller_plot
-
 
     // Sort the groupTuple so that the int is always
     // first and then flatten the tuple list to return a 3mer
@@ -164,26 +161,28 @@ workflow {
     ch_filtered_count_matrices = filter_count_matrix.out.cell_only_count_matrix
 
     // structure of ch_summary_report_in is
-    // [sample_id, min_nuc_gene_cutoff, barcodes, features, matrix, multiqc_data, antisense, cell_caller_png, qualimap]
-    ch_filtered_count_matrices.map({[it[0], it.tail()]}).transpose()
+    // [sample_id, min_nuc_gene_cutoff, h5ad, multiqc_data, antisense, dedup.log, qualimap]
+    ch_filtered_count_matrices
     .mix(ch_multiqc_json)
     .mix(ch_antisense_out)
     .mix(ch_qualimap_txt)
-    .groupTuple(by:0, size: 6, sort:{it.name})
+    .mix(ch_io_dedup_log)
+    .groupTuple(by:0, size: 5, sort:{it.name})
     .mix(ch_cell_caller_out)
-    .groupTuple(by:0, size:2).map({it.flatten()})
+    .groupTuple(by:0, size:2, sort:{sort:{it.getClass() == nextflow.util.ArrayBag ? 1 : 0}})
+    .map({it.flatten()})
     .set({ch_summary_report_in})
     
     // Generate summary statistics
     summary_statistics(ch_summary_report_in)
     ch_summary_stats = summary_statistics.out.stats_files
 
-    ch_summary_stats_plot = ch_summary_stats.join(ch_cell_caller_plot, by:0)
+    // ch_summary_stats_plot = ch_summary_stats.join(ch_cell_caller_plot, by:0)
 
-    // Generate single sample report
-    single_summary_report(ch_summary_stats_plot, single_sample_report_template, cs_logo)
+    // // Generate single sample report
+    // single_summary_report(ch_summary_stats_plot, single_sample_report_template, cs_logo)
 
-    // Generate multi sample report
-    multi_sample_report(single_summary_report.out.single_sample_metric_out.collect(), multi_sample_report_template)
+    // // Generate multi sample report
+    // multi_sample_report(single_summary_report.out.single_sample_metric_out.collect(), multi_sample_report_template)
  
 }

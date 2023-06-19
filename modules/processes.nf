@@ -6,7 +6,6 @@
 
 nextflow.enable.dsl=2
 
-
 /*
 * Convert GTF into features file
 */
@@ -39,74 +38,54 @@ process merge_lanes {
   tuple val(sample_id), file(fastq_1), file(fastq_2)
 
   output:
-  tuple val(sample_id), env(numreads), path('merged'), emit: merge_lanes_out
+  tuple val(sample_id), env(numreads), path("${sample_id}_R1.merged.fastq.gz"), path("${sample_id}_R2.merged.fastq.gz"), emit: merge_lanes_out
   tuple val(sample_id), env(numreads), path('numreads.txt'), emit: numreads_log
 
   shell:
   '''
-  mkdir merged
   # merging R1 and R2
-  cat *_L*_R1*.f*q.gz > merged/!{sample_id}_R1.fastq.gz
-  cat *_L*_R2*.f*q.gz > merged/!{sample_id}_R2.fastq.gz
+  cat *_L*_R1*.f*q.gz > !{sample_id}_R1.merged.fastq.gz
+  cat *_L*_R2*.f*q.gz > !{sample_id}_R2.merged.fastq.gz
   
   # count number of raw reads
-  numreads=$(( $(zcat merged/!{sample_id}_R1.f*q.gz | wc -l) / 4))
+  numreads=$(( $(zcat !{sample_id}_R1.merged.fastq.gz | wc -l) / 4))
   echo $numreads > numreads.txt
   '''
 }
 
-
-/*
-* Run FASTQC - generates a report, also useful for getting related base composition statistics
-*/
-process fastqc {
-  tag "$sample_id"
-  label 'c2m4'
-
-  publishDir "${params.outdir}/fastqc", mode: 'copy'
-
-  input:
-  tuple val(sample_id), path(f)
-
-  output:
-  tuple val(sample_id), path("${sample_id}_R1_fastqc.html"), path("${sample_id}_R1_fastqc.zip"), path("${sample_id}_R2_fastqc.html"), path("${sample_id}_R2_fastqc.zip"), emit: fastqc_multiqc
-  tuple val(sample_id), path("${sample_id}_R1_fastqc.zip"), emit: fastqc_out
-
-  shell:
-  '''
-  in=merged
-  fastqc -q -o . $in/*.fastq.gz
-  '''
-}
-
-/*
-* Use fastp to trim R2 reads equal to barcode length to get q30 rate for barcode region only 
-* https://github.com/OpenGene/fastp
-*/
-process barcode {
+process merged_fastp{
   tag "$sample_id"
   label 'c4m2'
 
+  publishDir "${params.outdir}/fastp", mode: 'copy'
+
   input:
-  tuple val(sample_id), path(f)
-  val (barcode_pattern)
+  tuple val(sample_id), path(r1), path(r2)
+  val(barcode_pattern)
 
   output:
-  tuple val(sample_id), path("${sample_id}_R2_fastp.html"), path("${sample_id}_R2_fastp.json"), emit: barcode_multiqc
+  tuple val(sample_id), path("${sample_id}_R*.merged_fastp.html"), path("${sample_id}_R*.merged_fastp.json"), emit: merged_fastp_multiqc
 
   shell:
+  barcode_length = barcode_pattern.size()
   '''
-  mkdir fastp_out
-     
   # Get q30_rate for barcode present in fastq2 file 
   # maximum length which be equal to barcode length 
   barcode_length=$(echo !{barcode_pattern} | tr -cd 'C' | wc -c)
-  in=merged
-  fastp -i $in/!{sample_id}_R2.fastq.gz \
-    -l $barcode_length \
-    -b $barcode_length \
-    -j !{sample_id}_R2_fastp.json \
-    -h !{sample_id}_R2_fastp.html 
+
+  # R1 fastp
+  fastp -i !{r1} \
+    -A -G \
+    -j !{sample_id}_R1.merged_fastp.json \
+    -h !{sample_id}_R1.merged_fastp.html
+
+  # R2 fastp
+  fastp -i !{r2} \
+    -A -G \
+    -b !{barcode_length} \
+    -l 13 \
+    -j !{sample_id}_R2.merged_fastp.json \
+    -h !{sample_id}_R2.merged_fastp.html
   '''
 }
 
@@ -118,31 +97,26 @@ process io_extract {
   label 'c2m4'
 
   input:
-  tuple val(sample_id), path(f)
-  path(w)
+  tuple val(sample_id), path(r1), path(r2)
+  path(whitelist)
   val(barcode_pattern)
 
   output:
-  tuple val(sample_id), path("io_extract_out/${sample_id}_R2.fastq.gz"), path("io_extract_out/${sample_id}_R1.fastq.gz"), emit: io_extract_out
-  tuple val(sample_id), path('extract.log'), emit: io_extract_log
+  tuple val(sample_id), path("${sample_id}_R1.io_extract.fastq.gz"), path("${sample_id}_R2.io_extract.fastq.gz"), emit: io_extract_out
+  tuple val(sample_id), path("extract.log"), emit: io_extract_log
 
-  shell:
-  '''
-  # check input directory name  
-  in=merged
-  
-  mkdir io_extract_out
+  script:
+  """
+  cat $whitelist | cut -d ',' -f2 > wl.txt
 
-  cat !{w} | cut -d ',' -f2 > wl.txt
-  umi_tools extract -I $in/!{sample_id}_R2.fastq.gz \
-    --bc-pattern=!{barcode_pattern} \
-    --read2-in=$in/!{sample_id}_R1.fastq.gz \
-    --stdout=io_extract_out/!{sample_id}_R2.fastq.gz \
-    --read2-out=io_extract_out/!{sample_id}_R1.fastq.gz \
+  umi_tools extract -I $r2 \
+    --bc-pattern=${barcode_pattern} \
+    --read2-in=$r1 \
+    --stdout=${sample_id}_R2.io_extract.fastq.gz \
+    --read2-out=${sample_id}_R1.io_extract.fastq.gz \
     --whitelist=wl.txt \
     -L extract.log
-  
-  '''
+  """
 }
 
 /*
@@ -154,37 +128,37 @@ process io_extract {
 * disable adapter trimming
 * disable polyG trimming 
 */
-process fastp {
+process io_extract_fastp {
   tag "$sample_id"
+
   label 'c4m2'
 
   publishDir "${params.outdir}/fastp", pattern: '*.{json,html}', mode: 'copy'
+
   input: tuple val(sample_id), path(r1), path(r2)
 
   output:
-  tuple val(sample_id), path('fastp_out'), emit: fastp_out
-  tuple val(sample_id), path("${sample_id}_R1_fastp.html"), path("${sample_id}_R1_fastp.json"), emit: fastp_multiqc
-  tuple val(sample_id), path('fastp.log'), emit: fastp_log
+  tuple val(sample_id), path("${sample_id}_R1.io_extract.fastp.fastq.gz"), emit: fastp_out
+  tuple val(sample_id), path("${sample_id}_R1.io_extract.fastp.html"), path("${sample_id}_R1.io_extract.fastp.json"), emit: fastp_multiqc
 
   shell:
   '''
-  mkdir fastp_out
   # SSS trimming
   # 3' polyX trimming with min length of 15 bases
   # remove reads of length <= 20 bases
   # disable adapter trimming
   # disable polyG trimming 
   
-  fastp -i !{sample_id}_R1.fastq.gz \
+  fastp -i !{r1} \
     -f !{params.sss_nmer} \
     -x --poly_x_min_len 15 \
     -l 20 \
     -A \
     -G \
-    -j !{sample_id}_R1_fastp.json \
-    -h !{sample_id}_R1_fastp.html \
+    -j !{sample_id}_R1.io_extract.fastp.json \
+    -h !{sample_id}_R1.io_extract.fastp.html \
     --stdout \
-     2> fastp.log | gzip > fastp_out/!{sample_id}_R1.fastq.gz
+     2> fastp.log | gzip > !{sample_id}_R1.io_extract.fastp.fastq.gz
   '''     
 }
 
@@ -194,23 +168,51 @@ process fastp {
 * This script finds and trims polyA (of length >=15) regardless of where it is in the read. eg. xxxxxxx[15As]CTG --> xxxxxxx
 * Also remove reads of length <=20 post polyA trimming
 */
-
 process trim_extra_polya {
   tag "$sample_id"
   label 'c2m4'
 
   input:
-  tuple val(sample_id), path('fastp_out')
+  tuple val(sample_id), path(fastq)
 
   output:
-  tuple val(sample_id), path('*.fastq.gz'), emit: trim_extra_polya_out
-  tuple val(sample_id), path('trim_polyA_metrics.csv'), emit: trim_extra_polya_log1
-  tuple val(sample_id), path('read_lengths_post_trimming.csv'), emit:trim_extra_polya_log2
+  tuple val(sample_id), path("${sample_id}_R1.polyA_trimmed.fastq.gz"), emit: trim_extra_polya_out
+  tuple val(sample_id), path("${sample_id}_trim_polyA_metrics.csv"), emit: trim_extra_polya_log1
 
-  shell:
-  '''
-  trim_extra_polya.py fastp_out/!{sample_id}_R1.fastq.gz !{sample_id}
-  '''
+  script:
+  """
+  trim_extra_polya.py $fastq $sample_id
+  """
+}
+
+process post_polyA_fastp{
+  tag "$sample_id"
+
+  label 'c4m2'
+
+  publishDir "${params.outdir}/fastp", pattern: '*.{json,html}', mode: 'copy'
+
+  input: tuple val(sample_id), path(r1)
+
+  output:
+  tuple val(sample_id), path("${sample_id}_R1.post_polyA_fastp.fastq.gz"), emit: fastp_out
+  tuple val(sample_id), path("${sample_id}_R1.post_polyA_fastp.html"), path("${sample_id}_R1.post_polyA_fastp.json"), emit: fastp_multiqc
+
+  script:
+  """
+  # remove reads of length <= 20 bases
+  # disable adapter trimming
+  # disable polyG trimming 
+  
+  fastp -i $r1 \
+    -l 20 \
+    -A \
+    -G \
+    -j ${sample_id}_R1.post_polyA_fastp.json \
+    -h ${sample_id}_R1.post_polyA_fastp.html \
+    --stdout \
+     2> fastp.log | gzip > ${sample_id}_R1.post_polyA_fastp.fastq.gz
+  """
 }
 
 /*
@@ -338,7 +340,6 @@ process multiqc {
     --filename "${sample_id}_multiqc.html" \
     -m fastqc \
     -m fastp \
-    -m fastp \
     -m star \
     -m featureCounts
   mv ${sample_id}_multiqc_data/multiqc_data.json ./${sample_id}.multiqc.data.json
@@ -394,7 +395,6 @@ process group {
     --output-bam --out-sam -S !{sample_id}_group.sam \
     --log=!{sample_id}_group.log
   '''
-
 }
 
 /*
@@ -528,9 +528,9 @@ process filter_count_matrix{
 
   output:
   // Output the 3 part barcode, features, matrix 
-  tuple val(sample_id), path("${sample_id}.*.cell_only.barcodes.tsv.gz"), path("${sample_id}.*.cell_only.features.tsv.gz"), path("${sample_id}.*.cell_only.matrix.mtx.gz"), emit: cell_only_count_matrix
+  tuple val(sample_id), path("${sample_id}.*.cell_only.barcodes.tsv.gz"), path("${sample_id}.*.cell_only.features.tsv.gz"), path("${sample_id}.*.cell_only.matrix.mtx.gz")
   // Output the h5ad matrix
-  tuple val(sample_id), path("${sample_id}.*.cell_only.count_matrix.h5ad")
+  tuple val(sample_id), path("${sample_id}.*.cell_only.count_matrix.h5ad"), emit: cell_only_count_matrix
 
   script:
   """
@@ -548,7 +548,7 @@ process summary_statistics {
   publishDir "${params.outdir}/report/${sample_id}", mode: 'copy', pattern: "*.csv"
   
   input:
-  tuple val(sample_id), val(min_nuc_gene_cutoff), path(filtered_barcodes), path(filtered_features), path(filtered_matrix), path(multiqc_data_json), path(antisense), path(qualimap)
+  tuple val(sample_id), val(min_nuc_gene_cutoff), path(h5ad), path(multiqc_data_json), path(antisense), path(dedup), path(qualimap)
 
   output:
   tuple val(sample_id),
@@ -556,12 +556,9 @@ process summary_statistics {
   path("${sample_id}_seq_stats.csv"),
   path("${sample_id}_map_stats.csv"), emit: stats_files
 
-
   script:
   """
-  summary_statistics.R --barcodes $filtered_barcodes --features $filtered_features --matrix $filtered_matrix \
-  --sample $sample_id --multiqc_json $multiqc_data_json --antisense $antisense --qualimap_report $qualimap \
-  --cell_caller $min_nuc_gene_cutoff
+  summary_statistics.py $sample_id $h5ad $multiqc_data_json $antisense $dedup $qualimap
   """
 }
 
