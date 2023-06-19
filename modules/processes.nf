@@ -229,8 +229,7 @@ process star {
   path(index)
 
   output:
-  tuple val(sample_id), path("${sample_id}_Aligned.sortedByCoord.out.bam"), emit: star_out_qualimap
-  tuple val(sample_id), path("${sample_id}_Aligned.sortedByCoord.out.bam"), emit: star_out_filtering
+  tuple val(sample_id), path("${sample_id}_Aligned.sortedByCoord.out.bam"), emit: star_out_bams
 
   tuple val(sample_id), path("${sample_id}_Log.final.out"), path("${sample_id}_Log.out"), path("${sample_id}_Log.progress.out"), path("${sample_id}_SJ.out.tab"), path("${sample_id}_Unmapped.out.mate1"), emit: star_multiqc
 
@@ -273,7 +272,7 @@ samtools view -h -e '[NH]==1 && ([nM]==0 || [nM]==1 || [nM]==2 || [nM]==3)' -b $
 /*
 * Run Qualimap, generates a report, also useful for getting related mapping composition statistics
 */
-process qualimap {
+process raw_qualimap {
   tag "$sample_id"
   label 'c8m16'
 
@@ -290,6 +289,7 @@ process qualimap {
   '''
   qualimap rnaseq -outdir !{sample_id} -a proportional -bam !{f} -p strand-specific-forward -gtf !{gtf} --java-mem-size=16G 
   mv !{sample_id}/rnaseq_qc_results.txt !{sample_id}_qualimap.txt
+  cp 
   '''
 }
 

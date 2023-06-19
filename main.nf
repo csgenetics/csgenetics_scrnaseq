@@ -88,15 +88,15 @@ workflow {
 
     // Align with STAR
     star(ch_post_polyA_fastp_out, star_index)
-    ch_star_out_qualimap = star.out.star_out_qualimap
-    ch_star_out_filtering = star.out.star_out_filtering
+    ch_star_out_qualimap = star.out.star_out_bams
+    ch_star_out_filtering = star.out.star_out_bams
     ch_star_multiqc = star.out.star_multiqc
 
     // Filter the mapped reads for reads with 1 alignment and max 3 mismatch
     filter(ch_star_out_filtering)
 
     // Qualimap on STAR output 
-    qualimap(ch_star_out_qualimap, gtf)
+    raw_qualimap(ch_star_out_qualimap, gtf)
     ch_qualimap_txt = qualimap.out.qualimap_txt 
 
     // Perform featurecount quantification

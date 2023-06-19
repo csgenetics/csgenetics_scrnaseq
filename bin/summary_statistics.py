@@ -55,6 +55,14 @@ class SummaryStatistics:
         command line input is: $sample_id $h5ad $multiqc_data_json $antisense $dedup $qualimap
 
         """
+        self.get_trimming_qc_stats()
+        self.get_mapping_stats()
+        self.get_filtered_mapping_stats()
+        # Proportion duplication (reads in to deduplication / reads out of deduplication)
+        self.metrics_dict["duplication_proportion"] = self.get_duplication_proportion()
+        
+
+    def get_trimming_qc_stats(self):
         # Reads pre-QC
         self.metrics_dict["reads_pre_qc"] = int(self.multiqc_json_dict["report_general_stats_data"][self.qc_key_to_index_dict["fastp"]][f"{self.sample_id}_R1"]["before_filtering_total_reads"])
         # Reads containing cellular barcode matching whitelist
@@ -69,8 +77,26 @@ class SummaryStatistics:
         self.metrics_dict["mean_post_trim_read_length"] = float(self.multiqc_json_dict["report_general_stats_data"][self.qc_key_to_index_dict["fastp"]][f"{self.sample_id}_R1.polyA"]["after_filtering_read1_mean_length"])
         # Proportion of bases post trimming >= Q30
         self.metrics_dict["prop_rna_bases_q30"] = float(self.multiqc_json_dict["report_general_stats_data"][self.qc_key_to_index_dict["fastp"]][f"{self.sample_id}_R1.polyA"]["after_filtering_q30_rate"])
-        # Proportion duplication (reads in to deduplication / reads out of deduplication)
-        self.metrics_dict[""]
+
+    def get_duplication_proportion(self):
+        with open(sys.argv[5], "r") as dedup_handle:
+            dedup_reads_in = None
+            dedup_reads_out = None
+            for line in dedup_handle:
+                if "INFO Reads: Input Reads:" in line:
+                    dedup_reads_in = int(line.split()[-1])
+                elif "INFO Number of reads out:" in line:
+                    dedup_reads_out = int(line.split()[-1])
+            
+            if dedup_reads_in is None or dedup_reads_out is None:
+                raise RuntimeError("Unable to fetch dedup stats")
+            
+            # If no in reads return 0
+            if dedup_reads_in == 0:
+                return 0
+            else:
+                return dedup_reads_out/dedup_reads_in
+
 
 if __name__ == "__main__":
     SummaryStatistics().generate_metrics()
