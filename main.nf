@@ -8,7 +8,8 @@
 nextflow.enable.dsl=2
 include {
   features_file; merge_lanes; merged_fastp; io_extract; io_extract_fastp;
-  trim_extra_polya; post_polyA_fastp; star; raw_qualimap; filter; filtered_qualimap; feature_counts; multiqc;
+  trim_extra_polya; post_polyA_fastp; star; raw_qualimap; filter_umr_mismatch; filtered_qualimap;
+  feature_counts; filter_for_annotated; annotated_qualimap; multiqc;
   sort_index_bam; group; dedup; io_count; count_matrix;
   filter_count_matrix; cell_caller; summary_statistics; single_summary_report;
   multi_sample_report
@@ -94,20 +95,24 @@ workflow {
 
     // Qualimap on STAR output
     raw_qualimap(ch_star_out_qualimap, gtf)
-    ch_raw_qualimap_txt = raw_qualimap.out.qualimap_txt
 
     // Filter the mapped reads for reads with 1 alignment and max 3 mismatch
-    filter(ch_star_out_filtering)
+    filter_umr_mismatch(ch_star_out_filtering)
 
     // Qualimap on filtered bam
-    filtered_qualimap(filter.out.filtered_bam, gtf)
-    ch_filtered_qualimap_txt = filtered_qualimap.out.qualimap_txt
+    filtered_qualimap(filter_umr_mismatch.out.filtered_bam, gtf)
 
     // Perform featurecount quantification
-    ch_feature_counts_in = filter.out.filtered_bam
-    feature_counts(ch_feature_counts_in, gtf)
-    ch_feature_counts_out = feature_counts.out.feature_counts_out
-    ch_feature_counts_multiqc = feature_counts.out.feature_counts_multiqc
+    feature_counts(filter_umr_mismatch.out.filtered_bam, gtf)
+
+    // Filter the annotated featureCounts bam
+    // for only annotated/assigned reads with 1
+    // target
+    filter_for_annotated(feature_counts.out.feature_counts_out_bam)
+
+    // Produce qualimap output of the annotated bam
+    // for metrics
+    annotated_qualimap(filter_for_annotated.out.annotated_bam, gtf)
 
     // Generate input channel containing all the files needed for multiqc per samples. 
     // The final channel structure is [sample_id, [file1, file2, file3, ...]]
@@ -118,7 +123,7 @@ workflow {
       .mix(ch_post_polyA_fastp_multiqc)
       .mix(ch_io_extract_fastp_multiqc)
       .mix(ch_star_multiqc)
-      .mix(ch_feature_counts_multiqc)
+      .mix(feature_counts.out.feature_counts_multiqc)
       .groupTuple(by:0, size: 5)
       .map({it.flatten()}).map({[it[0], it.tail()]})
       .set { ch_multiqc_in }
@@ -128,7 +133,7 @@ workflow {
     ch_multiqc_json = multiqc.out.multiqc_json    
     
     // Run Sort and index bam file
-    sort_index_bam(ch_feature_counts_out)
+    sort_index_bam(filter_for_annotated.out.annotated_bam)
     ch_antisense_out = sort_index_bam.out.antisense_out
     ch_sort_index_bam_out = sort_index_bam.out.sort_index_bam_out 
 
@@ -168,14 +173,16 @@ workflow {
     ch_filtered_count_matrices = filter_count_matrix.out.cell_only_count_matrix
 
     // structure of ch_summary_report_in is
-    // [sample_id, min_nuc_gene_cutoff, h5ad, multiqc_data, antisense, dedup.log, filtered_qualimap, raw_qualimap]
+    // [sample_id, min_nuc_gene_cutoff, h5ad, annotated_qualimap,
+    // antisense, dedup.log, filtered_qualimap, multiqc_data, raw_qualimap]
     ch_filtered_count_matrices
     .mix(ch_multiqc_json)
     .mix(ch_antisense_out)
-    .mix(ch_raw_qualimap_txt)
-    .mix(ch_filtered_qualimap_txt)
+    .mix(raw_qualimap.out.qualimap_txt)
+    .mix(filtered_qualimap.out.qualimap_txt)
+    .mix(annotated_qualimap.out.annotated_qualimap)
     .mix(ch_io_dedup_log)
-    .groupTuple(by:0, size: 6, sort:{it.name})
+    .groupTuple(by:0, size: 7, sort:{it.name})
     .mix(ch_cell_caller_out)
     .groupTuple(by:0, size:2, sort:{sort:{it.getClass() == nextflow.util.ArrayBag ? 1 : 0}})
     .map({it.flatten()})

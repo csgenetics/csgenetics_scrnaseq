@@ -41,7 +41,7 @@ def make_count_matrix(args):
 
     # second merge by gene ID
     counts = merge(counts, genes_all,how='left')
-    counts = counts[~counts.ensID.isin(['MmusInterGenic','HsapInterGenic','Mmus_InterGenic','Hsap_InterGenic', 'InterGenic'])]
+
     zero_genes = genes_all.loc[-genes_all.ensID.isin(counts.ensID)]
 
     # transform a long counts DataFrame into a sparse matrix

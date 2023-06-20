@@ -276,7 +276,7 @@ process raw_qualimap {
 /*
 * Filter for reads with 1 alignment and max of 3 differences from reference seq.
 */
-process filter{
+process filter_umr_mismatch{
 tag "$sample_id"
 
 label "c2m2"
@@ -304,7 +304,7 @@ process filtered_qualimap {
   publishDir "${params.outdir}/qualimap", mode: 'copy'
 
   input:
-  tuple val (sample_id), path(bam)
+  tuple val(sample_id), path(bam)
   path(gtf)
 
   output:
@@ -331,13 +331,50 @@ process feature_counts {
   path(gtf)
 
   output:
-  tuple val(sample_id), path('*.bam'), emit: feature_counts_out
+  tuple val(sample_id), path('*.bam'), emit: feature_counts_out_bam
   tuple val(sample_id), path("${sample_id}_gene_assigned.txt"), path("${sample_id}_gene_assigned.txt.summary"), emit: feature_counts_multiqc
 
   shell:
   """
-  featureCounts -a $gtf -o ${sample_id}_gene_assigned.txt -R BAM $bam -T 4 -t exon,intron,intergenic -g gene_id --fracOverlap 0.5 --extraAttributes gene_name
+  featureCounts -a $gtf -o ${sample_id}_gene_assigned.txt -R BAM $bam -T 4 -t exon,intron -g gene_id --fracOverlap 0.5 --extraAttributes gene_name
   """
+}
+
+process filter_for_annotated {
+  tag "$sample_id"
+
+  label "c2m2"
+
+  input:
+  tuple val(sample_id), path(feature_counts_out_bam)
+
+  output:
+  tuple val(sample_id), path("${sample_id}.mapped.sorted.filtered.annotated.bam"), emit: annotated_bam
+
+  script:
+  """
+  samtools view -h -e '[XN]==1 && [XT] && [XS]=="Assigned"' -b $feature_counts_out_bam > ${sample_id}.mapped.sorted.filtered.annotated.bam 
+  """
+}
+
+process annotated_qualimap {
+  tag "$sample_id"
+  label 'c8m16'
+
+  publishDir "${params.outdir}/qualimap", mode: 'copy'
+
+  input:
+  tuple val(sample_id), path(bam)
+  path(gtf)
+
+  output:
+  tuple val (sample_id), path("${sample_id}.annotated_qualimap.txt"), emit: annotated_qualimap
+
+  shell:
+  '''
+  qualimap rnaseq -outdir !{sample_id}_annotated_qualimap -a proportional -bam !{bam} -p strand-specific-forward -gtf !{gtf} --java-mem-size=16G 
+  mv !{sample_id}_annotated_qualimap/rnaseq_qc_results.txt !{sample_id}.annotated_qualimap.txt
+  '''
 }
 
 /*
@@ -378,16 +415,16 @@ process sort_index_bam {
   label 'c1m2'
 
   input:
-  tuple val (sample_id), path(f)
+  tuple val (sample_id), path(bam)
 
   output:
-  tuple val(sample_id), path('*.txt'), emit: antisense_out
+  tuple val(sample_id), path("${sample_id}.antisense.txt"), emit: antisense_out
   tuple val (sample_id), path('*.{bam,bai}'), emit: sort_index_bam_out
 
   shell:
   '''
-  samtools view -c -f 16 !{f} > !{sample_id}_antisense.txt
-  samtools sort !{f} -o !{sample_id}_sorted.bam
+  samtools view -c -f 16 !{bam} > !{sample_id}.antisense.txt
+  samtools sort !{bam} -o !{sample_id}_sorted.bam
   samtools index !{sample_id}_sorted.bam
   '''
 }
@@ -434,8 +471,8 @@ process dedup{
   tuple val (sample_id), path(f)
 
   output:
-  tuple val(sample_id), path('*_dedup.log'), emit: io_dedup_log
-  tuple val(sample_id), path('*_dedup.sam'), emit: io_dedup_sam
+  tuple val(sample_id), path("${sample_id}.dedup.log"), emit: io_dedup_log
+  tuple val(sample_id), path("${sample_id}.dedup.sam"), emit: io_dedup_sam
   
   shell:
   '''
@@ -445,8 +482,8 @@ process dedup{
   umi_tools dedup \
     --per-cell \
     --in-sam -I !{f} \
-    --out-sam -S !{sample_id}_dedup.sam \
-    --log=!{sample_id}_dedup.log
+    --out-sam -S !{sample_id}.dedup.sam \
+    --log=!{sample_id}.dedup.log
   '''
 }
 
@@ -572,7 +609,7 @@ process summary_statistics {
   publishDir "${params.outdir}/report/${sample_id}", mode: 'copy', pattern: "*.csv"
   
   input:
-  tuple val(sample_id), val(min_nuc_gene_cutoff), path(h5ad), path(multiqc_data_json), path(antisense), path(dedup), path(filtered_qualimap), path(raw_qualimap)
+  tuple val(sample_id), val(min_nuc_gene_cutoff), path(h5ad), path(annotated_qualimap), path(antisense), path(dedup), path(filtered_qualimap), path(multiqc_data_json), path(raw_qualimap)
 
   output:
   tuple val(sample_id),
@@ -582,7 +619,7 @@ process summary_statistics {
 
   script:
   """
-  summary_statistics.py $sample_id $h5ad $multiqc_data_json $antisense $dedup $filtered_qualimap $raw_qualimap
+  summary_statistics.py $sample_id $h5ad $multiqc_data_json $antisense $dedup $raw_qualimap $filtered_qualimap $annotated_qualimap
   """
 }
 

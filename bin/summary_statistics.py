@@ -1,14 +1,8 @@
 #!/usr/bin/env python
 
 """
-Reads in 4 input data files:
-1 - _antisense.txt
-2 - .multiqc.data.json
-3 - _qualimap.txt
-4 - .cell_only.count_matrix.h5ad
-
-Input files are provided as command line inputs
-summary_statistics.py Sample1 Sample1.cell_only.count_matrix.h5ad Sample1.multiqc.data.json Sample1_antisense.txt 
+Stats are pulled from the commandline-supplied input files:
+    summary_statistics.py $sample_id $h5ad $multiqc_data_json $antisense $dedup $raw_qualimap $filtered_qualimap $annotated_qualimap
 """
 
 import anndata
@@ -48,18 +42,12 @@ class SummaryStatistics:
         
     def get_sequencing_stats(self):
         """
-        Get metrics related to sequencing
-        # TODO use the comments as tool tips in the html documents.
-        # TODO see if we can get rid of the polyA stats file and get
-        # everything we need from the fastp outputs.
-        
-        command line input is: $sample_id $h5ad $multiqc_data_json $antisense $dedup $filtered_qualimap $raw_qualimap
-
+        Populate the self.metrics_dict with the stats
         """
         self.get_trimming_qc_stats()
         self.get_mapping_stats()
         self.get_duplication_stats()
-        self.get_allocation_stats()
+        self.get_cell_stats()
     
     def get_allocation_stats(self):
         # TODO update this so that it also includes the filtering of the Intergenic tags
@@ -80,9 +68,11 @@ class SummaryStatistics:
 
     def get_mapping_stats(self):
         # Populate self.metrics_dict with the raw qualimap stats
-        self.get_qualimap_stats(sys.argv[7], "raw")
+        self.get_qualimap_stats(sys.argv[6], "raw")
         # Populate self.metrics_dict with the filtered qualimap stats
-        self.get_qualimap_stats(sys.argv[6], "filtered")
+        self.get_qualimap_stats(sys.argv[7], "filtered")
+        # Populate self.metrics_dict with the annotated qualimap stats
+        self.get_qualimap_stats(sys.argv[8], "annotated")
 
     def get_qualimap_stats(self, path, prefix):
         # Read in the qualimap output for the unfiltered mapping
