@@ -254,6 +254,7 @@ process star {
 */
 process raw_qualimap {
   tag "$sample_id"
+  
   label 'c8m16'
 
   publishDir "${params.outdir}/qualimap", mode: 'copy'
