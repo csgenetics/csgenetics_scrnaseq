@@ -430,35 +430,6 @@ process sort_index_bam {
 }
 
 /*
-* Group reads by cell ids/IOs using umitools
-*/
-process group {
-  tag "$sample_id"
-
-  label 'c4m2'
-
-  publishDir "${params.outdir}/io_count", mode: 'copy'
-
-  input:
-  tuple val (sample_id), path(f)
-
-  output:
-  tuple val(sample_id), path('*_group.sam'), emit: io_group_sam
-  tuple val(sample_id), path('*_group.tsv'), emit: io_group_tsv
-  tuple val(sample_id), path('*_group.log'), emit: io_group_log
-
-  shell:
-  '''
-  umi_tools group \
-    --per-cell \
-    -I !{sample_id}_sorted.bam \
-    --group-out=!{sample_id}_group.tsv \
-    --output-bam --out-sam -S !{sample_id}_group.sam \
-    --log=!{sample_id}_group.log
-  '''
-}
-
-/*
 * Deduplicate reads (currently based on the combination of IO and SSS start site)
 */
 process dedup{

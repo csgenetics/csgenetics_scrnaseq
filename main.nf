@@ -10,7 +10,7 @@ include {
   features_file; merge_lanes; merged_fastp; io_extract; io_extract_fastp;
   trim_extra_polya; post_polyA_fastp; star; raw_qualimap; filter_umr_mismatch; filtered_qualimap;
   feature_counts; filter_for_annotated; annotated_qualimap; multiqc;
-  sort_index_bam; group; dedup; io_count; count_matrix;
+  sort_index_bam; dedup; io_count; count_matrix;
   filter_count_matrix; cell_caller; summary_statistics; single_summary_report;
   multi_sample_report
   } from './modules/processes.nf'
@@ -132,19 +132,11 @@ workflow {
     multiqc(ch_multiqc_in)
     ch_multiqc_json = multiqc.out.multiqc_json    
     
-    // Run Sort and index bam file
+    // Sort and index bam file
     sort_index_bam(filter_for_annotated.out.annotated_bam)
-    ch_antisense_out = sort_index_bam.out.antisense_out
-    ch_sort_index_bam_out = sort_index_bam.out.sort_index_bam_out 
-
-    // Run umi tools group (basically assign reads to cells) and save a lot of output channels
-    group(ch_sort_index_bam_out)
-    ch_io_group_sam = group.out.io_group_sam
-    ch_group_tsv = group.out.io_group_tsv
-    ch_io_group_log = group.out.io_group_log
 
     // Perform deduplication
-    dedup(ch_io_group_sam)
+    dedup(sort_index_bam.out.sort_index_bam_out)
     ch_io_dedup_log = dedup.out.io_dedup_log
     ch_io_dedup_sam = dedup.out.io_dedup_sam
 
@@ -177,7 +169,7 @@ workflow {
     // antisense, dedup.log, filtered_qualimap, multiqc_data, raw_qualimap]
     ch_filtered_count_matrices
     .mix(ch_multiqc_json)
-    .mix(ch_antisense_out)
+    .mix(sort_index_bam.out.antisense_out)
     .mix(raw_qualimap.out.qualimap_txt)
     .mix(filtered_qualimap.out.qualimap_txt)
     .mix(annotated_qualimap.out.annotated_qualimap)
