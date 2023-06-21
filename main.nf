@@ -183,10 +183,10 @@ workflow {
     // Generate summary statistics
     summary_statistics(ch_summary_report_in)
 
-    // ch_summary_metrics_and_plot = summary_statistics.out.metrics_csv.join(ch_cell_caller_plot, by:0)
+    ch_summary_metrics_and_plot = summary_statistics.out.metrics_csv.join(ch_cell_caller_plot, by:0)
 
-    // // Generate single sample report
-    // single_summary_report(ch_summary_metrics_and_plot, single_sample_report_template, cs_logo)
+    // Generate single sample report
+    single_summary_report(ch_summary_metrics_and_plot, single_sample_report_template, cs_logo)
 
     // // Generate multi sample report
     // multi_sample_report(single_summary_report.out.single_sample_metric_out.collect(), multi_sample_report_template)

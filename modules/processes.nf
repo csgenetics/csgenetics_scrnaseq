@@ -583,8 +583,7 @@ process summary_statistics {
   tuple val(sample_id), val(min_nuc_gene_cutoff), path(h5ad), path(annotated_qualimap), path(antisense), path(dedup), path(filtered_qualimap), path(multiqc_data_json), path(raw_qualimap)
 
   output:
-  tuple val(sample_id),
-  path("${sample_id}.metrics.csv"), emit: metrics_csv
+  tuple val(sample_id), path("${sample_id}.metrics.csv"), emit: metrics_csv
 
   script:
   """

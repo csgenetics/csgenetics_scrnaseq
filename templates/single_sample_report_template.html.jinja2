@@ -15,6 +15,7 @@
   </script>
  </head>
  <body>
+ 
   <div class="m-4">
    <nav class="navbar navbar-expand-lg navbar-light mx-5 px-5">
     <div class="container-fluid">
@@ -56,7 +57,7 @@
        <div class="row no-gutters align-items-centre">
         <div class="col mr-2 col-md-6">
          <div class="text-xs font-weight-bold mb-1" style="font-size:25px; color:rgb(54, 186, 0)" id="Mean_Reads_per_Cell">
-          {{ mean_reads_per_cell }}
+          {{ mean_genes_detected_per_cell }}
          </div>
          <div class="h5 mb-0 font-weight-bold text-gray-800" style="font-size:12px">
           Mean reads per cell
@@ -77,7 +78,7 @@
        <div class="row no-gutters align-items-left">
         <div class="col mr-2 col-md-6">
          <div class="text-xs font-weight-bold mb-1" style="font-size:25px; color:rgb(54, 186, 0) " id="Total_genes_detected">
-          {{ total_genes_detected }}
+          {{ raw_reads_aligned }}
          </div>
          <div class="h5 mb-0 font-weight-bold text-gray-800" style="font-size:12px">
           Estimated number of genes per cell
@@ -92,208 +93,96 @@
      </div>
     </div>
    </div>
+
+
    <!-- Second row -->
    <div class="card mb-4 border-left-success shadow">
     <div class="row" id="container2">
+     
      <!-- Cell counter plot -->
      <div class="col-6", id="cell_caller_plot">
         <img alt='...' class='img-fluid' src='data:image/png;base64,{{ encoded_png_str }}'/>
      </div>
+     
+     
      <div class="text-left col-md-6 mt-4">
+
+      
+      <table class="table" style="font-size:13px; color:grey">
+       <tbody>
       <h2 class="text-xs font-weight-bold me-5 ms-3" style="font-size: 21px; line-height: 1.5">
        Mapping
       </h2>
-      <table class="table" style="font-size:13px; color:grey">
-       <tbody>
+  
+        {% for metric, metric_val in cell_metrics_dict.items() %}
+          <tr>
+            <th scope="row">{{ metric }}</th>
+              <td>{{ metric_val }}</td>
+          </tr>
+        {% endfor %}
 
-        <tr>
-         <th scope="row" id="Reads Mapped to Genome">
-          Reads Mapped to Genome
-         </th>
-         <td id="Reads Mapped to Genome">
-          {{ mapped_reads }}
-         </td>
-        </tr>
-
-        <tr>
-         <th scope="row" id="Reads Mapped Confidently to Genome">
-          Reads Mapped Confidently to Genome
-         </th>
-         <td id="Reads Mapped Confidently to Genome">
-          {{ confidently_mapped_reads }}
-         </td>
-        </tr>
-
-        <tr>
-         <th scope="row" id="Reads Mapped Confidently to Intergenic Regions">
-          Reads Mapped Confidently to Intergenic regions
-         </th>
-         <td id="Reads Mapped Confidently to Intergenic Regions">
-          {{ confidently_mapped_reads_intergenic }}
-         </td>
-        </tr>
-
-        <tr>
-         <th scope="row" id="Reads Mapped Confidently to Intronic Regions">
-          Reads Mapped Confidently to Intronic Regions
-         </th>
-         <td id="Reads Mapped Confidently to Intronic Regions">
-          {{ confidently_mapped_reads_intronic }}
-         </td>
-        </tr>
-
-        <tr>
-         <th scope="row" id="Reads Mapped Confidently to Exonic Regions">
-          Reads Mapped Confidently to Exonic Regions
-         </th>
-         <td id="Reads Mapped Confidently to Exonic Regions">
-          {{ confidently_mapped_reads_exonic }}
-         </td>
-        </tr>
-
-        <tr>
-         <th scope="row" id="Reads Mapped Antisense to Gene">
-          Reads Mapped Antisense to Gene
-         </th>
-         <td id="Reads Mapped Antisense to Gene">
-          {{ mapped_reads_antisense }}
-         </td>
-        </tr>
 
        </tbody>
       </table>
      </div>
     </div>
    </div>
+
+
    <!-- Third row -->
    <div class="card mb-4 border-left-success shadow">
     <div class="row">
      <div class="text-left col-md-6 mt-4">
+
+
+      <table class="table" style="font-size:13px; color:grey">
+       <tbody>
       <h2 class="text-xs font-weight-bold me-5 ms-3" style="font-size: 21px; line-height: 1.5">
        Sequencing
       </h2>
+        {% for metric, metric_val in sequencing_metrics_dict.items() %}
+          <tr>
+            <th scope="row">{{ metric }}</th>
+              <td>{{ metric_val }}</td>
+          </tr>
+        {% endfor %} 
+
+
       <table class="table" style="font-size:13px; color:grey">
        <tbody>
-        <tr>
-         <th scope="row" id="Total Number of Reads">
-          Total number of Reads
-         </th>
-         <td id="Total Number of Reads">
-          {{ total_num_reads }}
-         </td>
-        </tr>
-        <tr>
-         <th scope="row" id="Valid Barcodes / CSGX Cell Barcodes">
-          Valid Barcodes / CSGX cell barcodes
-         </th>
-         <td id="Valid Barcodes / CSGX Cell Barcodes">
-          {{ valid_barcodes }}
-         </td>
-        </tr>
-        <tr>
-         <th scope="row" id="Sequencing Saturation">
-         Sequencing Saturation
-         </th>
-         <td id="Sequencing Saturation">
-          {{ sequencing_saturation }}
-         </td>
-        </tr>
-        <tr>
-         <th scope="row" id="Q30 Bases in Barcode">
-         Q30 Bases in Barcode
-         </th>
-         <td id="Q30 Bases in Barcode">
-          {{ q30_barcode }}
-         </td>
-        </tr>
-        <tr>
-         <th scope="row" id="Q30 Bases in RNA Read">
-         Q30 Bases in RNA Read
-         </th>
-         <td id="Q30 Bases in RNA Read">
-          {{ q30_rna }}
-         </td>
-        </tr>
+      <h2 class="text-xs font-weight-bold me-5 ms-3" style="font-size: 21px; line-height: 1.5">
+       Duplication
+      </h2>
+        {% for metric, metric_val in duplication_stats_dict.items() %}
+          <tr>
+            <th scope="row">{{ metric }}</th>
+              <td>{{ metric_val }}</td>
+          </tr>
+        {% endfor %} 
+
+
+       </tbody>
+      </table>
+
        </tbody>
       </table>
      </div>
+
+
      <div class="text-left col-md-6 mt-4">
+
+      <table class="table" style="font-size:13px; color:grey">
+       <tbody>
       <h2 class="text-xs font-weight-bold me-5 ms-3" style="font-size: 21px; line-height: 1.5">
        Cells
       </h2>
-      <table class="table" style="font-size:13px; color:grey">
-       <tbody>
-        <tr>
-         <th scope="row" id="Estimated Number of Cells">
-          Estimated number of cells
-         </th>
-         <td id="Estimated Number of Cells">
-          {{ estimated_number_of_cells }}
-         </td>
-        </tr>
-        <tr>
-
-         <th scope="row" id="Mean Reads per Cell">
-          Mean Reads per Cell
-         </th>
-         <td id="Mean Reads per Cell">
-          {{ mean_reads_per_cell }}
-         </td>
-        </tr>
-
-        <tr>
-         <th scope="row" id="Median Genes per Cell">
-          Median genes per cell
-         </th>
-         <td id="Median Genes per Cell">
-          {{ median_genes_per_cell }}
-         </td>
-        </tr>
-
-        <tr>
-         <th scope="row" id="Total Genes Detected">
-          Total genes detected
-         </th>
-         <td id="Total Genes Detected">
-          {{ total_genes_detected }}
-         </td>
-        </tr>
-
-        <tr>
-         <th scope="row" id="Mean Counts per Cell">
-          Mean Counts per Cell
-         </th>
-         <td id="Mean Counts per Cell">
-          {{ mean_counts_per_cell }}
-         </td>
-        </tr>
-
-        <tr>
-         <th scope="row" id="Median Counts per Cell">
-          Median Counts per Cell
-         </th>
-         <td id="Median Counts per Cell">
-          {{ median_counts_per_cell }}
-         </td>
-        </tr>
-
-        <tr>
-         <th scope="row" id="Mitochondrial Ratio">
-          Mitochondrial Ratio
-         </th>
-         <td id="Mitochondrial Ratio">
-          {{ mito_ratio }}
-         </td>
-        </tr>
-
-        <tr>
-         <th scope="row" id="Mean Genes per Cell">
-          Mean genes per cell
-         </th>
-         <td id="Mean Genes per Cell">
-          {{ mean_genes_per_cell }}
-         </td>
-        </tr>
+        {% for metric, metric_val in mapping_metrics_dict.items() %}
+          <tr>
+            <th scope="row">{{ metric }}</th>
+              <td>{{ metric_val }}</td>
+          </tr>
+        {% endfor %}         
+        
 
        </tbody>
       </table>
