@@ -56,11 +56,6 @@ class SummaryStatistics:
                 for dict_id2,v2 in v.items():
                     csv_handle.write(f"{dict_id2},{v2},{dict_id}\n")
     
-    # def write_out_dict_to_csv(self):
-    #     with open(f"{self.sample_id}.metrics.json","w") as json_handle:
-    #         self.json_object = json.dumps(self.metrics_dict)
-    #         json_handle.write(self.json_object)
-
     @staticmethod
     def get_non_zero_sum(np_1d_array):
         return np.sum(np_1d_array[np.nonzero(np_1d_array)])
