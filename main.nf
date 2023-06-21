@@ -189,6 +189,6 @@ workflow {
     single_summary_report(ch_summary_metrics_and_plot, single_sample_report_template, cs_logo)
 
     // // Generate multi sample report
-    // multi_sample_report(single_summary_report.out.single_sample_metric_out.collect(), multi_sample_report_template)
+    multi_sample_report(single_summary_report.out.single_sample_metric_out.collect(), multi_sample_report_template)
  
 }

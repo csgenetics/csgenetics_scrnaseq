@@ -71,7 +71,7 @@ class MultipleSampleHTMLReport:
             with open(csv_path, "r") as csv_f:
                 for line in [_.rstrip() for _ in csv_f]:
                     # read in the metrics and add them to the defaultdict
-                    metric_name, metric_val = line.split("\t")
+                    metric_name, metric_val,table_group = line.split(",")
                     self.metrics_dict[metric_name].append(metric_val.strip())
 
         return self.sample_name_list, self.metrics_dict
