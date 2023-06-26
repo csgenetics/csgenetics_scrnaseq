@@ -29,13 +29,12 @@ process features_file {
 /*
 * Merge Illumina Lanes
 */
-
 process merge_lanes {
   tag "$sample_id"
   label 'c1m4'
 
   input:
-  tuple val(sample_id), file(fastq_1), file(fastq_2)
+  tuple val(sample_id), path(fastq_1), path(fastq_2)
 
   output:
   tuple val(sample_id), env(numreads), path("${sample_id}_R1.merged.fastq.gz"), path("${sample_id}_R2.merged.fastq.gz"), emit: merge_lanes_out
@@ -43,12 +42,12 @@ process merge_lanes {
 
   shell:
   '''
-  # merging R1 and R2
-  cat *_L*_R1*.f*q.gz > !{sample_id}_R1.merged.fastq.gz
-  cat *_L*_R2*.f*q.gz > !{sample_id}_R2.merged.fastq.gz
+  cat !{fastq_1} > !{sample_id}_R1.merged.fastq.gz
+  cat !{fastq_2} > !{sample_id}_R2.merged.fastq.gz
   
   # count number of raw reads
   numreads=$(( $(zcat !{sample_id}_R1.merged.fastq.gz | wc -l) / 4))
+
   echo $numreads > numreads.txt
   '''
 }
