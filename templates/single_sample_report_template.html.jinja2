@@ -121,7 +121,6 @@
           </tr>
         {% endfor %}
 
-
        </tbody>
       </table>
      </div>
@@ -140,6 +139,7 @@
       <h2 class="text-xs font-weight-bold me-5 ms-3" style="font-size: 21px; line-height: 1.5">
        Sequencing
       </h2>
+
         {% for metric, metric_val in sequencing_metrics_dict.items() %}
           <tr>
             <th scope="row">{{ metric }}</th>
@@ -147,19 +147,18 @@
           </tr>
         {% endfor %} 
 
-
       <table class="table" style="font-size:13px; color:grey">
        <tbody>
       <h2 class="text-xs font-weight-bold me-5 ms-3" style="font-size: 21px; line-height: 1.5">
        Duplication
       </h2>
+
         {% for metric, metric_val in duplication_stats_dict.items() %}
           <tr>
             <th scope="row">{{ metric }}</th>
               <td>{{ metric_val }}</td>
           </tr>
         {% endfor %} 
-
 
        </tbody>
       </table>
@@ -176,13 +175,13 @@
       <h2 class="text-xs font-weight-bold me-5 ms-3" style="font-size: 21px; line-height: 1.5">
        Cells
       </h2>
+
         {% for metric, metric_val in mapping_metrics_dict.items() %}
           <tr>
             <th scope="row">{{ metric }}</th>
               <td>{{ metric_val }}</td>
           </tr>
         {% endfor %}         
-        
 
        </tbody>
       </table>

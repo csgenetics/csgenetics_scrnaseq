@@ -53,8 +53,8 @@ class SummaryStatistics:
     def write_out_dict_to_csv(self):
         with open(f"{self.sample_id}.metrics.csv", "w") as csv_handle:
             for dict_id, v in self.metrics_dict.items():
-                for dict_id2,v2 in v.items():
-                    csv_handle.write(f"{dict_id2},{v2},{dict_id}\n")
+                for dict_id2, v2 in v.items():
+                    csv_handle.write(f"{dict_id2}, {v2},{dict_id}\n")
     
     @staticmethod
     def get_non_zero_sum(np_1d_array):
