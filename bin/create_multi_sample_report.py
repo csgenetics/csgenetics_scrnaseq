@@ -24,19 +24,20 @@ class MultipleSampleHTMLReport:
 
         self.sample_name_list, self.metrics_dict = self.make_metrics_dict_and_sample_list()
         self.render_and_write_report()
-        self.write_out_tsv()
+        self.write_out_csv()
 
-    def write_out_tsv(self):
+    def write_out_csv(self):
         """
-        write out the metrics as a tsv
+        write out the metrics as a csv
         """
         # open a stream to write to
-        with open("multisample_out.tsv", "w") as tsv_out:
-            tsv_out.write("\t")
-            tsv_out.write("\t".join(self.sample_name_list) + "\n")
+        with open("multisample_out.csv", "w") as csv_out:
+            # Put in an empty field to allow for the variable names
+            csv_out.write(",")
+            csv_out.write(",".join(self.sample_name_list) + "\n")
             for metric_name, metric_val_list in self.metrics_dict.items():
-                tsv_out.write(f"{metric_name}\t")
-                tsv_out.write("\t".join(metric_val_list) + "\n")
+                csv_out.write(f"{metric_name},")
+                csv_out.write(",".join(metric_val_list) + "\n")
 
     def render_and_write_report(self):
         # Render the template.

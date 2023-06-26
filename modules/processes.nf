@@ -628,7 +628,7 @@ process multi_sample_report {
 
   output:
   path('multisample_report.html')
-  path('multisample_out.tsv')
+  path('multisample_out.csv')
 
   script:
   """
