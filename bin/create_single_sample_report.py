@@ -20,8 +20,8 @@ class SingleSampleHTMLReport:
         self.metrics_dict = defaultdict(dict)
         with open(sys.argv[3]) as metrics_handle:
             for line in metrics_handle:
-                row_id,var,group = line.strip().split(",")
-                self.metrics_dict[group][row_id] = var
+                row_id, var, group = line.strip().split(",")
+                self.metrics_dict[group][row_id] = self.format_number_to_string(var)
 
 
 
@@ -54,6 +54,24 @@ class SingleSampleHTMLReport:
         # Write out the rendered template.
         with open(f"{self.sample_id}_report.html", "w") as f_output:
             f_output.write(final_report)
+    
+    @staticmethod
+    def format_number_to_string(number_str):
+        """
+        Ensure that the proper formatting of numbers
+        for the output html.
+
+        Floats should be formatted to 2 d.p.
+
+        Integers should not have any decimal places.
+        """
+        if "." in number_str:
+            # If float then return with 2 d.p.
+            return f"{float(number_str):.2f}"
+        else:
+            # Else return original int
+            return number_str
+            
 
 if __name__ == "__main__":
     SingleSampleHTMLReport()
