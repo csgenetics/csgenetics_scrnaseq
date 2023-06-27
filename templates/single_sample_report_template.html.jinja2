@@ -114,7 +114,7 @@
           <table class="table" style="font-size:13px; color:grey">
             <tbody>
               <h2 class="text-xs font-weight-bold me-5 ms-3" style="font-size: 21px; line-height: 1.5">
-              Sequencing
+              Read QC
               </h2>
         
               {% for metric, metric_tup in metrics_dict.sequencing_stats.items() %}
@@ -171,89 +171,7 @@
 
     <!-- Second col contains alignment and cell stats -->
     <div class="col">
-      <div class="card border-left-success shadow py-2">
-        <div class="card-body">
-          <div class="accordion accordion-flush" id="alignmentCollapse">
-            
-            <div class="accordion-item">
-              <h2 class="accordion-header" id="postQCAlignment">
-                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#rawAlignmentCollapse" aria-expanded="true" aria-controls="rawAlignmentCollapse">
-                  Post QC alignment <i class="bi-info-circle ms-1" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="Mapping of the post QC reads (i.e. after trimming (polyX end and internal polyA) and barcode verification)">
-                      </i>
-                </button>
-              </h2>
-              <div id="rawAlignmentCollapse" class="accordion-collapse collapse show" aria-labelledby="postQCAlignment" data-bs-parent="#alignmentCollapse">
-                <div class="accordion-body">
-                  <table class="table" style="font-size:13px; color:grey">
-                    <tbody>
-                      {% for metric, metric_tup in metrics_dict.raw_alignment_stats.items() %}
-                        <tr>
-                          <th scope="row">{{ metric_tup[0] }}</th>
-                            <td>
-                              {{ metric_tup[1] }}
-                            </td>
-                        </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
-                </div>
-              </div>  
-            </div>
-
-            <div class="accordion-item">
-              <h2 class="accordion-header" id="highConfidenceAlignment">
-                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#filteredAlignmentCollapse" aria-expanded="true" aria-controls="filteredAlignmentCollapse">
-                  High confidence
-                  <i class="bi-info-circle ms-1" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="Reads with a single alignment and a maximum of 3 bp mismatch.">
-                      </i>
-                </button>
-              </h2>
-              <div id="filteredAlignmentCollapse" class="accordion-collapse collapse show" aria-labelledby="highConfidenceAlignment" data-bs-parent="#alignmentCollapse">
-                <div class="accordion-body">
-                  <table class="table" style="font-size:13px; color:grey">
-                    <tbody>
-                      {% for metric, metric_tup in metrics_dict.filtered_alignment_stats.items() %}
-                        <tr>
-                          <th scope="row">{{ metric_tup[0] }}</th>
-                            <td>
-                              {{ metric_tup[1] }}
-                            </td>
-                        </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
-                </div>
-              </div>  
-            </div>
-
-            <div class="accordion-item">
-              <h2 class="accordion-header" id="annotatedAlignment">
-                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#annotatedAlignmentCollapse" aria-expanded="true" aria-controls="annotatedAlignmentCollapse">
-                  Post QC alignment<i class="bi-info-circle ms-1" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="High confidence reads annotated with a gene ID.">
-                      </i>
-                </button>
-              </h2>
-              <div id="annotatedAlignmentCollapse" class="accordion-collapse collapse show" aria-labelledby="annotatedAlignment" data-bs-parent="#alignmentCollapse">
-                <div class="accordion-body">
-                  <table class="table" style="font-size:13px; color:grey">
-                    <tbody>
-                      {% for metric, metric_tup in metrics_dict.annotated_alignment_stats.items() %}
-                        <tr>
-                          <th scope="row">{{ metric_tup[0] }}</th>
-                            <td>
-                              {{ metric_tup[1] }}
-                            </td>
-                        </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
-                </div>
-              </div>  
-            </div>
-          </div>
-        </div>
-      </div>
-
+      <!-- Cell stats -->
       <div class="card border-left-success shadow py-2">
         <div class="card-body">
           <table class="table" style="font-size:13px; color:grey">
@@ -279,6 +197,95 @@
           </table>
         </div>
       </div>
+
+      <!-- Alignment stats -->
+      <div class="card border-left-success shadow py-2">
+        <div class="card-body">
+          <h2 class="text-xs font-weight-bold me-5 ms-3" style="font-size: 21px; line-height: 1.5">
+            Alignment stats
+          </h2>
+          <div class="accordion accordion-flush" id="alignmentCollapse">
+            
+            <div class="accordion-item">
+              <h2 class="accordion-header" id="postQCAlignment">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#rawAlignmentCollapse" aria-expanded="false" aria-controls="rawAlignmentCollapse">
+                  Post QC alignment <i class="bi-info-circle ms-1" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="Mapping of the post QC reads (i.e. after trimming (polyX end and internal polyA) and barcode verification)">
+                      </i>
+                </button>
+              </h2>
+              <div id="rawAlignmentCollapse" class="accordion-collapse collapse" aria-labelledby="postQCAlignment" data-bs-parent="#alignmentCollapse">
+                <div class="accordion-body">
+                  <table class="table" style="font-size:13px; color:grey">
+                    <tbody>
+                      {% for metric, metric_tup in metrics_dict.raw_alignment_stats.items() %}
+                        <tr>
+                          <th scope="row">{{ metric_tup[0] }}</th>
+                            <td>
+                              {{ metric_tup[1] }}
+                            </td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </div>  
+            </div>
+
+            <div class="accordion-item">
+              <h2 class="accordion-header" id="highConfidenceAlignment">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#filteredAlignmentCollapse" aria-expanded="false" aria-controls="filteredAlignmentCollapse">
+                  High confidence
+                  <i class="bi-info-circle ms-1" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="Reads with a single alignment and a maximum of 3 bp mismatch.">
+                      </i>
+                </button>
+              </h2>
+              <div id="filteredAlignmentCollapse" class="accordion-collapse collapse" aria-labelledby="highConfidenceAlignment" data-bs-parent="#alignmentCollapse">
+                <div class="accordion-body">
+                  <table class="table" style="font-size:13px; color:grey">
+                    <tbody>
+                      {% for metric, metric_tup in metrics_dict.filtered_alignment_stats.items() %}
+                        <tr>
+                          <th scope="row">{{ metric_tup[0] }}</th>
+                            <td>
+                              {{ metric_tup[1] }}
+                            </td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </div>  
+            </div>
+
+            <div class="accordion-item">
+              <h2 class="accordion-header" id="annotatedAlignment">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#annotatedAlignmentCollapse" aria-expanded="false" aria-controls="annotatedAlignmentCollapse">
+                  Annotated
+                  <i class="bi-info-circle ms-1" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="High confidence reads annotated with a gene ID.">
+                      </i>
+                </button>
+              </h2>
+              <div id="annotatedAlignmentCollapse" class="accordion-collapse collapse" aria-labelledby="annotatedAlignment" data-bs-parent="#alignmentCollapse">
+                <div class="accordion-body">
+                  <table class="table" style="font-size:13px; color:grey">
+                    <tbody>
+                      {% for metric, metric_tup in metrics_dict.annotated_alignment_stats.items() %}
+                        <tr>
+                          <th scope="row">{{ metric_tup[0] }}</th>
+                            <td>
+                              {{ metric_tup[1] }}
+                            </td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </div>  
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
 
   </div>
