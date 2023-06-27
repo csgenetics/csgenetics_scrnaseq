@@ -9,7 +9,7 @@ Stats are pulled from the commandline-supplied input files:
         the variable value
         the variable human readable name
         the variable description (used to make tooltips in the html report)
-        the wider metric classification (cell_stats, sequence_stats, raw_alignment_stats, annotated_alignment_stats, duplication_stats)
+        the wider metric classification (cell_stats, sequencing_stats, raw_alignment_stats, annotated_alignment_stats, duplication_stats)
 """
 
 import anndata
@@ -24,7 +24,7 @@ class SummaryStatistics:
         self.sample_id = sys.argv[1]
         # Primary keys will be:
         #   cell_stats
-        #   sequence_stats
+        #   sequencing_stats
         #   raw_alignment_stats
         #   filtered_alignment_stats
         #   annotated_alignment_stats
@@ -72,7 +72,6 @@ class SummaryStatistics:
             csv_handle.write("variable_name,value,human_readable_name,description,classification\n")
             for metrtic_classification, inner_stats_dict in self.metrics_dict.items():
                 for stat_name, stat_value in inner_stats_dict.items():
-                    # The value of the 
                     csv_handle.write(f"{stat_name},{stat_value[1]},{stat_value[0]},{stat_value[2]},{metrtic_classification}\n")
     
     @staticmethod
@@ -86,23 +85,29 @@ class SummaryStatistics:
         anndata_array = self.anndata.X.toarray()
         # Remove genes that have not been detected at all across the sample
         anndata_array_detected_genes = anndata_array[:, ~np.all(anndata_array == 0, axis=0)]
+
         # Estimated number of cells
         self.metrics_dict["cell_stats"]["num_cells"] = ("Number of cells", anndata_array.shape[0], "Estimated number of cells; Number of barcodes passing the nulcear genes detected threshold.")
 
-        # Mean counts per cell - all genes (i.e. all counts across all genes considered even those genes not detected in the sample)
-        self.metrics_dict["cell_stats"]["mean_counts_per_cell_all_genes"] = ("Mean count per cell: all genes", np.mean(anndata_array.sum(axis=1)), "Mean count per cell with all genes considered, even those genes not detected in the sample.")
-        # Median counts per cell - all genes (i.e. all counts across all genes considered even those genes not detected in the sample)
-        self.metrics_dict["cell_stats"]["median_counts_per_cell_all_genes"] = ("Median count per cell: all genes", np.median(anndata_array.sum(axis=1)), "Median count per cell with all genes considered, even those genes not detected in the sample."), 
+        # Mean total counts per cell
+        self.metrics_dict["cell_stats"]["mean_total_counts_per_cell"] = ("Mean total counts per cell", np.mean(anndata_array.sum(axis=1)), "Mean of the sum of counts per cell.")
+        # Median total counts per cell
+        self.metrics_dict["cell_stats"]["median_total_reads_per_cell"] = ("Median total counts per cell", np.mean(anndata_array.sum(axis=1)), "Median of the sum of counts per cell.")
 
-        # Mean counts per cell - sample detected genes (i.e. only those genes that were detected in the sample)
-        self.metrics_dict["cell_stats"]["mean_counts_per_cell_sample_detected_genes"] = ("Mean count per cell: sample-detected genes", np.mean(anndata_array_detected_genes.sum(axis=1)), "Mean count per cell with only those genes detected in the sample considered.")
-        # Median counts per cell - sample detected genes (i.e. only those genes that were detected in the sample)
-        self.metrics_dict["cell_stats"]["median_counts_per_cell_sample_detected_genes"] = ("Median count per cell: sample-detected genes", np.median(anndata_array_detected_genes.sum(axis=1)), "Median count per cell with only those genes detected in the sample considered.")
+        # Mean single gene counts per cell - all genes (i.e. all counts across all genes considered even those genes not detected in the sample)
+        self.metrics_dict["cell_stats"]["mean_counts_per_cell_all_genes"] = ("Mean single gene count per cell: all genes", np.mean(anndata_array.mean(axis=1)), "Mean of the mean individual gene count per cell with all genes considered (including those genes not detected in the sample).")
+        # Median single gene counts per cell - all genes (i.e. all counts across all genes considered even those genes not detected in the sample)
+        self.metrics_dict["cell_stats"]["median_counts_per_cell_all_genes"] = ("Median single gene count per cell: all genes", np.median(np.median(anndata_array, axis=1)), "Median of the median individual gene count per cell with all genes considered (including those genes not detected in the sample).")
 
-        # Mean count per cell -  cell detected genes (i.e. only those genes that were detected in the given cell)
-        self.metrics_dict["cell_stats"]["mean_counts_per_cell_cell_detected_genes"] = ("Mean count per cell: cell-detected genes", np.mean(np.apply_along_axis(self.get_non_zero_sum, 1, anndata_array)), "Mean count per cell with only those genes detected in each cell considered.")
-        # Median count per cell -  cell detected genes (i.e. only those genes that were detected in the given cell)
-        self.metrics_dict["cell_stats"]["median_counts_per_cell_cell_detected_genes"] = ("Median count per cell: cell-detected genes", np.median(np.apply_along_axis(self.get_non_zero_sum, 1, anndata_array)), "Median count per cell with only those genes detected in each cell considered.")
+        # Mean single genecounts per cell - sample detected genes (i.e. only those genes that were detected in the sample)
+        self.metrics_dict["cell_stats"]["mean_counts_per_cell_sample_detected_genes"] = ("Mean single gene count per cell: sample-detected genes", np.mean(anndata_array_detected_genes.mean(axis=1)), "Mean of the mean individual gene count per cell with only those genes detected in the sample considered.")
+        # Median single gene counts per cell - sample detected genes (i.e. only those genes that were detected in the sample)
+        self.metrics_dict["cell_stats"]["median_counts_per_cell_sample_detected_genes"] = ("Median single gene count per cell: sample-detected genes", np.median(anndata_array_detected_genes.sum(axis=1)), "Median of the median individual gene count per cell with only those genes detected in the sample considered.")
+
+        # Mean single gene count per cell -  cell detected genes (i.e. only those genes that were detected in the given cell)
+        self.metrics_dict["cell_stats"]["mean_counts_per_cell_cell_detected_genes"] = ("Mean single gene count per cell: cell-detected genes", np.mean(np.apply_along_axis(self.get_non_zero_sum, 1, anndata_array)), "Mean of the mean individual gene count per cell with only those genes detected in each cell considered.")
+        # Median single gene count per cell -  cell detected genes (i.e. only those genes that were detected in the given cell)
+        self.metrics_dict["cell_stats"]["median_counts_per_cell_cell_detected_genes"] = ("Median single gene count per cell: cell-detected genes", np.median(np.apply_along_axis(self.get_non_zero_sum, 1, anndata_array)), "Median of the median individual gene count per cell with only those genes detected in each cell considered.")
         
         # Mean genes detected per cell
         self.metrics_dict["cell_stats"]["mean_genes_detected_per_cell"] = ("Mean genes detected per cell", np.mean(anndata_array.astype(bool).sum(axis=1)), "Mean number of genes detected for each cell (including nuclear and mitochondrial genes).")
@@ -124,7 +129,7 @@ class SummaryStatistics:
         self.metrics_dict["cell_stats"]["median_mito_genes_detected_per_cell"] = ("Median mitochondrial genes detected per cell", int(np.median(anndata_array_mito.astype(bool).sum(axis=1))), "Median number of mitochondrial genes detected for each cell.")
 
         # Unique genes detected across samples (i.e. a gene can only be detected once per sample)
-        self.metrics_dict["cell_stats"]["num_unique_genes_detected_across_sample"] = ("Unique genes detected across sample", anndata_array_detected_genes.shape[1], "Number of unique genes detected across the sample (each gene can be counted only once, even if found in multiple cells).")
+        self.metrics_dict["cell_stats"]["num_unique_genes_detected_across_sample"] = ("Unique genes detected across sample", anndata_array_detected_genes.shape[1], "Number of unique genes detected across the sample (each gene can be counted only once even if found in multiple cells).")
 
         # Total genes detected across samples (i.e. genes detected per cell summed)
         self.metrics_dict["cell_stats"]["total_genes_detected_across_samples"] = ("Total genes detected across sample", np.count_nonzero(anndata_array_detected_genes), "Total number of genes detected across the sample (each gene can be counted more than once if detected in more than one cell).")
@@ -161,7 +166,7 @@ class SummaryStatistics:
                     self.metrics_dict["duplication_stats"]["reads_before_deduplication"] = ("Reads before deduplication", int(line.split()[-1].strip()), "Number of reads before deduplication.")
                 elif "INFO Number of reads out:" in line:
                     self.metrics_dict["duplication_stats"]["reads_after_deduplication"] = ("Reads after deduplication", int(line.split()[-1].strip()), "Number of reads after deduplication.")
-        self.metrics_dict["duplication_stats"]["duplication_perc"] = ("Deduplication percent", self.as_perc(1 - (self.metrics_dict["duplication_stats"]["reads_after_deduplication"]/self.metrics_dict["duplication_stats"]["reads_before_deduplication"])), "Reads before deduplication / reads after deduplication * 100")
+        self.metrics_dict["duplication_stats"]["duplication_perc"] = ("Deduplication percent", self.as_perc(1 - (self.metrics_dict["duplication_stats"]["reads_after_deduplication"][1]/self.metrics_dict["duplication_stats"]["reads_before_deduplication"][1])), "Reads before deduplication / reads after deduplication * 100")
 
     def get_mapping_stats(self):
         # Populate self.metrics_dict with the raw qualimap stats
@@ -209,7 +214,7 @@ class SummaryStatistics:
                         val_absolute = int(re.search("((?<=\s)[\d,]*\s+(?=\())", lines[i]).groups()[0].rstrip().replace(",",""))
                         val_percent = float(re.search(r"((?<=\()[\d]*\.[\d]+)%(?=\))", lines[i]).groups()[0].rstrip())
                         self.metrics_dict[f"{prefix}_alignment_stats"][f"{prefix}_{header}"] = (header.replace("_", " ").capitalize(), val_absolute, header.replace("_", " ").capitalize())
-                        self.metrics_dict[f"{prefix}_alignment_stats"][f"{prefix}_{header}_perc"] = (header.replace("_", " ").capitalize(), val_percent, header.replace("_", " ").capitalize())
+                        self.metrics_dict[f"{prefix}_alignment_stats"][f"{prefix}_{header}_perc"] = (header.replace("_", " ").capitalize() + "percentage", val_percent, header.replace("_", " ").capitalize() + "percentage")
 
     @staticmethod
     def as_perc(float_to_convert):
@@ -218,19 +223,19 @@ class SummaryStatistics:
 
     def get_trimming_qc_stats(self):
         # Reads pre-QC
-        self.metrics_dict["sequence_stats"]["reads_pre_qc"] = ("Number of reads pre-QC", int(self.multiqc_json_dict["report_general_stats_data"][self.qc_key_to_index_dict["fastp"]][f"{self.sample_id}_R1"]["before_filtering_total_reads"]), "Number of reads in the input R1 fastq files (after merging if applicable).")
+        self.metrics_dict["sequencing_stats"]["reads_pre_qc"] = ("Number of reads pre-QC", int(self.multiqc_json_dict["report_general_stats_data"][self.qc_key_to_index_dict["fastp"]][f"{self.sample_id}_R1"]["before_filtering_total_reads"]), "Number of reads in the input R1 fastq files (after merging if applicable).")
         # Reads containing cellular barcode matching whitelist
-        self.metrics_dict["sequence_stats"]["valid_barcode_reads"] = ("Number of valid barcode-containing reads", int(self.multiqc_json_dict["report_general_stats_data"][self.qc_key_to_index_dict["fastp"]][f"{self.sample_id}_R1.io_extract"]["before_filtering_total_reads"]), "Number of reads containing a barcode exactly matching the whitelist.")
+        self.metrics_dict["sequencing_stats"]["valid_barcode_reads"] = ("Number of valid barcode-containing reads", int(self.multiqc_json_dict["report_general_stats_data"][self.qc_key_to_index_dict["fastp"]][f"{self.sample_id}_R1.io_extract"]["before_filtering_total_reads"]), "Number of reads containing a barcode exactly matching the whitelist.")
         # Percentage of reads containing cellular barcode matching whitelist as percentage of pre-QC reads
-        self.metrics_dict["sequence_stats"]["valid_barcode_reads_perc"] = ("Percentage valid barcode-containing reads", self.as_perc(float(self.metrics_dict["sequence_stats"]["valid_barcode_reads"] / self.metrics_dict["sequence_stats"]["reads_pre_qc"])), "Number of valid barcode-containing reads / Number of reads pre-QC * 100.")
+        self.metrics_dict["sequencing_stats"]["valid_barcode_reads_perc"] = ("Percentage valid barcode-containing reads", self.as_perc(float(self.metrics_dict["sequencing_stats"]["valid_barcode_reads"][1] / self.metrics_dict["sequencing_stats"]["reads_pre_qc"][1])), "Number of valid barcode-containing reads / Number of reads pre-QC * 100.")
         # Percentage of barcode bases >= Q30
-        self.metrics_dict["sequence_stats"]["barcode_bases_q30_perc"] = ("Barcode bp >= Q30 percentage", self.as_perc(float(self.multiqc_json_dict["report_general_stats_data"][self.qc_key_to_index_dict["fastp"]][f"{self.sample_id}_R2"]["after_filtering_q30_rate"])), "The percentage of the barcode bases with a Phred score >= 30.")
+        self.metrics_dict["sequencing_stats"]["barcode_bases_q30_perc"] = ("Barcode bp >= Q30 percentage", self.as_perc(float(self.multiqc_json_dict["report_general_stats_data"][self.qc_key_to_index_dict["fastp"]][f"{self.sample_id}_R2"]["after_filtering_q30_rate"])), "The percentage of the barcode bases with a Phred score >= 30.")
         # Reads after polyX tail and polyA internal trimming
-        self.metrics_dict["sequence_stats"]["reads_post_trimming"] = ("Number of reads post-QC trimming", int(self.multiqc_json_dict["report_general_stats_data"][self.qc_key_to_index_dict["fastp"]][f"{self.sample_id}_R1.polyA"]["after_filtering_total_reads"]), "Number of reads after polyX tail and polyA internal trimming.")
+        self.metrics_dict["sequencing_stats"]["reads_post_trimming"] = ("Number of reads post-QC trimming", int(self.multiqc_json_dict["report_general_stats_data"][self.qc_key_to_index_dict["fastp"]][f"{self.sample_id}_R1.polyA"]["after_filtering_total_reads"]), "Number of reads after polyX tail and polyA internal trimming.")
         # Mean read length after polyX tail and polyA internal trimming
-        self.metrics_dict["sequence_stats"]["mean_post_trim_read_length"] = ("Mean read length post-QC trimming", float(self.multiqc_json_dict["report_general_stats_data"][self.qc_key_to_index_dict["fastp"]][f"{self.sample_id}_R1.polyA"]["after_filtering_read1_mean_length"]), "Mean R1 read length post-QC trimming.")
+        self.metrics_dict["sequencing_stats"]["mean_post_trim_read_length"] = ("Mean read length post-QC trimming", float(self.multiqc_json_dict["report_general_stats_data"][self.qc_key_to_index_dict["fastp"]][f"{self.sample_id}_R1.polyA"]["after_filtering_read1_mean_length"]), "Mean R1 read length post-QC trimming.")
         # Percentage of bases post trimming >= Q30
-        self.metrics_dict["sequence_stats"]["rna_bases_q30_perc"] = ("R1 bp >= Q30 percentage; post-QC trimming", self.as_perc(float(self.multiqc_json_dict["report_general_stats_data"][self.qc_key_to_index_dict["fastp"]][f"{self.sample_id}_R1.polyA"]["after_filtering_q30_rate"])), "The percentage of the R1 bases (post-QC trimming) with a Phred score >= 30.")
+        self.metrics_dict["sequencing_stats"]["rna_bases_q30_perc"] = ("R1 bp >= Q30 percentage; post-QC trimming", self.as_perc(float(self.multiqc_json_dict["report_general_stats_data"][self.qc_key_to_index_dict["fastp"]][f"{self.sample_id}_R1.polyA"]["after_filtering_q30_rate"])), "The percentage of the R1 bases (post-QC trimming) with a Phred score >= 30.")
 
 
 if __name__ == "__main__":

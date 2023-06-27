@@ -19,18 +19,15 @@ class SingleSampleHTMLReport:
         # Create a nested dict grouping by table
         self.metrics_dict = defaultdict(dict)
         with open(sys.argv[3]) as metrics_handle:
+            header_line = next(metrics_handle)
             for line in metrics_handle:
-                row_id, var, group = line.strip().split(",")
-                self.metrics_dict[group][row_id] = self.format_number_to_string(var)
-
-
+                var_name, var_value, var_human_readable_name, var_tooltip, var_group = line.strip().split(",")
+                self.metrics_dict[var_group][var_name] = (var_human_readable_name, self.format_number_to_string(var_value), var_tooltip)
 
         with open(sys.argv[4]) as html_template:
             self.jinja_template = Template(html_template.read())
 
-        self.metrics_dict["sample_id"] = self.sample_id
         self.encoded_png_str = self.generate_encoded_png_str()
-        self.metrics_dict["encoded_png_str"] = self.encoded_png_str
 
         self.render_and_write_report()
 
@@ -41,15 +38,19 @@ class SingleSampleHTMLReport:
 
     def render_and_write_report(self):
         # Render the template.
-        final_report = self.jinja_template.render(cell_metrics_dict=self.metrics_dict["cell_stats"],
-                                                  duplication_stats_dict=self.metrics_dict["duplication_stats"],
-                                            sequencing_metrics_dict=self.metrics_dict["sequence_stats"],
-                                            mapping_metrics_dict=self.metrics_dict["alignment_stats"],
-                                            encoded_png_str=self.metrics_dict["encoded_png_str"],
-                                            sample_id=self.metrics_dict["sample_id"],
-                                            estimated_number_of_cells=self.metrics_dict["cell_stats"]["num_cells"],
-                                            mean_genes_detected_per_cell=self.metrics_dict["cell_stats"]["mean_genes_detected_per_cell"],
-                                            raw_reads_aligned=self.metrics_dict["alignment_stats"]["raw_reads_aligned"])
+        # final_report = self.jinja_template.render(metrics_dict=self.metrics_dict["cell_stats"],
+        #                                           duplication_stats_dict=self.metrics_dict["duplication_stats"],
+        #                                     sequencing_metrics_dict=self.metrics_dict["sequence_stats"],
+        #                                     mapping_metrics_dict=self.metrics_dict["alignment_stats"],
+        #                                     encoded_png_str=self.encoded_png_str,
+        #                                     sample_id=self.sample_id,
+        #                                     estimated_number_of_cells=self.metrics_dict["cell_stats"]["num_cells"],
+        #                                     mean_genes_detected_per_cell=self.metrics_dict["cell_stats"]["mean_genes_detected_per_cell"],
+        #                                     raw_reads_aligned=self.metrics_dict["alignment_stats"]["raw_reads_aligned"])
+        
+        final_report = self.jinja_template.render(metrics_dict=self.metrics_dict,
+                                            encoded_png_str=self.encoded_png_str,
+                                            sample_id=self.sample_id)
 
         # Write out the rendered template.
         with open(f"{self.sample_id}_report.html", "w") as f_output:

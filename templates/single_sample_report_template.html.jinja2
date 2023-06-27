@@ -14,6 +14,10 @@
     .tooltip{
       font-size: 0.8rem;
    }
+    .accordion-button:not(.collapsed) {
+    color: #000000;
+    background-color: #FFFFFF;
+    }
   </style>
  </head>
  <body>
@@ -26,162 +30,279 @@
     </div>
    </nav>
   </div>
+
+  <!-- Main header is sample_id -->
   <div class="container-sm w-75" id="container1">
    <h2 class="text-left mt-3" id="sample_id">
     {{ sample_id }}
    </h2>
-   <div class="row">
-    <!-- Total Cell Number -->
+
+  <!-- 1st row is row of headline stats: num_cells, mean_total_counts_per_cell, mean_genes_detected_per_cell -->
+  <div class="row">
+
+    <!-- Number of cells -->
     <div class="col mb-4">
-     <div class="card border-left-success shadow py-2" style="height:100%">
+      <div class="card border-left-success shadow py-2" style="height:100%">
       <div class="card-body">
-       <div class="row no-gutters align-items-left">
-        <div class="col mr-2">
-         <div class="text-xs font-weight-bold mb-1" style="font-size:25px; color:rgb(54, 186, 0)" id="Estimated_Number_of_Cells">
-          {{ estimated_number_of_cells }}
-         </div>
-         <div class="h5 mb-0 font-weight-bold text-gray-800" style="font-size:12px">
-          Estimated number of cells
-          <i class="bi-info-circle" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="Tooltip on top this is some really really really long tool tip that didid  s asdf t fasodifjadjqwelkrwer q ewr qwe rq weroaisj asdf"></i>
-         </div>
+        <div class="row no-gutters align-items-left">
+          <div class="col mr-2">
+            <div class="text-xs font-weight-bold mb-1" style="font-size:25px; color:rgb(54, 186, 0)">
+            <!-- Metric value -->
+            {{ metrics_dict["cell_stats"]["num_cells"][1] }}
+            </div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800" style="font-size:12px">
+            <!-- Human readable metric name -->
+            {{ metrics_dict["cell_stats"]["num_cells"][0] }}
+            <i class="bi-info-circle" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="{{ metrics_dict["cell_stats"]["num_cells"][2] }}"></i>
+            </div>
+          </div>
         </div>
-       </div>
       </div>
-     </div>
+      </div>
     </div>
-    <!-- Mean reads -->
+
+    <!-- Mean total counts per cell -->
     <div class="col mb-4">
-     <div class="card border-left-success shadow py-2" style="height:100%">
-      <div class="card-body">
-       <div class="row no-gutters align-items-centre">
-        <div class="col mr-2">
-         <div class="text-xs font-weight-bold mb-1" style="font-size:25px; color:rgb(54, 186, 0)" id="Mean_Reads_per_Cell">
-          {{ mean_genes_detected_per_cell }}
-         </div>
-         <div class="h5 mb-0 font-weight-bold text-gray-800" style="font-size:12px">
-          Mean reads per cell
-          <i class="bi-info-circle" style="font-size:15px" data-toggle="tooltip" data-original-title="Download"></i>
-         </div>
+      <div class="card border-left-success shadow py-2" style="height:100%">
+        <div class="card-body">
+          <div class="row no-gutters align-items-left">
+          <div class="col mr-2">
+            <div class="text-xs font-weight-bold mb-1" style="font-size:25px; color:rgb(54, 186, 0)">
+            {{ metrics_dict["cell_stats"]["mean_total_counts_per_cell"][1] }}
+            </div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800" style="font-size:12px">
+            {{ metrics_dict["cell_stats"]["mean_total_counts_per_cell"][0] }}
+            <i class="bi-info-circle" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="{{ metrics_dict["cell_stats"]["mean_total_counts_per_cell"][2] }}"></i>
+            </div>
+          </div>
         </div>
-       </div>
       </div>
-     </div>
+      </div>
     </div>
+
     <!-- Estimated gene number -->
     <div class="col mb-4">
-     <div class="card border-left-success shadow py-2" style="height:100%">
-      <div class="card-body">
-       <div class="row no-gutters align-items-left">
-        <div class="col mr-2">
-         <div class="text-xs font-weight-bold mb-1" style="font-size:25px; color:rgb(54, 186, 0) " id="Total_genes_detected">
-          {{ raw_reads_aligned }}
-         </div>
-         <div class="h5 mb-0 font-weight-bold text-gray-800" style="font-size:12px">
-          Estimated number of genes per cell
-          <i class="bi-info-circle" style="font-size:15px"></i>
-         </div>
+      <div class="card border-left-success shadow py-2" style="height:100%">
+        <div class="card-body">
+          <div class="row no-gutters align-items-left">
+          <div class="col mr-2">
+            <div class="text-xs font-weight-bold mb-1" style="font-size:25px; color:rgb(54, 186, 0)">
+            {{ metrics_dict["cell_stats"]["mean_genes_detected_per_cell"][1] }}
+            </div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800" style="font-size:12px">
+            {{ metrics_dict["cell_stats"]["mean_genes_detected_per_cell"][0] }}
+            <i class="bi-info-circle" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="{{ metrics_dict["cell_stats"]["mean_genes_detected_per_cell"][2] }}"></i>
+            </div>
+          </div>
         </div>
-       </div>
       </div>
-     </div>
+      </div>
     </div>
-   </div>
-
-
-   <!-- Second row -->
-   <div class="card mb-4 border-left-success shadow">
-    <div class="row" id="container2">
-     
-     <!-- Cell counter plot -->
-     <div class="col-6", id="cell_caller_plot">
-        <img alt='...' class='img-fluid' src='data:image/png;base64,{{ encoded_png_str }}'/>
-     </div>
-     
-     
-     <div class="text-left col-md-6 mt-4">
-
-      
-      <table class="table" style="font-size:13px; color:grey">
-       <tbody>
-      <h2 class="text-xs font-weight-bold me-5 ms-3" style="font-size: 21px; line-height: 1.5">
-       Mapping
-      </h2>
-  
-        {% for metric, metric_val in cell_metrics_dict.items() %}
-          <tr>
-            <th scope="row">{{ metric }}</th>
-              <td>{{ metric_val }}</td>
-          </tr>
-        {% endfor %}
-
-       </tbody>
-      </table>
-     </div>
-    </div>
-   </div>
-
-
-   <!-- Third row -->
-   <div class="card mb-4 border-left-success shadow">
-    <div class="row">
-     <div class="text-left col-md-6 mt-4">
-
-
-      <table class="table" style="font-size:13px; color:grey">
-       <tbody>
-      <h2 class="text-xs font-weight-bold me-5 ms-3" style="font-size: 21px; line-height: 1.5">
-       Sequencing
-      </h2>
-
-        {% for metric, metric_val in sequencing_metrics_dict.items() %}
-          <tr>
-            <th scope="row">{{ metric }}</th>
-              <td>{{ metric_val }}</td>
-          </tr>
-        {% endfor %} 
-
-      <table class="table" style="font-size:13px; color:grey">
-       <tbody>
-      <h2 class="text-xs font-weight-bold me-5 ms-3" style="font-size: 21px; line-height: 1.5">
-       Duplication
-      </h2>
-
-        {% for metric, metric_val in duplication_stats_dict.items() %}
-          <tr>
-            <th scope="row">{{ metric }}</th>
-              <td>{{ metric_val }}</td>
-          </tr>
-        {% endfor %} 
-
-       </tbody>
-      </table>
-
-       </tbody>
-      </table>
-     </div>
-
-
-     <div class="text-left col-md-6 mt-4">
-
-      <table class="table" style="font-size:13px; color:grey">
-       <tbody>
-      <h2 class="text-xs font-weight-bold me-5 ms-3" style="font-size: 21px; line-height: 1.5">
-       Cells
-      </h2>
-
-        {% for metric, metric_val in mapping_metrics_dict.items() %}
-          <tr>
-            <th scope="row">{{ metric }}</th>
-              <td>{{ metric_val }}</td>
-          </tr>
-        {% endfor %}         
-
-       </tbody>
-      </table>
-     </div>
-    </div>
-   </div>
   </div>
+
+  <!-- Second row; contains nested rows -->
+  <div class="row">
+    <!-- First col contains two rows -->
+    <div class="col">
+
+      <!-- Sequencing stats -->
+      <div class="row">
+        <div class="col mb-4">
+          <div class="card border-left-success shadow py-2" style="height:100%">
+            <div class="card-body">
+              <table class="table" style="font-size:13px; color:grey">
+                <tbody>
+                  <h2 class="text-xs font-weight-bold me-5 ms-3" style="font-size: 21px; line-height: 1.5">
+                  Sequencing
+                  </h2>
+            
+                  {% for metric, metric_tup in metrics_dict.sequencing_stats.items() %}
+                    <tr>
+                      <th scope="row">
+                        {{ metric_tup[0] }}
+                        <i class="bi-info-circle" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="{{ metric_tup[2] }}">
+                      </th>
+                        <td>
+                          {{ metric_tup[1] }}
+                          
+                          </i>
+                        </td>
+                    </tr>
+                  {% endfor %}
+
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Deduplication stats -->
+      <div class="row">
+        <div class="col mb-4">
+          <div class="card border-left-success shadow py-2" style="height:100%">
+            <div class="card-body">
+              <table class="table" style="font-size:13px; color:grey">
+                <tbody>
+                  <h2 class="text-xs font-weight-bold me-5 ms-3" style="font-size: 21px; line-height: 1.5">
+                  Duplication
+                  </h2>
+            
+                  {% for metric, metric_tup in metrics_dict.duplication_stats.items() %}
+                    <tr>
+                      <th scope="row">
+                        {{ metric_tup[0] }}
+                        <i class="bi-info-circle" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="{{ metric_tup[2] }}">
+                      </th>
+                        <td>
+                          {{ metric_tup[1] }}
+                          
+                          </i>
+                        </td>
+                    </tr>
+                  {% endfor %}
+
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Second col contains one row for Alignment stats -->
+    <div class="col mb-4">
+      <div class="card border-left-success shadow py-2" style="height:100%">
+        <div class="card-body">
+          <div class="accordion accordion-flush" id="alignmentCollapse">
+            
+            <div class="accordion-item">
+              <h2 class="accordion-header" id="postQCAlignment">
+                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#rawAlignmentCollapse" aria-expanded="true" aria-controls="rawAlignmentCollapse">
+                  Post QC alignment <i class="bi-info-circle ms-1" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="Mapping of the post QC reads (i.e. after trimming (polyX end and internal polyA) and barcode verification)">
+                      </i>
+                </button>
+              </h2>
+              <div id="rawAlignmentCollapse" class="accordion-collapse collapse show" aria-labelledby="postQCAlignment" data-bs-parent="#alignmentCollapse">
+                <div class="accordion-body">
+                  <table class="table" style="font-size:13px; color:grey">
+                    <tbody>
+                      {% for metric, metric_tup in metrics_dict.raw_alignment_stats.items() %}
+                        <tr>
+                          <th scope="row">{{ metric_tup[0] }}</th>
+                            <td>
+                              {{ metric_tup[1] }}
+                            </td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </div>  
+            </div>
+
+            <div class="accordion-item">
+              <h2 class="accordion-header" id="highConfidenceAlignment">
+                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#filteredAlignmentCollapse" aria-expanded="true" aria-controls="filteredAlignmentCollapse">
+                  High confidence
+                  <i class="bi-info-circle ms-1" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="Reads with a single alignment and a maximum of 3 bp mismatch.">
+                      </i>
+                </button>
+              </h2>
+              <div id="filteredAlignmentCollapse" class="accordion-collapse collapse show" aria-labelledby="highConfidenceAlignment" data-bs-parent="#alignmentCollapse">
+                <div class="accordion-body">
+                  <table class="table" style="font-size:13px; color:grey">
+                    <tbody>
+                      {% for metric, metric_tup in metrics_dict.filtered_alignment_stats.items() %}
+                        <tr>
+                          <th scope="row">{{ metric_tup[0] }}</th>
+                            <td>
+                              {{ metric_tup[1] }}
+                            </td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </div>  
+            </div>
+
+            <div class="accordion-item">
+              <h2 class="accordion-header" id="annotatedAlignment">
+                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#annotatedAlignmentCollapse" aria-expanded="true" aria-controls="annotatedAlignmentCollapse">
+                  Post QC alignment<i class="bi-info-circle ms-1" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="High confidence reads annotated with a gene ID.">
+                      </i>
+                </button>
+              </h2>
+              <div id="annotatedAlignmentCollapse" class="accordion-collapse collapse show" aria-labelledby="annotatedAlignment" data-bs-parent="#alignmentCollapse">
+                <div class="accordion-body">
+                  <table class="table" style="font-size:13px; color:grey">
+                    <tbody>
+                      {% for metric, metric_tup in metrics_dict.annotated_alignment_stats.items() %}
+                        <tr>
+                          <th scope="row">{{ metric_tup[0] }}</th>
+                            <td>
+                              {{ metric_tup[1] }}
+                            </td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </div>  
+            </div>
+            
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div
+
+  <!-- Third row has two columns each with a card-->
+  <div class="row">
+    
+    <!-- First col is cell caller plot -->
+    <div class="col mb-4">
+      <div class="card border-left-success shadow py-2">
+        <div class="card-body">
+        <img alt='...' class='img-fluid' src='data:image/png;base64,{{ encoded_png_str }}'/>
+        </div>
+      </div>
+    </div>
+
+    <!-- Second col is cell stats -->
+    <div class="col mb-4">
+      <div class="card border-left-success shadow py-2" style="height:100%">
+        <div class="card-body">
+        <table class="table" style="font-size:13px; color:grey">
+          <tbody>
+            <h2 class="text-xs font-weight-bold me-5 ms-3" style="font-size: 21px; line-height: 1.5">
+            Cell stats
+            </h2>
+      
+            {% for metric, metric_tup in metrics_dict.cell_stats.items() %}
+              <tr>
+                <th scope="row">
+                  {{ metric_tup[0] }}
+                  <i class="bi-info-circle" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="{{ metric_tup[2] }}">
+                </th>
+                  <td>
+                    {{ metric_tup[1] }}
+                    
+                    </i>
+                  </td>
+              </tr>
+            {% endfor %}
+
+          </tbody>
+        </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz" crossorigin="anonymous"></script>
   <script>
       const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
