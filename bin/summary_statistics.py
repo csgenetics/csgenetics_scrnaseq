@@ -214,7 +214,7 @@ class SummaryStatistics:
                         val_absolute = int(re.search("((?<=\s)[\d,]*\s+(?=\())", lines[i]).groups()[0].rstrip().replace(",",""))
                         val_percent = float(re.search(r"((?<=\()[\d]*\.[\d]+)%(?=\))", lines[i]).groups()[0].rstrip())
                         self.metrics_dict[f"{prefix}_alignment_stats"][f"{prefix}_{header}"] = (header.replace("_", " ").capitalize(), val_absolute, header.replace("_", " ").capitalize())
-                        self.metrics_dict[f"{prefix}_alignment_stats"][f"{prefix}_{header}_perc"] = (header.replace("_", " ").capitalize() + "percentage", val_percent, header.replace("_", " ").capitalize() + "percentage")
+                        self.metrics_dict[f"{prefix}_alignment_stats"][f"{prefix}_{header}_perc"] = (header.replace("_", " ").capitalize() + " percentage", val_percent, header.replace("_", " ").capitalize() + " percentage")
 
     @staticmethod
     def as_perc(float_to_convert):
