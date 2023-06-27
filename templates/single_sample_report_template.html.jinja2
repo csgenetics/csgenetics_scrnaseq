@@ -18,6 +18,9 @@
     color: #000000;
     background-color: #FFFFFF;
     }
+    .card,.headline-stat{
+      margin-bottom: 1rem;
+    }
   </style>
  </head>
  <body>
@@ -41,7 +44,7 @@
   <div class="row">
 
     <!-- Number of cells -->
-    <div class="col mb-4">
+    <div class="col headline-stat">
       <div class="card border-left-success shadow py-2" style="height:100%">
       <div class="card-body">
         <div class="row no-gutters align-items-left">
@@ -62,7 +65,7 @@
     </div>
 
     <!-- Mean total counts per cell -->
-    <div class="col mb-4">
+    <div class="col headline-stat">
       <div class="card border-left-success shadow py-2" style="height:100%">
         <div class="card-body">
           <div class="row no-gutters align-items-left">
@@ -81,7 +84,7 @@
     </div>
 
     <!-- Estimated gene number -->
-    <div class="col mb-4">
+    <div class="col headline-stat">
       <div class="card border-left-success shadow py-2" style="height:100%">
         <div class="card-body">
           <div class="row no-gutters align-items-left">
@@ -100,80 +103,75 @@
     </div>
   </div>
 
-  <!-- Second row; contains nested rows -->
+  <!-- Second row; contains remainder of the stats distributed in two columns -->
   <div class="row">
-    <!-- First col contains two rows -->
+    <!-- First col contains three cards -->
     <div class="col">
 
       <!-- Sequencing stats -->
-      <div class="row">
-        <div class="col mb-4">
-          <div class="card border-left-success shadow py-2" style="height:100%">
-            <div class="card-body">
-              <table class="table" style="font-size:13px; color:grey">
-                <tbody>
-                  <h2 class="text-xs font-weight-bold me-5 ms-3" style="font-size: 21px; line-height: 1.5">
-                  Sequencing
-                  </h2>
-            
-                  {% for metric, metric_tup in metrics_dict.sequencing_stats.items() %}
-                    <tr>
-                      <th scope="row">
-                        {{ metric_tup[0] }}
-                        <i class="bi-info-circle" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="{{ metric_tup[2] }}">
-                      </th>
-                        <td>
-                          {{ metric_tup[1] }}
-                          
-                          </i>
-                        </td>
-                    </tr>
-                  {% endfor %}
+      <div class="card border-left-success shadow py-2">
+        <div class="card-body">
+          <table class="table" style="font-size:13px; color:grey">
+            <tbody>
+              <h2 class="text-xs font-weight-bold me-5 ms-3" style="font-size: 21px; line-height: 1.5">
+              Sequencing
+              </h2>
+        
+              {% for metric, metric_tup in metrics_dict.sequencing_stats.items() %}
+                <tr>
+                  <th scope="row">
+                    {{ metric_tup[0] }}
+                    <i class="bi-info-circle" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="{{ metric_tup[2] }}"></i>
+                  </th>
+                    <td>
+                      {{ metric_tup[1] }}
+                    </td>
+                </tr>
+              {% endfor %}
 
-                </tbody>
-              </table>
-            </div>
-          </div>
+            </tbody>
+          </table>
         </div>
       </div>
 
       <!-- Deduplication stats -->
-      <div class="row">
-        <div class="col mb-4">
-          <div class="card border-left-success shadow py-2" style="height:100%">
-            <div class="card-body">
-              <table class="table" style="font-size:13px; color:grey">
-                <tbody>
-                  <h2 class="text-xs font-weight-bold me-5 ms-3" style="font-size: 21px; line-height: 1.5">
-                  Duplication
-                  </h2>
-            
-                  {% for metric, metric_tup in metrics_dict.duplication_stats.items() %}
-                    <tr>
-                      <th scope="row">
-                        {{ metric_tup[0] }}
-                        <i class="bi-info-circle" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="{{ metric_tup[2] }}">
-                      </th>
-                        <td>
-                          {{ metric_tup[1] }}
-                          
-                          </i>
-                        </td>
-                    </tr>
-                  {% endfor %}
+      <div class="card border-left-success shadow py-2">
+        <div class="card-body">
+          <table class="table" style="font-size:13px; color:grey">
+            <tbody>
+              <h2 class="text-xs font-weight-bold me-5 ms-3" style="font-size: 21px; line-height: 1.5">
+              Duplication
+              </h2>
+        
+              {% for metric, metric_tup in metrics_dict.duplication_stats.items() %}
+                <tr>
+                  <th scope="row">
+                    {{ metric_tup[0] }}
+                    <i class="bi-info-circle" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="{{ metric_tup[2] }}"></i>
+                  </th>
+                    <td>
+                      {{ metric_tup[1] }}
+                    </td>
+                </tr>
+              {% endfor %}
 
-                </tbody>
-              </table>
-            </div>
-          </div>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Cell caller plot -->
+      <div class="card border-left-success shadow py-2">
+        <div class="card-body">
+        <img alt='...' class='img-fluid' src='data:image/png;base64,{{ encoded_png_str }}'/>
         </div>
       </div>
 
     </div>
 
-    <!-- Second col contains one row for Alignment stats -->
-    <div class="col mb-4">
-      <div class="card border-left-success shadow py-2" style="height:100%">
+    <!-- Second col contains alignment and cell stats -->
+    <div class="col">
+      <div class="card border-left-success shadow py-2">
         <div class="card-body">
           <div class="accordion accordion-flush" id="alignmentCollapse">
             
@@ -252,55 +250,37 @@
                 </div>
               </div>  
             </div>
-            
           </div>
         </div>
       </div>
-    </div>
 
-  </div
-
-  <!-- Third row has two columns each with a card-->
-  <div class="row">
-    
-    <!-- First col is cell caller plot -->
-    <div class="col mb-4">
       <div class="card border-left-success shadow py-2">
         <div class="card-body">
-        <img alt='...' class='img-fluid' src='data:image/png;base64,{{ encoded_png_str }}'/>
-        </div>
-      </div>
-    </div>
-
-    <!-- Second col is cell stats -->
-    <div class="col mb-4">
-      <div class="card border-left-success shadow py-2" style="height:100%">
-        <div class="card-body">
-        <table class="table" style="font-size:13px; color:grey">
-          <tbody>
-            <h2 class="text-xs font-weight-bold me-5 ms-3" style="font-size: 21px; line-height: 1.5">
-            Cell stats
-            </h2>
-      
-            {% for metric, metric_tup in metrics_dict.cell_stats.items() %}
-              <tr>
-                <th scope="row">
-                  {{ metric_tup[0] }}
-                  <i class="bi-info-circle" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="{{ metric_tup[2] }}">
-                </th>
-                  <td>
-                    {{ metric_tup[1] }}
-                    
+          <table class="table" style="font-size:13px; color:grey">
+            <tbody>
+              <h2 class="text-xs font-weight-bold me-5 ms-3" style="font-size: 21px; line-height: 1.5">
+              Cell stats
+              </h2>
+        
+              {% for metric, metric_tup in metrics_dict.cell_stats.items() %}
+                <tr>
+                  <th scope="row">
+                    {{ metric_tup[0] }}
+                    <i class="bi-info-circle" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="{{ metric_tup[2] }}">
                     </i>
-                  </td>
-              </tr>
-            {% endfor %}
+                  </th>
+                    <td>
+                      {{ metric_tup[1] }}
+                    </td>
+                </tr>
+              {% endfor %}
 
-          </tbody>
-        </table>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
+
   </div>
   
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz" crossorigin="anonymous"></script>
