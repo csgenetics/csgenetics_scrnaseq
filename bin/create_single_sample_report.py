@@ -35,7 +35,6 @@ class SingleSampleHTMLReport:
         with open(f"{self.plot_path}", "rb") as image_file:
             return base64.b64encode(image_file.read()).decode("utf-8")
         
-
     def render_and_write_report(self):
         # Render the template.        
         final_report = self.jinja_template.render(metrics_dict=self.metrics_dict,
