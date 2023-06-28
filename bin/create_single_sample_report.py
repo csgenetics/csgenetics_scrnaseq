@@ -37,20 +37,18 @@ class SingleSampleHTMLReport:
         
 
     def render_and_write_report(self):
-        # Render the template.
-        # final_report = self.jinja_template.render(metrics_dict=self.metrics_dict["cell_stats"],
-        #                                           duplication_stats_dict=self.metrics_dict["duplication_stats"],
-        #                                     sequencing_metrics_dict=self.metrics_dict["sequence_stats"],
-        #                                     mapping_metrics_dict=self.metrics_dict["alignment_stats"],
-        #                                     encoded_png_str=self.encoded_png_str,
-        #                                     sample_id=self.sample_id,
-        #                                     estimated_number_of_cells=self.metrics_dict["cell_stats"]["num_cells"],
-        #                                     mean_genes_detected_per_cell=self.metrics_dict["cell_stats"]["mean_genes_detected_per_cell"],
-        #                                     raw_reads_aligned=self.metrics_dict["alignment_stats"]["raw_reads_aligned"])
-        
+        # Render the template.        
         final_report = self.jinja_template.render(metrics_dict=self.metrics_dict,
                                             encoded_png_str=self.encoded_png_str,
-                                            sample_id=self.sample_id)
+                                            sample_id=self.sample_id,
+                                            # This dict is required to supply the tooltips, the accordion header ID and the collapse ID for each of the categories of alignment statistics
+                                            # The keys match the alignment categories of the metrics dict, and the values (tuples) give the tooltips and IDs.
+                                            # We rely on the order of the dictionary to populate the accordions in the output html.
+                                            alignment_cat_dict = {
+                                                "Post read QC alignment": ("Mapping of the post QC reads i.e. after trimming (polyX end and internal polyA) and barcode verification.", "qc_accord_header", "qc_collapse"),
+                                                "High confidence read alignment": ("Reads with a single alignment and a maximum of 3 bp mismatch.", "hc_accord_header", "hc_collapse"),
+                                                "Annotated reads alignment": ("High confidence reads annotated with a gene ID (XT bam tag).", "ann_accord_header", "ann_collapse")
+                                                })
 
         # Write out the rendered template.
         with open(f"{self.sample_id}_report.html", "w") as f_output:
