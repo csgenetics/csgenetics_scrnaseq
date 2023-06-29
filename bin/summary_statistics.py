@@ -92,7 +92,7 @@ class SummaryStatistics:
         # Mean total counts per cell
         self.metrics_dict["Cell metrics"]["mean_total_counts_per_cell"] = ("Mean total counts per cell", np.mean(anndata_array.sum(axis=1)), "Mean of the sum of counts per cell.")
         # Median total counts per cell
-        self.metrics_dict["Cell metrics"]["median_total_reads_per_cell"] = ("Median total counts per cell", np.mean(anndata_array.sum(axis=1)), "Median of the sum of counts per cell.")
+        self.metrics_dict["Cell metrics"]["median_total_reads_per_cell"] = ("Median total counts per cell", np.median(anndata_array.sum(axis=1)), "Median of the sum of counts per cell.")
 
         # Mean single gene counts per cell - all genes (i.e. all counts across all genes considered even those genes not detected in the sample)
         self.metrics_dict["Cell metrics"]["mean_counts_per_cell_all_genes"] = ("Mean single gene count per cell: all genes", np.mean(anndata_array.mean(axis=1)), "Mean of the mean individual gene count per cell with all genes considered (including those genes not detected in the sample).")
