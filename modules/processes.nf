@@ -462,7 +462,6 @@ process io_count {
 
   output:
   tuple val(sample_id), path('*_bcGeneSummary.txt'), emit: io_count_out
-  tuple val(sample_id), path('*_goodUMRcount.txt'),  emit: io_goodumr_count
 
   shell:
   '''
@@ -474,12 +473,7 @@ process io_count {
   # use sed to replace the first '_' in each line, and any 'XT:Z:' strings with empty string with sed
 
   # output has 2 columns: io_sequence and gene_name for every deduplicated alignments with gene assignment
-
   samtools view !{f} | grep 'XT:' | sed 's/mm10___/mm10_/g' |cut -f 1,18 | cut -f 2,3,4 -d '_' | sed 's/_//' | sed 's/XT:Z://g'> !{sample_id}_bcGeneSummary.txt
-
-  ## 2. Generate deduplicated reads per IO file 
-  # similar command as above, but include all alignments, instead of just those with gene assignment
-  samtools view !{f} | cut -f 1,3| cut -f 2,3 -d '_' | sed 's/_//g' | sort | uniq -c > !{sample_id}_goodUMRcount.txt
   '''
 
 }

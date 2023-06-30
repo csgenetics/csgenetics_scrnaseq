@@ -127,7 +127,6 @@ workflow {
     // Generate file for count matrix
     io_count(ch_io_dedup_sam)
     ch_io_count_out = io_count.out.io_count_out
-    ch_io_goodumr_count = io_count.out.io_goodumr_count
 
     // Generate raw count matrix
     count_matrix(ch_io_count_out, whitelist, feature_file_out)
