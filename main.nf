@@ -48,22 +48,14 @@ workflow {
     // and count the number of reads in the merged fastq
     merge_lanes(ch_input)
     ch_merge_lanes_out = merge_lanes.out.merge_lanes_out
-    ch_numreads_log = merge_lanes.out.numreads_log
-
-    // Remove fastqs with less than params.depth_min reads
-    // and generate a channel where each items is a list of [sample id, filename]
-    ch_merge_lanes_out_filtered = ch_merge_lanes_out
-          .filter { (it[1].toInteger() >= params.depth_min) }
-          .map { [it[0], it[2], it[3]] }
-
 
     // Set the barcode_pattern 
     barcode_pattern="CCCCCCCCCCCCC"
-    merged_fastp(ch_merge_lanes_out_filtered, barcode_pattern)
+    merged_fastp(ch_merge_lanes_out, barcode_pattern)
     ch_merged_fastp_multiqc = merged_fastp.out.merged_fastp_multiqc
 
     // Get the whitelist and extract the IOs from the fastqs using umitools
-    io_extract(ch_merge_lanes_out_filtered, whitelist, barcode_pattern)
+    io_extract(ch_merge_lanes_out, whitelist, barcode_pattern)
     ch_io_extract_out = io_extract.out.io_extract_out
     // Filter out empty fastq files.
     ch_io_extract_out_filtered = ch_io_extract_out

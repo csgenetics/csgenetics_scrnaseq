@@ -37,18 +37,12 @@ process merge_lanes {
   tuple val(sample_id), path(fastq_1), path(fastq_2)
 
   output:
-  tuple val(sample_id), env(numreads), path("${sample_id}_R1.merged.fastq.gz"), path("${sample_id}_R2.merged.fastq.gz"), emit: merge_lanes_out
-  tuple val(sample_id), env(numreads), path('numreads.txt'), emit: numreads_log
+  tuple val(sample_id), path("${sample_id}_R1.merged.fastq.gz"), path("${sample_id}_R2.merged.fastq.gz"), emit: merge_lanes_out
 
   shell:
   '''
   cat !{fastq_1} > !{sample_id}_R1.merged.fastq.gz
   cat !{fastq_2} > !{sample_id}_R2.merged.fastq.gz
-  
-  # count number of raw reads
-  numreads=$(( $(zcat !{sample_id}_R1.merged.fastq.gz | wc -l) / 4))
-
-  echo $numreads > numreads.txt
   '''
 }
 
