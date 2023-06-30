@@ -57,14 +57,9 @@ workflow {
     // Get the whitelist and extract the IOs from the fastqs using umitools
     io_extract(ch_merge_lanes_out, whitelist, barcode_pattern)
     ch_io_extract_out = io_extract.out.io_extract_out
-    // Filter out empty fastq files.
-    ch_io_extract_out_filtered = ch_io_extract_out
-      .filter { it[2].countFastq() > 0}
-
     ch_io_extract_log = io_extract.out.io_extract_log
-
     // Trim and remove low quality reads with fastp
-    io_extract_fastp(ch_io_extract_out_filtered)
+    io_extract_fastp(ch_io_extract_out)
     ch_io_extract_fastp_out = io_extract_fastp.out.fastp_out
     ch_io_extract_fastp_multiqc = io_extract_fastp.out.fastp_multiqc
 
