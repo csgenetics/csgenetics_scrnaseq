@@ -331,7 +331,6 @@ process feature_counts {
 
   output:
   tuple val(sample_id), path('*.bam'), emit: feature_counts_out_bam
-  tuple val(sample_id), path("${sample_id}_gene_assigned.txt"), path("${sample_id}_gene_assigned.txt.summary"), emit: feature_counts_multiqc
 
   shell:
   """

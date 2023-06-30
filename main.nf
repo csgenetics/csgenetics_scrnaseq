@@ -91,7 +91,6 @@ workflow {
     star(ch_post_polyA_fastp_out, star_index)
     ch_star_out_qualimap = star.out.star_out_bams
     ch_star_out_filtering = star.out.star_out_bams
-    ch_star_multiqc = star.out.star_multiqc
 
     // Qualimap on STAR output
     raw_qualimap(ch_star_out_qualimap, gtf)
@@ -122,9 +121,7 @@ workflow {
     ch_merged_fastp_multiqc
       .mix(ch_post_polyA_fastp_multiqc)
       .mix(ch_io_extract_fastp_multiqc)
-      .mix(ch_star_multiqc)
-      .mix(feature_counts.out.feature_counts_multiqc)
-      .groupTuple(by:0, size: 5)
+      .groupTuple(by:0, size: 3)
       .map({it.flatten()}).map({[it[0], it.tail()]})
       .set { ch_multiqc_in }
 
