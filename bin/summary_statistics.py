@@ -163,11 +163,18 @@ class SummaryStatistics:
         with open(sys.argv[5], "r") as dedup_handle:
             for line in dedup_handle:
                 if "INFO Reads: Input Reads:" in line:
-                    self.metrics_dict["Deduplication"]["reads_before_deduplication"] = ("Reads before deduplication", int(line.split()[-1].strip()), "Number of reads before deduplication.")
+                    try:
+                        reads_in = int(line.split()[-1].strip())
+                    except ValueError:
+                        reads_in = 0
+                    self.metrics_dict["Deduplication"]["reads_before_deduplication"] = ("Reads before deduplication", reads_in, "Number of reads before deduplication.")
                 elif "INFO Number of reads out:" in line:
                     self.metrics_dict["Deduplication"]["reads_after_deduplication"] = ("Reads after deduplication", int(line.split()[-1].strip()), "Number of reads after deduplication.")
-        self.metrics_dict["Deduplication"]["duplication_perc"] = ("Deduplication percent", self.as_perc(1 - (self.metrics_dict["Deduplication"]["reads_after_deduplication"][1]/self.metrics_dict["Deduplication"]["reads_before_deduplication"][1])), "Reads before deduplication / reads after deduplication * 100")
-
+        if reads_in != 0:
+            self.metrics_dict["Deduplication"]["duplication_perc"] = ("Deduplication percent", self.as_perc(1 - (self.metrics_dict["Deduplication"]["reads_after_deduplication"][1]/self.metrics_dict["Deduplication"]["reads_before_deduplication"][1])), "Reads before deduplication / reads after deduplication * 100")
+        else:
+            self.metrics_dict["Deduplication"]["duplication_perc"] = ("Deduplication percent", 0.0, "Reads before deduplication / reads after deduplication * 100")
+    
     def get_mapping_stats(self):
         # Populate self.metrics_dict with the raw qualimap stats
         self.get_qualimap_stats(sys.argv[6], "Post read QC alignment")
