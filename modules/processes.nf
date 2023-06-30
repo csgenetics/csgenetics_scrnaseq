@@ -230,8 +230,6 @@ process star {
   output:
   tuple val(sample_id), path("${sample_id}_Aligned.sortedByCoord.out.bam"), emit: star_out_bams
 
-  tuple val(sample_id), path("${sample_id}_Log.final.out"), path("${sample_id}_Log.out"), path("${sample_id}_Log.progress.out"), path("${sample_id}_SJ.out.tab"), path("${sample_id}_Unmapped.out.mate1"), emit: star_multiqc
-
   shell:
   '''
   # alignment filtering step to be performed by samtools
