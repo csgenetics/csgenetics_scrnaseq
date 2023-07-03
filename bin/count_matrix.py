@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from pandas import read_csv, read_table, merge,DataFrame
+from pandas import read_csv, read_table, merge, DataFrame, errors
 from pandas.api.types import CategoricalDtype
 from scipy.sparse import csr_matrix
 from scipy.io import mmwrite
@@ -26,7 +26,14 @@ def make_count_matrix(args):
     wl = wl.iloc[:,[0,1]]
 
     # load count table obtained using UMI-tools
-    counts = read_table(args.count_table,header=None)
+    try:
+        counts = read_table(args.count_table,header=None)
+    except errors.EmptyDataError:
+        # The input file is empty and we simply write out an empty .h5ad
+        # to be picked up by the process then exit
+        open(f"{args.sample}.count_matrix.h5ad", "w").close()
+        sys.exit(0)
+
     counts.columns = ['io', 'ensID']
 
      # load feature (gene) names obtained from the genome GTF file

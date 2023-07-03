@@ -29,7 +29,13 @@ def parse_arguments():
 def getlog10NucGenes(sample, args):
    '''function to read in sample and get relevant values into adata.obs'''
    #read in the counts matrix
-   adata = sc.read_h5ad(args.count_matrix)
+   # If the file is empty, output the min_nucGene and an empty .png file
+   try:
+      adata = sc.read_h5ad(args.count_matrix)
+   except OSError:
+      open(f"{args.sample}_pdf_with_cutoff.png", "w").close()
+      print(int(args.min_nucGene), end="")
+      sys.exit(0)
    #calculate QC metrics (total number of genes per cell, total counts per cell)
    sc.pp.calculate_qc_metrics(adata, percent_top=None, log1p=False, inplace=True)
    # calculate the number of NUCLEAR genes per cell

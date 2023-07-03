@@ -3,6 +3,7 @@ import sys
 from jinja2 import Template
 import base64
 from collections import defaultdict
+import os
 
 class SingleSampleHTMLReport:
     """
@@ -27,7 +28,16 @@ class SingleSampleHTMLReport:
         with open(sys.argv[4]) as html_template:
             self.jinja_template = Template(html_template.read())
 
-        self.encoded_png_str = self.generate_encoded_png_str()
+        # If 'empty' in the name of the Cell Caller plot
+        # then set self.show_cell_caller_plot to False.
+        # Will cause the Cell Caller plot to be hidden.
+        if os.path.getsize(self.plot_path) == 0:
+            self.show_cell_caller_plot=False
+            self.encoded_png_str = None
+            print("Cell Caller plot size is 0. Hiding Cell Caller plot card.")
+        else:
+            self.show_cell_caller_plot=True
+            self.encoded_png_str = self.generate_encoded_png_str()
 
         self.render_and_write_report()
 
@@ -38,6 +48,7 @@ class SingleSampleHTMLReport:
     def render_and_write_report(self):
         # Render the template.        
         final_report = self.jinja_template.render(metrics_dict=self.metrics_dict,
+                                            show_cell_caller_plot=self.show_cell_caller_plot,
                                             encoded_png_str=self.encoded_png_str,
                                             sample_id=self.sample_id,
                                             # This dict is required to supply the tooltips, the accordion header ID and the collapse ID for each of the categories of alignment statistics

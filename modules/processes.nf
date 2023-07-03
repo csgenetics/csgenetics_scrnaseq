@@ -481,48 +481,52 @@ process io_count {
 /*
 * Generate a h5ad count matrix
 * output raw_count_matrix (unfiltered for single-cells only)
+* Will output ${sample_id}.count_matrix.empty.h5ad if the input file is blank
+* Otherwise the file will be called ${sample_id}.count_matrix.h5ad
+* The tripartite count table files will only be output if the input
+* file is not empty.
 */
 process count_matrix {
   tag "$sample_id"
   label 'c4m4'
 
-  publishDir "${params.outdir}/count_matrix/raw_count_matrix/${sample_id}", mode: 'copy'
+  publishDir "${params.outdir}/count_matrix/raw_count_matrix/${sample_id}", mode: 'copy', pattern: "*.{count_matrix.h5ad,.matrix.mtx.gz,.barcodes.tsv.gz,.features.tsv.gz}"
   
   input:
-  tuple val(sample_id), path(f)
-  path(w)
+  tuple val(sample_id), path(input_file)
+  path(whitelist)
   path(features_file)
 
-
   output:
-  tuple val(sample_id), path("${sample_id}.count_matrix.h5ad"), emit: h5ad
-  tuple val(sample_id), path("${sample_id}.matrix.mtx.gz"), emit: raw_matrix
-  tuple val(sample_id), path("${sample_id}.barcodes.tsv.gz"), emit: raw_barcodes
-  tuple val(sample_id), path("${sample_id}.features.tsv.gz"), emit: raw_features
+  tuple val(sample_id), path("${sample_id}.count_matrix.*h5ad"), emit: h5ad
+  tuple val(sample_id), path("${sample_id}.matrix.mtx.gz"), optional: true, emit: raw_matrix
+  tuple val(sample_id), path("${sample_id}.barcodes.tsv.gz"), optional: true, emit: raw_barcodes
+  tuple val(sample_id), path("${sample_id}.features.tsv.gz"), optional: true, emit: raw_features
 
   script:
   """
-  count_matrix.py --white_list ${w} --count_table ${f} --gene_list ${features_file} --sample ${sample_id}
+  count_matrix.py --white_list ${whitelist} --count_table ${input_file} --gene_list ${features_file} --sample ${sample_id}
   """
 }
 
 /*
 * Run cell caller - this determines a threshold number of nuclear genes detected to call a cell.
 * The threshold is output to stdout and output as cell_caller_out
+* If the h5ad matrix is empty, an empty .png will be output and checked for
+* in the summary statistic script causing the Cell Caller plot to be hidden.
 */
 process cell_caller {
   tag "$sample_id"
   label 'c4m2'
 
-  publishDir "${params.outdir}/plots", pattern: '*.png', mode: 'copy'
+  publishDir "${params.outdir}/plots", pattern: "${sample_id}_pdf_with_cutoff.png", mode: 'copy'
 
   input:
   tuple val(sample_id), path(count_matrix_h5ad)
 
   output:
-  // returns the call_caller-calculated nuclear gene threshold
-  tuple val(sample_id), stdout, emit: cell_caller_out 
-  tuple val(sample_id), path('*.png'), emit: cell_caller_plot
+  tuple val(sample_id), stdout, emit: cell_caller_out
+  tuple val(sample_id), path("${sample_id}_pdf_with_cutoff.png"), emit: cell_caller_plot
 
   script:
   """
@@ -532,21 +536,23 @@ process cell_caller {
 
 /*
 * Filter count table - produce a count table that has been filtered for barcodes that pass the cell caller threshold
+* If an empty file is input as the .h5ad (due to fail at count_matrix), an "${sample_id}.*.cell_only.count_matrix.empty.h5ad"
+* file will be created and carried into summary_metrics.py. The tripartite matrix files will not be ouput in this case.
 */
 process filter_count_matrix{
   tag "$sample_id"
   label 'c2m2'
 
-  publishDir "${params.outdir}/count_matrix/cell_only_count_matrix/${sample_id}/", mode: 'copy'
+  publishDir "${params.outdir}/count_matrix/cell_only_count_matrix/${sample_id}/", mode: 'copy', pattern: "*.cell_only.{count_matrix.h5ad,.matrix.mtx.gz,.barcodes.tsv.gz,.features.tsv.gz}"
 
   input:
   tuple val(sample_id), val(nuc_gene_threshold), path(h5ad_raw_count_matrix)
 
   output:
   // Output the 3 part barcode, features, matrix 
-  tuple val(sample_id), path("${sample_id}.*.cell_only.barcodes.tsv.gz"), path("${sample_id}.*.cell_only.features.tsv.gz"), path("${sample_id}.*.cell_only.matrix.mtx.gz")
+  tuple val(sample_id), path("${sample_id}.*.cell_only.barcodes.tsv.gz"), path("${sample_id}.*.cell_only.features.tsv.gz"), path("${sample_id}.*.cell_only.matrix.mtx.gz"), optional: true
   // Output the h5ad matrix
-  tuple val(sample_id), path("${sample_id}.*.cell_only.count_matrix.h5ad"), emit: cell_only_count_matrix
+  tuple val(sample_id), path("${sample_id}.*.cell_only.count_matrix.*h5ad"), emit: cell_only_count_matrix
 
   script:
   """

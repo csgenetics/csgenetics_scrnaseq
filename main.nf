@@ -135,7 +135,6 @@ workflow {
     // Run cell caller
     cell_caller(ch_h5ad)
     ch_cell_caller_out = cell_caller.out.cell_caller_out //[val(sample_id), int(cell_caller_nuc_gene_threshold)]
-    ch_cell_caller_plot = cell_caller.out.cell_caller_plot
 
     // Sort the groupTuple so that the int is always
     // first and then flatten the tuple list to return a 3mer
@@ -166,7 +165,7 @@ workflow {
     // Generate summary statistics
     summary_statistics(ch_summary_report_in)
 
-    ch_summary_metrics_and_plot = summary_statistics.out.metrics_csv.join(ch_cell_caller_plot, by:0)
+    ch_summary_metrics_and_plot = summary_statistics.out.metrics_csv.join(cell_caller.out.cell_caller_plot, by:0)
 
     // Generate single sample report
     single_summary_report(ch_summary_metrics_and_plot, single_sample_report_template, cs_logo)

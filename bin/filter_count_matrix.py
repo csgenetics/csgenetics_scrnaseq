@@ -22,10 +22,16 @@ class FilterCountMatrix:
         # been covered in order to consider a barcode a cell
         self.single_cell_nuc_gene_threshold = int(sys.argv[1])
 
-        # Read in the h5ad matrix to an anndata object
-        self.anndata_obj = anndata.read_h5ad(sys.argv[2])
-
         self.sample_name = sys.argv[3]
+
+        # Read in the h5ad matrix to an anndata object
+        # If the h5ad matrix is an empty file, simply write out
+        # another empty file and exit
+        try:
+            self.anndata_obj = anndata.read_h5ad(sys.argv[2])
+        except OSError:
+            open(f"{self.sample_name}.{self.single_cell_nuc_gene_threshold}.cell_only.count_matrix.empty.h5ad", "w").close()
+            sys.exit(0)
 
         # Compute the number of nuclear genes covered per barcode
         self.anndata_obj.obs['num_genes_covered_per_barcode'] = self.anndata_obj.X.toarray().astype(bool).sum(axis=1)

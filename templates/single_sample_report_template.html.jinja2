@@ -97,12 +97,14 @@
         </div>
       {% endfor %}
 
+      {% if show_cell_caller_plot %}
       <!-- Cell caller plot -->
       <div class="card border-left-success shadow py-2">
         <div class="card-body">
         <img alt='...' class='img-fluid' src='data:image/png;base64,{{ encoded_png_str }}'/>
         </div>
       </div>
+      {% endif %}
 
     </div>
 
