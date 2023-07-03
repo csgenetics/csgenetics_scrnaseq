@@ -8,8 +8,10 @@
 nextflow.enable.dsl=2
 include {
   features_file; merge_lanes; merged_fastp; io_extract; io_extract_fastp;
-  trim_extra_polya; post_polyA_fastp; star; create_valid_empty_bam as create_valid_empty_bam_star; create_valid_empty_bam as create_valid_empty_bam_annotate; raw_qualimap; filter_umr_mismatch;
-  filtered_qualimap; feature_counts; filter_for_annotated; annotated_qualimap; multiqc;
+  trim_extra_polya; post_polyA_fastp; star;
+  create_valid_empty_bam as create_valid_empty_bam_star;
+  run_qualimap as raw_qualimap; run_qualimap as filtered_qualimap; run_qualimap as annotated_qualimap;
+  filter_umr_mismatch; feature_counts; filter_for_annotated; multiqc;
   sort_index_bam; dedup; io_count; count_matrix;
   filter_count_matrix; cell_caller; summary_statistics; single_summary_report;
   multi_sample_report
@@ -98,13 +100,13 @@ workflow {
     // Annotate the channel objects with dummy counts of either 1 or 0
     // depending on whether the bams are empty are not to either run
     // qualimap or populate an empty qualimap template
-    raw_qualimap(star.out.out_bam.map({[it[0], it[1], 1]}).mix(create_valid_empty_bam_star.out.out_bam.map({[it[0], it[1], 0]})), gtf, empty_qualimap_template)
+    raw_qualimap(star.out.out_bam.map({[it[0], it[1], 1]}).mix(create_valid_empty_bam_star.out.out_bam.map({[it[0], it[1], 0]})), gtf, empty_qualimap_template, "raw")
 
     // Filter the mapped reads for reads with 1 alignment and max 3 mismatch
     filter_umr_mismatch(star.out.out_bam.mix(create_valid_empty_bam_star.out.out_bam))
 
-    // // Qualimap on filtered bam
-    // filtered_qualimap(filter_umr_mismatch.out.filtered_bam, gtf)
+    // Qualimap on filtered bam
+    filtered_qualimap(filter_umr_mismatch.out.filtered_bam, gtf, empty_qualimap_template, "filtered")
 
     // Branch on alignment counts
     // If counts is 0 then skip feature counts
@@ -123,24 +125,24 @@ workflow {
     // for only annotated/assigned reads with 1 target
     filter_for_annotated(feature_counts.out.out_bam.mix(filter_umr_mismatch_out_ch.empty_bam.map({[it[0], it[1]]})))
 
-    // // Produce qualimap output of the annotated bam for metrics
-    // annotated_qualimap(filter_for_annotated.out.annotated_bam, gtf)
+    // Produce qualimap output of the annotated bam for metrics
+    annotated_qualimap(filter_for_annotated.out.annotated_bam, gtf, empty_qualimap_template, "annotated")
 
-    // // Generate input channel containing all the files needed for multiqc per samples. 
-    // // The final channel structure is [sample_id, [file1, file2, file3, ...]]
-    // // NB fastqc currently does not integrate multip qualimap
-    // // outputs successfuly so they are manually carried through
-    // // to the summary_statistics
-    // ch_merged_fastp_multiqc
-    //   .mix(ch_post_polyA_fastp_multiqc)
-    //   .mix(ch_io_extract_fastp_multiqc)
-    //   .groupTuple(by:0, size: 3)
-    //   .map({it.flatten()}).map({[it[0], it.tail()]})
-    //   .set { ch_multiqc_in }
+    // Generate input channel containing all the files needed for multiqc per samples. 
+    // The final channel structure is [sample_id, [file1, file2, file3, ...]]
+    // NB fastqc currently does not integrate multip qualimap
+    // outputs successfuly so they are manually carried through
+    // to the summary_statistics
+    ch_merged_fastp_multiqc
+      .mix(ch_post_polyA_fastp_multiqc)
+      .mix(ch_io_extract_fastp_multiqc)
+      .groupTuple(by:0, size: 3)
+      .map({it.flatten()}).map({[it[0], it.tail()]})
+      .set { ch_multiqc_in }
 
-    // // Run multiqc  
-    // multiqc(ch_multiqc_in)
-    // ch_multiqc_json = multiqc.out.multiqc_json    
+    // Run multiqc  
+    multiqc(ch_multiqc_in)
+    ch_multiqc_json = multiqc.out.multiqc_json    
     
     // Sort and index bam file
     sort_index_bam(filter_for_annotated.out.annotated_bam)
@@ -172,31 +174,31 @@ workflow {
     filter_count_matrix(ch_filter_count_matrix_in)
     ch_filtered_count_matrices = filter_count_matrix.out.cell_only_count_matrix
 
-    // // structure of ch_summary_report_in is
-    // // [sample_id, min_nuc_gene_cutoff, h5ad, annotated_qualimap,
-    // // antisense, dedup.log, filtered_qualimap, multiqc_data, raw_qualimap]
-    // ch_filtered_count_matrices
-    // .mix(ch_multiqc_json)
-    // .mix(sort_index_bam.out.antisense_out)
-    // .mix(raw_qualimap.out.qualimap_txt)
-    // .mix(filtered_qualimap.out.qualimap_txt)
-    // .mix(annotated_qualimap.out.annotated_qualimap)
-    // .mix(ch_io_dedup_log)
-    // .groupTuple(by:0, size: 7, sort:{it.name})
-    // .mix(ch_cell_caller_out)
-    // .groupTuple(by:0, size:2, sort:{sort:{it.getClass() == nextflow.util.ArrayBag ? 1 : 0}})
-    // .map({it.flatten()})
-    // .set({ch_summary_report_in})
+    // structure of ch_summary_report_in is
+    // [sample_id, min_nuc_gene_cutoff, h5ad, annotated_qualimap,
+    // antisense, dedup.log, filtered_qualimap, multiqc_data, raw_qualimap]
+    ch_filtered_count_matrices
+    .mix(ch_multiqc_json)
+    .mix(sort_index_bam.out.antisense_out)
+    .mix(raw_qualimap.out.qualimap_txt)
+    .mix(filtered_qualimap.out.qualimap_txt)
+    .mix(annotated_qualimap.out.qualimap_txt)
+    .mix(ch_io_dedup_log)
+    .groupTuple(by:0, size: 7, sort:{it.name})
+    .mix(ch_cell_caller_out)
+    .groupTuple(by:0, size:2, sort:{sort:{it.getClass() == nextflow.util.ArrayBag ? 1 : 0}})
+    .map({it.flatten()})
+    .set({ch_summary_report_in})
     
-    // // Generate summary statistics
-    // summary_statistics(ch_summary_report_in)
+    // Generate summary statistics
+    summary_statistics(ch_summary_report_in)
 
-    // ch_summary_metrics_and_plot = summary_statistics.out.metrics_csv.join(cell_caller.out.cell_caller_plot, by:0)
+    ch_summary_metrics_and_plot = summary_statistics.out.metrics_csv.join(cell_caller.out.cell_caller_plot, by:0)
 
-    // // Generate single sample report
-    // single_summary_report(ch_summary_metrics_and_plot, single_sample_report_template, cs_logo)
+    // Generate single sample report
+    single_summary_report(ch_summary_metrics_and_plot, single_sample_report_template, cs_logo)
 
-    // // Generate multi sample report
-    // multi_sample_report(single_summary_report.out.single_sample_metric_out.collect(), multi_sample_report_template)
+    // Generate multi sample report
+    multi_sample_report(single_summary_report.out.single_sample_metric_out.collect(), multi_sample_report_template)
  
 }

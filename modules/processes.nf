@@ -264,11 +264,10 @@ process create_valid_empty_bam{
 
 }
 
-
 /*
-* Run Qualimap, generates a report, also useful for getting related mapping composition statistics
+* Generic process for running qualimap.
 */
-process raw_qualimap {
+process run_qualimap {
   tag "$sample_id"
   
   label 'c8m16'
@@ -279,21 +278,22 @@ process raw_qualimap {
   tuple val (sample_id), path(bam), val(count)
   path(gtf)
   path(empty_qualimap_template)
+  val(prefix)
 
   output:
-  tuple val (sample_id), path("${sample_id}.raw_qualimap.txt"), emit: qualimap_txt
+  tuple val (sample_id), path("${sample_id}.${prefix}_qualimap.txt"), emit: qualimap_txt
 
   shell:
   '''
   if [[ !{count} > 0 ]]
     then
-      qualimap rnaseq -outdir !{sample_id}_raw_qualimap -a proportional -bam !{bam} -p strand-specific-forward -gtf !{gtf} --java-mem-size=16G 
-      mv !{sample_id}_raw_qualimap/rnaseq_qc_results.txt !{sample_id}.raw_qualimap.txt
+      qualimap rnaseq -outdir !{sample_id}_!{prefix}_qualimap -a proportional -bam !{bam} -p strand-specific-forward -gtf !{gtf} --java-mem-size=16G 
+      mv !{sample_id}_!{prefix}_qualimap/rnaseq_qc_results.txt !{sample_id}.!{prefix}_qualimap.txt
     else
       BAMNAME=!{bam}
       GTFNAME=!{gtf}
       export BAMNAME GTFNAME
-      cat !{empty_qualimap_template} | envsubst > !{sample_id}.raw_qualimap.txt
+      cat !{empty_qualimap_template} | envsubst > !{sample_id}.!{prefix}_qualimap.txt
   fi
   '''
 }
@@ -317,30 +317,6 @@ script:
 samtools view -h -b -e '[NH]==1 && ([nM]==0 || [nM]==1 || [nM]==2 || [nM]==3)' -b $star_out_bam > ${sample_id}.mapped.sorted.filtered.bam
 alignment_count=\$(samtools view -c ${sample_id}.mapped.sorted.filtered.bam)
 """
-}
-
-
-/*
-* Run Qualimap, generates a report, also useful for getting related mapping composition statistics
-*/
-process filtered_qualimap {
-  tag "$sample_id"
-  label 'c8m16'
-
-  publishDir "${params.outdir}/qualimap", mode: 'copy'
-
-  input:
-  tuple val(sample_id), path(bam), val(count)
-  path(gtf)
-
-  output:
-  tuple val (sample_id), path("${sample_id}.filtered_qualimap.txt"), emit: qualimap_txt
-
-  shell:
-  '''
-  qualimap rnaseq -outdir !{sample_id}_filtered_qualimap -a proportional -bam !{bam} -p strand-specific-forward -gtf !{gtf} --java-mem-size=16G 
-  mv !{sample_id}_filtered_qualimap/rnaseq_qc_results.txt !{sample_id}.filtered_qualimap.txt
-  '''
 }
 
 /*
@@ -374,32 +350,13 @@ process filter_for_annotated {
   tuple val(sample_id), path(feature_counts_out_bam)
 
   output:
-  tuple val(sample_id), path("${sample_id}.mapped.sorted.filtered.annotated.bam"), emit: annotated_bam
+  tuple val(sample_id), path("${sample_id}.mapped.sorted.filtered.annotated.bam"), env(alignment_count), emit: annotated_bam
 
   script:
   """
   samtools view -h -b -e '[XN]==1 && [XT] && [XS]=="Assigned"' -b $feature_counts_out_bam > ${sample_id}.mapped.sorted.filtered.annotated.bam 
+  alignment_count=\$(samtools view -c ${sample_id}.mapped.sorted.filtered.annotated.bam)
   """
-}
-
-process annotated_qualimap {
-  tag "$sample_id"
-  label 'c8m16'
-
-  publishDir "${params.outdir}/qualimap", mode: 'copy'
-
-  input:
-  tuple val(sample_id), path(bam)
-  path(gtf)
-
-  output:
-  tuple val (sample_id), path("${sample_id}.annotated_qualimap.txt"), emit: annotated_qualimap
-
-  shell:
-  '''
-  qualimap rnaseq -outdir !{sample_id}_annotated_qualimap -a proportional -bam !{bam} -p strand-specific-forward -gtf !{gtf} --java-mem-size=16G 
-  mv !{sample_id}_annotated_qualimap/rnaseq_qc_results.txt !{sample_id}.annotated_qualimap.txt
-  '''
 }
 
 /*
@@ -440,7 +397,7 @@ process sort_index_bam {
   label 'c1m2'
 
   input:
-  tuple val (sample_id), path(bam)
+  tuple val (sample_id), path(bam), val(count)
 
   output:
   tuple val(sample_id), path("${sample_id}.antisense.txt"), emit: antisense_out

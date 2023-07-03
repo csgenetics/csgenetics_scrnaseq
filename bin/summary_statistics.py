@@ -78,108 +78,117 @@ class SummaryStatistics:
     def get_non_zero_sum(np_1d_array):
         return np.sum(np_1d_array[np.nonzero(np_1d_array)])
 
-    def get_cell_stats(self):
-        # If the h5ad is an empty file, output empty metrics
-        try:
-            self.anndata = anndata.read_h5ad(sys.argv[2])
-        except OSError:
-            # Populate with 0s
-            num_cells = 0
-            mean_total_counts_per_cell = 0
-            median_total_reads_per_cell = 0
-            mean_counts_per_cell_all_genes = 0
-            median_counts_per_cell_all_genes = 0
-            mean_counts_per_cell_sample_detected_genes = 0
-            median_counts_per_cell_sample_detected_genes = 0
-            mean_counts_per_cell_cell_detected_genes = 0
-            median_counts_per_cell_cell_detected_genes = 0
-            mean_genes_detected_per_cell = 0
-            median_genes_detected_per_cell = 0
-            mean_nuclear_genes_detected_per_cell = 0
-            median_nuclear_genes_detected_per_cell = 0
-            mean_mito_genes_detected_per_cell = 0
-            median_mito_genes_detected_per_cell = 0
-            num_unique_genes_detected_across_sample = 0
-            total_genes_detected_across_samples = 0
-        else:
-            # Populate with the actual values
-            self.anndata.var["is_mito"] = np.where(self.anndata.var['geneSym'].str.startswith("MT-"), True, False)
-            # Convert to array for convenience
-            anndata_array = self.anndata.X.toarray()
-            # Remove genes that have not been detected at all across the sample
-            anndata_array_detected_genes = anndata_array[:, ~np.all(anndata_array == 0, axis=0)]
-            
-            num_cells = anndata_array.shape[0]
-            mean_total_counts_per_cell = np.mean(anndata_array.sum(axis=1))
-            median_total_reads_per_cell = np.median(anndata_array.sum(axis=1))
-            mean_counts_per_cell_all_genes = np.mean(anndata_array.mean(axis=1))
-            median_counts_per_cell_all_genes = np.median(np.median(anndata_array, axis=1))
-            mean_counts_per_cell_sample_detected_genes = np.mean(anndata_array_detected_genes.mean(axis=1))
-            median_counts_per_cell_sample_detected_genes = np.median(anndata_array_detected_genes.sum(axis=1))
-            mean_counts_per_cell_cell_detected_genes = np.mean(np.apply_along_axis(self.get_non_zero_sum, 1, anndata_array))
-            median_counts_per_cell_cell_detected_genes = np.median(np.apply_along_axis(self.get_non_zero_sum, 1, anndata_array))
-            mean_genes_detected_per_cell = np.mean(anndata_array.astype(bool).sum(axis=1))
-            median_genes_detected_per_cell = int(np.median(anndata_array.astype(bool).sum(axis=1)))
+    def set_cell_stats_to_zero(self):
+        self.num_cells = 0
+        self.mean_total_counts_per_cell = 0
+        self.median_total_reads_per_cell = 0
+        self.mean_counts_per_cell_all_genes = 0
+        self.median_counts_per_cell_all_genes = 0
+        self.mean_counts_per_cell_sample_detected_genes = 0
+        self.median_counts_per_cell_sample_detected_genes = 0
+        self.mean_counts_per_cell_cell_detected_genes = 0
+        self.median_counts_per_cell_cell_detected_genes = 0
+        self.mean_genes_detected_per_cell = 0
+        self.median_genes_detected_per_cell = 0
+        self.mean_nuclear_genes_detected_per_cell = 0
+        self.median_nuclear_genes_detected_per_cell = 0
+        self.mean_mito_genes_detected_per_cell = 0
+        self.median_mito_genes_detected_per_cell = 0
+        self.num_unique_genes_detected_across_sample = 0
+        self.total_genes_detected_across_samples = 0
 
-            # Get a subset of the array that doesn't contain the mito genes
-            anndata_array_nuc = anndata_array[:,~self.anndata.var["is_mito"]]
-            mean_nuclear_genes_detected_per_cell = np.mean(anndata_array_nuc.astype(bool).sum(axis=1))
-            median_nuclear_genes_detected_per_cell = np.median(anndata_array_nuc.astype(bool).sum(axis=1))
-            
+    def calculate_cell_stats(self):
+        self.anndata.var["is_mito"] = np.where(self.anndata.var['geneSym'].str.startswith("MT-"), True, False)
+        # Convert to array for convenience
+        anndata_array = self.anndata.X.toarray()
+        # Remove genes that have not been detected at all across the sample
+        self.anndata_array_detected_genes = anndata_array[:, ~np.all(anndata_array == 0, axis=0)]
+        
+        self.num_cells = anndata_array.shape[0]
+        self.mean_total_counts_per_cell = np.mean(anndata_array.sum(axis=1))
+        self.median_total_reads_per_cell = np.median(anndata_array.sum(axis=1))
+        self.mean_counts_per_cell_all_genes = np.mean(anndata_array.mean(axis=1))
+        self.median_counts_per_cell_all_genes = np.median(np.median(anndata_array, axis=1))
+        self.mean_counts_per_cell_sample_detected_genes = np.mean(self.anndata_array_detected_genes.mean(axis=1))
+        self.median_counts_per_cell_sample_detected_genes = np.median(self.anndata_array_detected_genes.sum(axis=1))
+        self.mean_counts_per_cell_cell_detected_genes = np.mean(np.apply_along_axis(self.get_non_zero_sum, 1, anndata_array))
+        self.median_counts_per_cell_cell_detected_genes = np.median(np.apply_along_axis(self.get_non_zero_sum, 1, anndata_array))
+        self.mean_genes_detected_per_cell = np.mean(anndata_array.astype(bool).sum(axis=1))
+        self.median_genes_detected_per_cell = int(np.median(anndata_array.astype(bool).sum(axis=1)))
 
-            # Get a subset of the array that contains only the mito genes
-            anndata_array_mito = anndata_array[:,self.anndata.var["is_mito"]]
-            mean_mito_genes_detected_per_cell = np.mean(anndata_array_mito.astype(bool).sum(axis=1))
-            median_mito_genes_detected_per_cell = int(np.median(anndata_array_mito.astype(bool).sum(axis=1)))
+        # Get a subset of the array that doesn't contain the mito genes
+        anndata_array_nuc = anndata_array[:,~self.anndata.var["is_mito"]]
+        self.mean_nuclear_genes_detected_per_cell = np.mean(anndata_array_nuc.astype(bool).sum(axis=1))
+        self.median_nuclear_genes_detected_per_cell = np.median(anndata_array_nuc.astype(bool).sum(axis=1))
 
-            num_unique_genes_detected_across_sample = anndata_array_detected_genes.shape[1]
-            total_genes_detected_across_samples = np.count_nonzero(anndata_array_detected_genes)
+        # Get a subset of the array that contains only the mito genes
+        anndata_array_mito = anndata_array[:,self.anndata.var["is_mito"]]
+        self.mean_mito_genes_detected_per_cell = np.mean(anndata_array_mito.astype(bool).sum(axis=1))
+        self.median_mito_genes_detected_per_cell = int(np.median(anndata_array_mito.astype(bool).sum(axis=1)))
 
+        self.num_unique_genes_detected_across_sample = self.anndata_array_detected_genes.shape[1]
+        self.total_genes_detected_across_samples = np.count_nonzero(self.anndata_array_detected_genes)
 
+    def populate_cell_stats_in_metrics_dict(self):
         # Estimated number of cells
-        self.metrics_dict["Cell metrics"]["num_cells"] = ("Number of cells", num_cells, "Estimated number of cells; Number of barcodes passing the nulcear genes detected threshold.")
+        self.metrics_dict["Cell metrics"]["num_cells"] = ("Number of cells", self.num_cells, "Estimated number of cells; Number of barcodes passing the nulcear genes detected threshold.")
 
         # Mean total counts per cell
-        self.metrics_dict["Cell metrics"]["mean_total_counts_per_cell"] = ("Mean total counts per cell", mean_total_counts_per_cell, "Mean of the sum of counts per cell.")
+        self.metrics_dict["Cell metrics"]["mean_total_counts_per_cell"] = ("Mean total counts per cell", self.mean_total_counts_per_cell, "Mean of the sum of counts per cell.")
         # Median total counts per cell
-        self.metrics_dict["Cell metrics"]["median_total_reads_per_cell"] = ("Median total counts per cell", median_total_reads_per_cell, "Median of the sum of counts per cell.")
+        self.metrics_dict["Cell metrics"]["median_total_reads_per_cell"] = ("Median total counts per cell", self.median_total_reads_per_cell, "Median of the sum of counts per cell.")
 
         # Mean single gene counts per cell - all genes (i.e. all counts across all genes considered even those genes not detected in the sample)
-        self.metrics_dict["Cell metrics"]["mean_counts_per_cell_all_genes"] = ("Mean single gene count per cell: all genes", mean_counts_per_cell_all_genes, "Mean of the mean individual gene count per cell with all genes considered (including those genes not detected in the sample).")
+        self.metrics_dict["Cell metrics"]["mean_counts_per_cell_all_genes"] = ("Mean single gene count per cell: all genes", self.mean_counts_per_cell_all_genes, "Mean of the mean individual gene count per cell with all genes considered (including those genes not detected in the sample).")
         # Median single gene counts per cell - all genes (i.e. all counts across all genes considered even those genes not detected in the sample)
-        self.metrics_dict["Cell metrics"]["median_counts_per_cell_all_genes"] = ("Median single gene count per cell: all genes", median_counts_per_cell_all_genes, "Median of the median individual gene count per cell with all genes considered (including those genes not detected in the sample).")
+        self.metrics_dict["Cell metrics"]["median_counts_per_cell_all_genes"] = ("Median single gene count per cell: all genes", self.median_counts_per_cell_all_genes, "Median of the median individual gene count per cell with all genes considered (including those genes not detected in the sample).")
 
         # Mean single genecounts per cell - sample detected genes (i.e. only those genes that were detected in the sample)
-        self.metrics_dict["Cell metrics"]["mean_counts_per_cell_sample_detected_genes"] = ("Mean single gene count per cell: sample-detected genes", mean_counts_per_cell_sample_detected_genes, "Mean of the mean individual gene count per cell with only those genes detected in the sample considered.")
+        self.metrics_dict["Cell metrics"]["mean_counts_per_cell_sample_detected_genes"] = ("Mean single gene count per cell: sample-detected genes", self.mean_counts_per_cell_sample_detected_genes, "Mean of the mean individual gene count per cell with only those genes detected in the sample considered.")
         # Median single gene counts per cell - sample detected genes (i.e. only those genes that were detected in the sample)
-        self.metrics_dict["Cell metrics"]["median_counts_per_cell_sample_detected_genes"] = ("Median single gene count per cell: sample-detected genes", median_counts_per_cell_sample_detected_genes, "Median of the median individual gene count per cell with only those genes detected in the sample considered.")
+        self.metrics_dict["Cell metrics"]["median_counts_per_cell_sample_detected_genes"] = ("Median single gene count per cell: sample-detected genes", self.median_counts_per_cell_sample_detected_genes, "Median of the median individual gene count per cell with only those genes detected in the sample considered.")
 
         # Mean single gene count per cell -  cell detected genes (i.e. only those genes that were detected in the given cell)
-        self.metrics_dict["Cell metrics"]["mean_counts_per_cell_cell_detected_genes"] = ("Mean single gene count per cell: cell-detected genes", mean_counts_per_cell_cell_detected_genes, "Mean of the mean individual gene count per cell with only those genes detected in each cell considered.")
+        self.metrics_dict["Cell metrics"]["mean_counts_per_cell_cell_detected_genes"] = ("Mean single gene count per cell: cell-detected genes", self.mean_counts_per_cell_cell_detected_genes, "Mean of the mean individual gene count per cell with only those genes detected in each cell considered.")
         # Median single gene count per cell -  cell detected genes (i.e. only those genes that were detected in the given cell)
-        self.metrics_dict["Cell metrics"]["median_counts_per_cell_cell_detected_genes"] = ("Median single gene count per cell: cell-detected genes", median_counts_per_cell_cell_detected_genes, "Median of the median individual gene count per cell with only those genes detected in each cell considered.")
+        self.metrics_dict["Cell metrics"]["median_counts_per_cell_cell_detected_genes"] = ("Median single gene count per cell: cell-detected genes", self.median_counts_per_cell_cell_detected_genes, "Median of the median individual gene count per cell with only those genes detected in each cell considered.")
         
         # Mean genes detected per cell
-        self.metrics_dict["Cell metrics"]["mean_genes_detected_per_cell"] = ("Mean genes detected per cell", mean_genes_detected_per_cell, "Mean number of genes detected for each cell (including nuclear and mitochondrial genes).")
+        self.metrics_dict["Cell metrics"]["mean_genes_detected_per_cell"] = ("Mean genes detected per cell", self.mean_genes_detected_per_cell, "Mean number of genes detected for each cell (including nuclear and mitochondrial genes).")
         # Median genes detected per cell
-        self.metrics_dict["Cell metrics"]["median_genes_detected_per_cell"] = ("Median genes detected per cell", median_genes_detected_per_cell, "Median number of genes detected for the cells (including nuclear and mitochondrial genes).")
+        self.metrics_dict["Cell metrics"]["median_genes_detected_per_cell"] = ("Median genes detected per cell", self.median_genes_detected_per_cell, "Median number of genes detected for the cells (including nuclear and mitochondrial genes).")
 
         # Mean nuclear genes detected per cell
-        self.metrics_dict["Cell metrics"]["mean_nuclear_genes_detected_per_cell"] = ("Mean nuclear (non-mitochondrial) genes detected per cell", mean_nuclear_genes_detected_per_cell, "Mean number of nuclear genes detected for each cell.")
+        self.metrics_dict["Cell metrics"]["mean_nuclear_genes_detected_per_cell"] = ("Mean nuclear (non-mitochondrial) genes detected per cell", self.mean_nuclear_genes_detected_per_cell, "Mean number of nuclear genes detected for each cell.")
         # Median nuclear genes detected per cell
-        self.metrics_dict["Cell metrics"]["median_nuclear_genes_detected_per_cell"] = ("Median nuclear (non-mitochondrial) genes detected per cell", median_nuclear_genes_detected_per_cell, "Median number of nuclear genes detected for each cell.")
+        self.metrics_dict["Cell metrics"]["median_nuclear_genes_detected_per_cell"] = ("Median nuclear (non-mitochondrial) genes detected per cell", self.median_nuclear_genes_detected_per_cell, "Median number of nuclear genes detected for each cell.")
 
         # Mean mitochondrial genes detected per cell
-        self.metrics_dict["Cell metrics"]["mean_mito_genes_detected_per_cell"] = ("Mean mitochondrial genes detected per cell", mean_mito_genes_detected_per_cell, "Mean number of mitochondrial genes detected for each cell.")
+        self.metrics_dict["Cell metrics"]["mean_mito_genes_detected_per_cell"] = ("Mean mitochondrial genes detected per cell", self.mean_mito_genes_detected_per_cell, "Mean number of mitochondrial genes detected for each cell.")
         # Median mitochondrial genes detected per cell
-        self.metrics_dict["Cell metrics"]["median_mito_genes_detected_per_cell"] = ("Median mitochondrial genes detected per cell", median_mito_genes_detected_per_cell, "Median number of mitochondrial genes detected for each cell.")
+        self.metrics_dict["Cell metrics"]["median_mito_genes_detected_per_cell"] = ("Median mitochondrial genes detected per cell", self.median_mito_genes_detected_per_cell, "Median number of mitochondrial genes detected for each cell.")
 
         # Unique genes detected across samples (i.e. a gene can only be detected once per sample)
-        self.metrics_dict["Cell metrics"]["num_unique_genes_detected_across_sample"] = ("Unique genes detected across sample", num_unique_genes_detected_across_sample, "Number of unique genes detected across the sample (each gene can be counted only once even if found in multiple cells).")
+        self.metrics_dict["Cell metrics"]["num_unique_genes_detected_across_sample"] = ("Unique genes detected across sample", self.num_unique_genes_detected_across_sample, "Number of unique genes detected across the sample (each gene can be counted only once even if found in multiple cells).")
 
         # Total genes detected across samples (i.e. genes detected per cell summed)
-        self.metrics_dict["Cell metrics"]["total_genes_detected_across_samples"] = ("Total genes detected across sample", total_genes_detected_across_samples, "Total number of genes detected across the sample (each gene can be counted more than once if detected in more than one cell).")
-    
+        self.metrics_dict["Cell metrics"]["total_genes_detected_across_samples"] = ("Total genes detected across sample", self.total_genes_detected_across_samples, "Total number of genes detected across the sample (each gene can be counted more than once if detected in more than one cell).")
+
+    def get_cell_stats(self):
+        try:
+            self.anndata = anndata.read_h5ad(sys.argv[2])
+        except OSError: # If the h5ad is an empty file, output empty metrics
+            # Populate with 0s
+            self.set_cell_stats_to_zero()
+        else:
+            if self.anndata.shape[0] == 0:
+                # There are no cells and we should set the cell_stats to 0
+                self.set_cell_stats_to_zero()
+            else:
+                # There are cells and we should calculate the cell stats
+                self.calculate_cell_stats()
+        self.populate_cell_stats_in_metrics_dict()
+
     def get_sequencing_stats(self):
         """
         Populate the self.metrics_dict with the stats
@@ -187,7 +196,6 @@ class SummaryStatistics:
         self.get_trimming_qc_stats()
         self.get_mapping_stats()
         self.get_duplication_stats()
-
 
     def get_antisense(self):
         """
