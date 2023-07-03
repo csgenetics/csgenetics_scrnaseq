@@ -44,6 +44,9 @@ workflow {
     features_file(gtf)
     feature_file_out = features_file.out.modified_gtf
 
+    // Create empty qualimap output template path object
+    empty_qualimap_template = file("templates/empty_qualmap.txt")
+
     // This process will merge fastqs split over multiple lanes 
     // and count the number of reads in the merged fastq
     merge_lanes(ch_input)
@@ -91,8 +94,11 @@ workflow {
     // and dedup (i.e. skip )
     create_valid_empty_bam_star(polyA_out_ch.empt_fastq.map({[it[0], it[1], "_Aligned.sortedByCoord.out"]}))
 
-    // // Qualimap on STAR output
-    // raw_qualimap(star.out.out_bam.mix(create_valid_empty_bam_star.out.out_bam), gtf)
+    // Qualimap on STAR output
+    // Annotate the channel objects with dummy counts of either 1 or 0
+    // depending on whether the bams are empty are not to either run
+    // qualimap or populate an empty qualimap template
+    raw_qualimap(star.out.out_bam.map({[it[0], it[1], 1]}).mix(create_valid_empty_bam_star.out.out_bam.map({[it[0], it[1], 0]})), gtf, empty_qualimap_template)
 
     // Filter the mapped reads for reads with 1 alignment and max 3 mismatch
     filter_umr_mismatch(star.out.out_bam.mix(create_valid_empty_bam_star.out.out_bam))

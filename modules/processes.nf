@@ -276,16 +276,25 @@ process raw_qualimap {
   publishDir "${params.outdir}/qualimap", mode: 'copy'
 
   input:
-  tuple val (sample_id), path(bam)
+  tuple val (sample_id), path(bam), val(count)
   path(gtf)
+  path(empty_qualimap_template)
 
   output:
   tuple val (sample_id), path("${sample_id}.raw_qualimap.txt"), emit: qualimap_txt
 
   shell:
   '''
-  qualimap rnaseq -outdir !{sample_id}_raw_qualimap -a proportional -bam !{bam} -p strand-specific-forward -gtf !{gtf} --java-mem-size=16G 
-  mv !{sample_id}_raw_qualimap/rnaseq_qc_results.txt !{sample_id}.raw_qualimap.txt
+  if [[ !{count} > 0 ]]
+    then
+      qualimap rnaseq -outdir !{sample_id}_raw_qualimap -a proportional -bam !{bam} -p strand-specific-forward -gtf !{gtf} --java-mem-size=16G 
+      mv !{sample_id}_raw_qualimap/rnaseq_qc_results.txt !{sample_id}.raw_qualimap.txt
+    else
+      BAMNAME=!{bam}
+      GTFNAME=!{gtf}
+      export BAMNAME GTFNAME
+      cat !{empty_qualimap_template} | envsubst > !{sample_id}.raw_qualimap.txt
+  fi
   '''
 }
 
