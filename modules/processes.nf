@@ -218,27 +218,52 @@ process star {
   publishDir "${params.outdir}/STAR", mode: 'copy'
 
   input:
-  tuple val (sample_id), path(f)
+  tuple val(sample_id), path(r1)
   path(index)
 
   output:
-  tuple val(sample_id), path("${sample_id}_Aligned.sortedByCoord.out.bam"), emit: star_out_bams
+  tuple val(sample_id), path("${sample_id}_Aligned.sortedByCoord.out.bam"), emit: out_bam
 
-  shell:
-  '''
-  # alignment filtering step to be performed by samtools
-
-  STAR --runThreadN 8 \
-    --genomeDir !{index} \
-    --readFilesIn !{f} \
-    --outFileNamePrefix !{sample_id}_ \
-    --outReadsUnmapped Fastx \
-    --outSAMtype BAM SortedByCoordinate \
-    --readFilesCommand zcat \
-    --outSAMattributes Standard
-  '''
+  script:
+  """
+      STAR --runThreadN 8 \
+        --genomeDir ${index} \
+        --readFilesIn ${r1} \
+        --outFileNamePrefix ${sample_id}_ \
+        --outReadsUnmapped Fastx \
+        --outSAMtype BAM SortedByCoordinate \
+        --readFilesCommand zcat \
+        --outSAMattributes Standard;
+  """
 
 }
+
+/*
+* Create an empty bam file that has a single line header
+* so that the downstream samtools filtering doesn't break.
+* Otherwise STAR and featureCount produce an empty bam that is an empty file
+* that breaks samtools view: [main_samview] fail to read the header from "247intergenic_Aligned.sortedByCoord.out.bam".
+*/
+process create_valid_empty_bam{
+  tag "$sample_id"
+
+  label 'c1m1'
+
+  publishDir "${params.outdir}/STAR", mode: 'copy'
+
+  input:
+  tuple val(sample_id), path(r1), val(prefix)
+
+  output:
+  tuple val(sample_id), path("${sample_id}${prefix}.bam"), emit: out_bam
+
+  script:
+  """
+  echo "@HD	VN:1.4	SO:coordinate" | samtools view -h -b > ${sample_id}${prefix}.bam
+  """
+
+}
+
 
 /*
 * Run Qualimap, generates a report, also useful for getting related mapping composition statistics
@@ -276,11 +301,12 @@ input:
 tuple val(sample_id), path(star_out_bam)
 
 output:
-tuple val(sample_id), path("${sample_id}.mapped.sorted.filtered.bam"), emit: filtered_bam
+tuple val(sample_id), path("${sample_id}.mapped.sorted.filtered.bam"), env(alignment_count), emit: filtered_bam
 
 script:
 """
-samtools view -h -e '[NH]==1 && ([nM]==0 || [nM]==1 || [nM]==2 || [nM]==3)' -b $star_out_bam > ${sample_id}.mapped.sorted.filtered.bam 
+samtools view -h -b -e '[NH]==1 && ([nM]==0 || [nM]==1 || [nM]==2 || [nM]==3)' -b $star_out_bam > ${sample_id}.mapped.sorted.filtered.bam
+alignment_count=\$(samtools view -c ${sample_id}.mapped.sorted.filtered.bam)
 """
 }
 
@@ -295,7 +321,7 @@ process filtered_qualimap {
   publishDir "${params.outdir}/qualimap", mode: 'copy'
 
   input:
-  tuple val(sample_id), path(bam)
+  tuple val(sample_id), path(bam), val(count)
   path(gtf)
 
   output:
@@ -322,7 +348,7 @@ process feature_counts {
   path(gtf)
 
   output:
-  tuple val(sample_id), path('*.bam'), emit: feature_counts_out_bam
+  tuple val(sample_id), path('*.bam'), emit: out_bam
 
   shell:
   """
@@ -343,7 +369,7 @@ process filter_for_annotated {
 
   script:
   """
-  samtools view -h -e '[XN]==1 && [XT] && [XS]=="Assigned"' -b $feature_counts_out_bam > ${sample_id}.mapped.sorted.filtered.annotated.bam 
+  samtools view -h -b -e '[XN]==1 && [XT] && [XS]=="Assigned"' -b $feature_counts_out_bam > ${sample_id}.mapped.sorted.filtered.annotated.bam 
   """
 }
 
@@ -409,14 +435,15 @@ process sort_index_bam {
 
   output:
   tuple val(sample_id), path("${sample_id}.antisense.txt"), emit: antisense_out
-  tuple val (sample_id), path('*.{bam,bai}'), emit: sort_index_bam_out
+  tuple val (sample_id), path("${sample_id}_sorted.bam"), path("${sample_id}_sorted.bam.bai"), env(alignment_count), emit: sort_index_bam_out
 
-  shell:
-  '''
-  samtools view -c -f 16 !{bam} > !{sample_id}.antisense.txt
-  samtools sort !{bam} -o !{sample_id}_sorted.bam
-  samtools index !{sample_id}_sorted.bam
-  '''
+  script:
+  """
+  samtools view -c -f 16 ${bam} > ${sample_id}.antisense.txt
+  samtools sort ${bam} -O BAM -o ${sample_id}_sorted.bam
+  samtools index ${sample_id}_sorted.bam
+  alignment_count=\$(samtools view -c ${sample_id}_sorted.bam)
+  """
 }
 
 /*
@@ -429,23 +456,30 @@ process dedup{
   publishDir "${params.outdir}/io_count", mode: 'copy'
 
   input:
-  tuple val (sample_id), path(f)
+  tuple val (sample_id), path(bam), path(bai), val(alignment_count)
 
   output:
   tuple val(sample_id), path("${sample_id}.dedup.log"), emit: io_dedup_log
-  tuple val(sample_id), path("${sample_id}.dedup.sam"), emit: io_dedup_sam
+  tuple val(sample_id), path("${sample_id}.dedup.bam"), emit: io_dedup_sam
   
-  shell:
-  '''
+  script:
+  """
   # The effect of this will be to deduplicate based on the combination of cell
   # barcode and SSS start site.
-
-  umi_tools dedup \
-    --per-cell \
-    --in-sam -I !{f} \
-    --out-sam -S !{sample_id}.dedup.sam \
-    --log=!{sample_id}.dedup.log
-  '''
+  if [[ $alignment_count > 0 ]]
+    then
+      umi_tools dedup \
+        --per-cell \
+        --in-sam -I ${bam} \
+        --log=${sample_id}.dedup.log > ${sample_id}.dedup.bam
+    else
+    
+    # Then there were no alignments and we should output a dummy .dedup.log
+    # and the original bam renamed
+      echo "INFO Reads: Input Reads: 0\nINFO Number of reads out: 0\n" > ${sample_id}.dedup.log
+      cp $bam ${sample_id}.dedup.bam
+  fi
+  """
 }
 
 /*
@@ -473,7 +507,7 @@ process io_count {
   # use sed to replace the first '_' in each line, and any 'XT:Z:' strings with empty string with sed
 
   # output has 2 columns: io_sequence and gene_name for every deduplicated alignments with gene assignment
-  samtools view !{f} | grep 'XT:' | sed 's/mm10___/mm10_/g' |cut -f 1,18 | cut -f 2,3,4 -d '_' | sed 's/_//' | sed 's/XT:Z://g'> !{sample_id}_bcGeneSummary.txt
+  samtools view !{f} | awk '/XT:/ {match($0, /_[A-Z]+_/); printf substr($0,RSTART+1,RLENGTH-2); match($0, /XT:Z:[A-Za-z0-9_]+/); print "\t" substr($0,RSTART+5,RLENGTH-5)}' > !{sample_id}_bcGeneSummary.txt
   '''
 
 }
