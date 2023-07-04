@@ -1,8 +1,8 @@
 #!/usr/bin/env nextflow
 
 /*
-* This script contains the workflow for the daily R&D pipeline.
-* The processes used in this workflow live in modules/processes.nf
+* A Nextflow pipeline for processing scRNA-Seq data generated using CS Genetics'
+* single-cell kit to produce a genes by barcode count table.
 */
 
 nextflow.enable.dsl=2
