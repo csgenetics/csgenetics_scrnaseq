@@ -344,6 +344,7 @@ process feature_counts {
     else
       # Simply rename the input bam so that it can be collected
       cp $bam ${sample_id}.mapped.sorted.filtered.bam.featureCounts.bam
+  fi
   """
 }
 
