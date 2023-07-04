@@ -1,0 +1,82 @@
+# Use the latest 2.1 version of CircleCI pipeline process engine.
+# See: https://circleci.com/docs/2.0/configuration-reference
+version: 2.1
+
+# Define a job to be invoked later in a workflow.
+# See: https://circleci.com/docs/2.0/configuration-reference/#jobs
+jobs:
+  run-current-branch:
+    # Specify the execution environment. You can specify an image from Dockerhub or use one of our Convenience Images from CircleCI's Developer Hub.
+    # See: https://circleci.com/docs/2.0/configuration-reference/#docker-machine-macos-windows-executor
+    docker:
+      - image: cimg/base:stable
+    # Add steps to the job
+    # See: https://circleci.com/docs/2.0/configuration-reference/#steps
+    steps:
+      - checkout
+      - run:
+          name: Create a new endpoint for the current branch
+          command: |
+            myvar=`curl -X POST "https://api.tower.nf/actions?workspaceId=$TOWER_WORKSPACE_ID" \
+            -H "Accept: application/json" \
+            -H "Authorization: Bearer $TOWER_AUTH_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"name":"'"$(echo $CIRCLE_SHA1 | cut -c -7)"'","source":"tower","launch":{"configProfiles":["test"], "computeEnvId":"'"$TOWER_COMPUTE_ENV_ID"'","pipeline":"https://github.com/csgenetics/private_csgenetics_scrnaseq","workDir":"s3://csg-tower-bucket","revision":"'"$(echo $CIRCLE_BRANCH)"'","pullLatest":true}}'`
+            id=`echo $myvar | awk -F: {'print $2'} | sed 's/}//g'`
+            echo "export ACTION_ID=$id" >> $BASH_ENV
+            echo $id
+      - run:
+          name: Start the pipeline using the newly created endpoint
+          command: |
+            SHA=$(echo $CIRCLE_SHA1 | cut -c -7)
+            echo $SHA
+            outdir="s3://csg-nextflow/circleci/"$SHA
+            echo $outdir
+            myvar=`curl -X POST "https://api.tower.nf/actions/$ACTION_ID/launch?workspaceId=$TOWER_WORKSPACE_ID" \
+            -H "Authorization: Bearer $TOWER_AUTH_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"params":{"outdir":"'"$outdir"'"}}'`
+            WORKFLOW_ID=`echo $myvar | awk -F: '{print $2}' | sed 's/}//g' | sed 's/"//g'`
+            echo $WORKFLOW_ID
+            echo "export WORKFLOW_ID=$WORKFLOW_ID" >> $BASH_ENV
+      - run:
+          name: Monitor pipeline execution
+          command: |
+            status=`curl -X GET "https://api.tower.nf/workflow/$WORKFLOW_ID?workspaceId=$TOWER_WORKSPACE_ID" \
+            -H "Authorization: Bearer $TOWER_AUTH_TOKEN" \
+            -H "Content-Type: application/json" | jq '.workflow.status' | sed 's/"//g'`
+            echo $status
+            while [[ "$status" != "SUCCEEDED" ]]; do
+              if [ "$status" = "CANCELLED" ]; then
+                echo "run was cancelled, deleting endpoint"
+                curl -X DELETE "https://api.tower.nf/actions/$ACTION_ID?workspaceId=$TOWER_WORKSPACE_ID" \
+                -H "Authorization: Bearer $TOWER_AUTH_TOKEN" \
+                -H "Accept: application/json"
+                exit 1
+              fi
+              if [ "$status" = "FAILED" ]; then
+                echo "run failed"
+                curl -X DELETE "https://api.tower.nf/actions/$ACTION_ID?workspaceId=$TOWER_WORKSPACE_ID" \
+                -H "Authorization: Bearer $TOWER_AUTH_TOKEN" \
+                -H "Accept: application/json"
+                exit 1
+              fi
+              sleep 60
+              status=`curl -X GET "https://api.tower.nf/workflow/$WORKFLOW_ID?workspaceId=$TOWER_WORKSPACE_ID" \
+              -H "Authorization: Bearer $TOWER_AUTH_TOKEN" \
+              -H "Content-Type: application/json" | jq '.workflow.status' | sed 's/"//g'`
+            done
+      - run:
+          name: Delete the newly created endpoint
+          command: |
+            curl -X DELETE "https://api.tower.nf/actions/$ACTION_ID?workspaceId=$TOWER_WORKSPACE_ID" \
+            -H "Authorization: Bearer $TOWER_AUTH_TOKEN" \
+            -H "Accept: application/json"
+
+
+# Invoke jobs via workflows
+# See: https://circleci.com/docs/2.0/configuration-reference/#workflows
+workflows:
+  nextflow-tower:
+    jobs:
+      - run-current-branch

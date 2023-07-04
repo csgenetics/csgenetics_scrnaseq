@@ -600,7 +600,6 @@ process single_summary_report {
   input:
   tuple val(sample_id), path(metrics_csv), path(plot_png)
   path(html_template)
-  path(cs_logo)
 
   output:
   tuple val(sample_id), path("${sample_id}_report.html")

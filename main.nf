@@ -17,6 +17,17 @@ include {
   multi_sample_report
   } from './modules/processes.nf'
 
+def order_integer_first(it){
+  try{
+        // Will raise exception if not int
+        it.isInteger()
+        0
+      } catch(MissingMethodException e1){
+        // path will end here and therefore return 1
+        1
+      }
+}
+
 workflow {
   // Create channels from rows in CSV file
   // tuples are grouped by sample_id so FQs from different lanes may be merged
@@ -32,22 +43,21 @@ workflow {
     gtf = file("${params.gtf_path}")
 
     // Create path objects to HTML report templates
-    single_sample_report_template = file("templates/single_sample_report_template.html.jinja2")
-    multi_sample_report_template = file("templates/multi_sample_report_template.html.jinja2")
-    cs_logo = file("templates/csgenetics_logo.png")
+    single_sample_report_template = file(params.single_sample_report_template)
+    multi_sample_report_template = file(params.multi_sample_report_template)
 
     // Create the whitelist object
-    whitelist = file("${params.whitelist_path}")
+    whitelist = file(params.whitelist_path)
 
     // Make a file object of the STAR dir
-    star_index = file("${params.star_index_dir}")
+    star_index = file(params.star_index_dir)
 
     // Create feature file for count_matrix from GTF
     features_file(gtf)
     feature_file_out = features_file.out.modified_gtf
 
     // Create empty qualimap output template path object
-    empty_qualimap_template = file("templates/empty_qualmap.txt")
+    empty_qualimap_template = file(params.empty_qualimap_template)
 
     // This process will merge fastqs split over multiple lanes 
     // and count the number of reads in the merged fastq
@@ -81,10 +91,12 @@ workflow {
     ch_post_polyA_fastp_multiqc = post_polyA_fastp.out.fastp_multiqc
 
     // Filter for empty fastq
+    // Pipe good to STAR
+    // Pipe empty to create_valid_empty_bam_star
     trim_extra_polya.out.trim_extra_polya_out
           .branch { 
             good_fastq: it[1].countFastq() > 0
-            empt_fastq: it[1].countFastq() == 0
+            empty_fastq: it[1].countFastq() == 0
             }
           .set{polyA_out_ch}
 
@@ -94,7 +106,7 @@ workflow {
     // Create an empty one-line-header bam for the empty fastq samples
     // and send this into each of the qualimap process
     // and dedup (i.e. skip )
-    create_valid_empty_bam_star(polyA_out_ch.empt_fastq.map({[it[0], it[1], "_Aligned.sortedByCoord.out"]}))
+    create_valid_empty_bam_star(polyA_out_ch.empty_fastq.map({[it[0], it[1], "_Aligned.sortedByCoord.out"]}))
 
     // Qualimap on STAR output
     // Annotate the channel objects with dummy counts of either 1 or 0
@@ -132,18 +144,15 @@ workflow {
 
     // Run multiqc  
     multiqc(ch_multiqc_in)
-    ch_multiqc_json = multiqc.out.multiqc_json    
     
     // Sort and index bam file
     sort_index_bam(filter_for_annotated.out.annotated_bam)
 
     // Perform deduplication
     dedup(sort_index_bam.out.sort_index_bam_out)
-    ch_io_dedup_log = dedup.out.io_dedup_log
-    ch_io_dedup_sam = dedup.out.io_dedup_sam
 
     // Generate file for count matrix
-    io_count(ch_io_dedup_sam)
+    io_count(dedup.out.io_dedup_sam)
     ch_io_count_out = io_count.out.io_count_out
 
     // Generate raw count matrix
@@ -156,27 +165,28 @@ workflow {
 
     // Sort the groupTuple so that the int is always
     // first and then flatten the tuple list to return a 3mer
+    // N.B. We were originally sorting by class (sort:{it.getClass() == sun.nio.fs.UnixPath ? 1 : 0})
+    // But for some reason this only worked locally and not on NextFlow tower
     ch_filter_count_matrix_in = ch_cell_caller_out.mix(ch_h5ad)
-    .groupTuple(by: 0, size:2, sort:{it.getClass() == sun.nio.fs.UnixPath ? 1 : 0})
+    .groupTuple(by: 0, size:2, sort:{order_integer_first(it)})
     .map{[it[0], it[1][0], it[1][1]]}
 
     // Output filtered (cells only) count tables
     filter_count_matrix(ch_filter_count_matrix_in)
-    ch_filtered_count_matrices = filter_count_matrix.out.cell_only_count_matrix
 
     // structure of ch_summary_report_in is
     // [sample_id, min_nuc_gene_cutoff, h5ad, annotated_qualimap,
     // antisense, dedup.log, filtered_qualimap, multiqc_data, raw_qualimap]
-    ch_filtered_count_matrices
-    .mix(ch_multiqc_json)
+    filter_count_matrix.out.cell_only_count_matrix
+    .mix(multiqc.out.multiqc_json)
     .mix(sort_index_bam.out.antisense_out)
     .mix(raw_qualimap.out.qualimap_txt)
     .mix(filtered_qualimap.out.qualimap_txt)
     .mix(annotated_qualimap.out.qualimap_txt)
-    .mix(ch_io_dedup_log)
+    .mix(dedup.out.io_dedup_log)
     .groupTuple(by:0, size: 7, sort:{it.name})
     .mix(ch_cell_caller_out)
-    .groupTuple(by:0, size:2, sort:{sort:{it.getClass() == nextflow.util.ArrayBag ? 1 : 0}})
+    .groupTuple(by:0, size:2, sort:{sort:{order_integer_first(it)}})
     .map({it.flatten()})
     .set({ch_summary_report_in})
     
@@ -186,7 +196,7 @@ workflow {
     ch_summary_metrics_and_plot = summary_statistics.out.metrics_csv.join(cell_caller.out.cell_caller_plot, by:0)
 
     // Generate single sample report
-    single_summary_report(ch_summary_metrics_and_plot, single_sample_report_template, cs_logo)
+    single_summary_report(ch_summary_metrics_and_plot, single_sample_report_template)
 
     // Generate multi sample report
     multi_sample_report(single_summary_report.out.single_sample_metric_out.collect(), multi_sample_report_template)

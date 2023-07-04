@@ -6,7 +6,7 @@ set -e
 # that matches the USER ID of the user launching the container
 # See https://denibertovic.com/posts/handling-permissions-with-docker-volumes/
 # for further details on motives to work with the local user's UID.
-USER_ID=${LOCAL_USER_ID}
+USER_ID=${LOCAL_USER_ID:-9001}
 
 echo "Starting with UID : $USER_ID"
 
