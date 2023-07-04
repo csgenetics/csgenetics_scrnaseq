@@ -40,9 +40,9 @@
     {{ sample_id }}
    </h2>
 
-  <!-- 1st row is row of headline stats: num_cells, mean_total_counts_per_cell, mean_genes_detected_per_cell -->
+  <!-- 1st row is row of headline stats: num_cells, raw_reads_per_cell, median_genes_detected_per_cell -->
   <div class="row">
-    {% for headline_stat in ["num_cells", "mean_total_counts_per_cell", "mean_genes_detected_per_cell"] %}
+    {% for headline_stat in ["num_cells", "raw_reads_per_cell", "median_genes_detected_per_cell"] %}
       <div class="col headline-stat">
         <div class="card border-left-success shadow py-2" style="height:100%">
         <div class="card-body">
@@ -63,7 +63,7 @@
         </div>
       </div>
     {% endfor %}
-
+  </div>
 
   <!-- Second row; contains remainder of the stats distributed in two columns -->
   <div class="row">

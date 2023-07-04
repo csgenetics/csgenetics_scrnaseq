@@ -80,8 +80,9 @@ class SummaryStatistics:
 
     def set_cell_stats_to_zero(self):
         self.num_cells = 0
+        self.raw_reads_per_cell = 0
         self.mean_total_counts_per_cell = 0
-        self.median_total_reads_per_cell = 0
+        self.median_total_counts_per_cell = 0
         self.mean_counts_per_cell_all_genes = 0
         self.median_counts_per_cell_all_genes = 0
         self.mean_counts_per_cell_sample_detected_genes = 0
@@ -94,6 +95,7 @@ class SummaryStatistics:
         self.median_nuclear_genes_detected_per_cell = 0
         self.mean_mito_genes_detected_per_cell = 0
         self.median_mito_genes_detected_per_cell = 0
+        self.percentage_counts_from_mito = 0
         self.num_unique_genes_detected_across_sample = 0
         self.total_genes_detected_across_samples = 0
 
@@ -105,8 +107,9 @@ class SummaryStatistics:
         self.anndata_array_detected_genes = anndata_array[:, ~np.all(anndata_array == 0, axis=0)]
         
         self.num_cells = anndata_array.shape[0]
+        self.raw_reads_per_cell = self.metrics_dict["Read QC"]["reads_pre_qc"][1] / self.num_cells
         self.mean_total_counts_per_cell = np.mean(anndata_array.sum(axis=1))
-        self.median_total_reads_per_cell = np.median(anndata_array.sum(axis=1))
+        self.median_total_counts_per_cell = np.median(anndata_array.sum(axis=1))
         self.mean_counts_per_cell_all_genes = np.mean(anndata_array.mean(axis=1))
         self.median_counts_per_cell_all_genes = np.median(np.median(anndata_array, axis=1))
         self.mean_counts_per_cell_sample_detected_genes = np.mean(self.anndata_array_detected_genes.mean(axis=1))
@@ -126,6 +129,9 @@ class SummaryStatistics:
         self.mean_mito_genes_detected_per_cell = np.mean(anndata_array_mito.astype(bool).sum(axis=1))
         self.median_mito_genes_detected_per_cell = int(np.median(anndata_array_mito.astype(bool).sum(axis=1)))
 
+        # Calculate percentage of counts or mitochondrial origin
+        self.percentage_counts_from_mito = self.as_perc(anndata_array_mito.sum() / anndata_array.sum())
+
         self.num_unique_genes_detected_across_sample = self.anndata_array_detected_genes.shape[1]
         self.total_genes_detected_across_samples = np.count_nonzero(self.anndata_array_detected_genes)
 
@@ -133,10 +139,13 @@ class SummaryStatistics:
         # Estimated number of cells
         self.metrics_dict["Cell metrics"]["num_cells"] = ("Number of cells", self.num_cells, "Estimated number of cells; Number of barcodes passing the nulcear genes detected threshold.")
 
+        # Raw reads per cell
+        self.metrics_dict["Cell metrics"]["raw_reads_per_cell"] = ("Raw reads per cell", self.raw_reads_per_cell, "Number of reads pre-QC / Number of cells")
+
         # Mean total counts per cell
         self.metrics_dict["Cell metrics"]["mean_total_counts_per_cell"] = ("Mean total counts per cell", self.mean_total_counts_per_cell, "Mean of the sum of counts per cell.")
         # Median total counts per cell
-        self.metrics_dict["Cell metrics"]["median_total_reads_per_cell"] = ("Median total counts per cell", self.median_total_reads_per_cell, "Median of the sum of counts per cell.")
+        self.metrics_dict["Cell metrics"]["median_total_reads_per_cell"] = ("Median total counts per cell", self.median_total_counts_per_cell, "Median of the sum of counts per cell.")
 
         # Mean single gene counts per cell - all genes (i.e. all counts across all genes considered even those genes not detected in the sample)
         self.metrics_dict["Cell metrics"]["mean_counts_per_cell_all_genes"] = ("Mean single gene count per cell: all genes", self.mean_counts_per_cell_all_genes, "Mean of the mean individual gene count per cell with all genes considered (including those genes not detected in the sample).")
@@ -167,6 +176,9 @@ class SummaryStatistics:
         self.metrics_dict["Cell metrics"]["mean_mito_genes_detected_per_cell"] = ("Mean mitochondrial genes detected per cell", self.mean_mito_genes_detected_per_cell, "Mean number of mitochondrial genes detected for each cell.")
         # Median mitochondrial genes detected per cell
         self.metrics_dict["Cell metrics"]["median_mito_genes_detected_per_cell"] = ("Median mitochondrial genes detected per cell", self.median_mito_genes_detected_per_cell, "Median number of mitochondrial genes detected for each cell.")
+
+        # Percentage of counts from mitochondrial origin
+        self.metrics_dict["Cell metrics"]["percentage_counts_from_mito"] = ("Percentage of counts of mitochondrial origin", self.percentage_counts_from_mito, "Mitochonrial counts / all counts * 100")
 
         # Unique genes detected across samples (i.e. a gene can only be detected once per sample)
         self.metrics_dict["Cell metrics"]["num_unique_genes_detected_across_sample"] = ("Unique genes detected across sample", self.num_unique_genes_detected_across_sample, "Number of unique genes detected across the sample (each gene can be counted only once even if found in multiple cells).")
@@ -273,7 +285,7 @@ class SummaryStatistics:
                     for i in range(i+2, i+6):
                         header = re.search("([\w\s\-]*(?=\=))", lines[i]).groups()[0].rstrip().replace(" ", "_")
                         val_absolute = int(re.search("((?<=\s)[\d,]*\s+(?=\())", lines[i]).groups()[0].rstrip().replace(",",""))
-                        val_percent = float(re.search(r"((?<=\()[\d]*\.[\d]+)%(?=\))", lines[i]).groups()[0].rstrip())
+                        val_percent = float(re.search(r"(?<=\()([\d]+\.{0,1}[\d]*)(?=%\))", lines[i]).groups()[0].rstrip())
                         self.metrics_dict[category][f"{header}"] = (header.replace("_", " ").capitalize(), val_absolute, header.replace("_", " ").capitalize())
                         self.metrics_dict[category][f"{header}_perc"] = (header.replace("_", " ").capitalize() + " percentage", val_percent, header.replace("_", " ").capitalize() + " percentage")
 
