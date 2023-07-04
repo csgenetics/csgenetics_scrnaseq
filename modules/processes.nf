@@ -329,7 +329,7 @@ process feature_counts {
   publishDir "${params.outdir}/featureCounts", mode: 'copy'
 
   input:
-  tuple val(sample_id), path(bam)
+  tuple val(sample_id), path(bam), val(aligned_count)
   path(gtf)
 
   output:
@@ -337,7 +337,13 @@ process feature_counts {
 
   shell:
   """
-  featureCounts -a $gtf -o ${sample_id}_gene_assigned.txt -R BAM $bam -T 4 -t exon,intron -g gene_id --fracOverlap 0.5 --extraAttributes gene_name
+  if [[ $aligned_count > 0 ]] # If the bam is not empty
+    then
+      # Run featureCounts as normal
+      featureCounts -a $gtf -o ${sample_id}_gene_assigned.txt -R BAM $bam -T 4 -t exon,intron -g gene_id --fracOverlap 0.5 --extraAttributes gene_name
+    else
+      # Simply rename the input bam so that it can be collected
+      cp $bam ${sample_id}.mapped.sorted.filtered.bam.featureCounts.bam
   """
 }
 

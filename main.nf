@@ -108,22 +108,12 @@ workflow {
     // Qualimap on filtered bam
     filtered_qualimap(filter_umr_mismatch.out.filtered_bam, gtf, empty_qualimap_template, "filtered")
 
-    // Branch on alignment counts
-    // If counts is 0 then skip feature counts
-    // and pass straight into filter_for_annotated
-    filter_umr_mismatch.out.filtered_bam
-          .branch { 
-            good_bam: it[2].toInteger() > 0
-            empty_bam: it[2].toInteger() == 0
-            }
-          .set{filter_umr_mismatch_out_ch}
-
     // Perform featurecount quantification
-    feature_counts(filter_umr_mismatch_out_ch.good_bam.map({[it[0], it[1]]}), gtf)
+    feature_counts(filter_umr_mismatch.out.filtered_bam, gtf)
 
     // Filter the annotated featureCounts bam
     // for only annotated/assigned reads with 1 target
-    filter_for_annotated(feature_counts.out.out_bam.mix(filter_umr_mismatch_out_ch.empty_bam.map({[it[0], it[1]]})))
+    filter_for_annotated(feature_counts.out.out_bam)
 
     // Produce qualimap output of the annotated bam for metrics
     annotated_qualimap(filter_for_annotated.out.annotated_bam, gtf, empty_qualimap_template, "annotated")
