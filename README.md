@@ -395,7 +395,10 @@ withLabel: c2m8 {
 
 Default resource allocations have been made that suit a wide variety of sample types (e.g. number of barcodes, number of reads). However, you may wish to adjust the resources allocated.
 
-To do this, you will need to either change the label of the process, the ```withLabel``` configureation in [base.config](conf/base.config), or provide an additional configuration file that overwrites the [base.config](conf/base.config) configurations using the `-c` flag. See the [Nextflow documantation on configuration](https://www.nextflow.io/docs/latest/config.html) for more details on pipeline configuration. NF-core also provide [useful documentation](https://nf-co.re/docs/usage/configuration#tuning-workflow-resources) on resource allocation through configuration files.
+To do this, you will need to either change the label of the process, the ```withLabel``` configuration in [base.config](conf/base.config), or provide an additional configuration file that overwrites the [base.config](conf/base.config) configurations using the `-c` flag. See the [Nextflow documantation on configuration](https://www.nextflow.io/docs/latest/config.html) for more details on pipeline configuration. NF-core also provide [useful documentation](https://nf-co.re/docs/usage/configuration#tuning-workflow-resources) on resource allocation through configuration files.
+
+In addition the executor scope in nextflow.config should be modified to use appropriate maximum resources.
+(Currently set to use a maximum of 128 CPUs and 220 GB of RAM)
 
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
