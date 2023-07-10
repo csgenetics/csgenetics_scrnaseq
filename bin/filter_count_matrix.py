@@ -56,16 +56,16 @@ class FilterCountMatrix:
             cell_only.matrix.mtx.gz
         """
         # Write filtered AnnData object into matrix file
-        with gzip.open(f'{self.sample_name}.{self.single_cell_nuc_gene_threshold}.cell_only.matrix.mtx.gz', 'w') as mtx_file:
+        with gzip.open('matrix.mtx.gz', 'w') as mtx_file:
             mmwrite(mtx_file, a = self.anndata_obj_filtered.X.T, comment='', field='integer', precision=None, symmetry='general')
 
         # Write barcode table
-        self.anndata_obj_filtered.obs.index.to_frame().to_csv(f'{self.sample_name}.{self.single_cell_nuc_gene_threshold}.cell_only.barcodes.tsv.gz', sep='\t', compression={'method': 'gzip', 'compresslevel': 1, 'mtime': 1}, header=None, index=False)
+        self.anndata_obj_filtered.obs.index.to_frame().to_csv('barcodes.tsv.gz', sep='\t', compression={'method': 'gzip', 'compresslevel': 1, 'mtime': 1}, header=None, index=False)
 
         # Write features table
         ft_table = self.anndata_obj_filtered.var.loc[:, ['ensID', 'geneSym']]
         ft_table['feature_type'] = 'Gene Expression'
-        ft_table.to_csv(f'{self.sample_name}.{self.single_cell_nuc_gene_threshold}.cell_only.features.tsv.gz', sep="\t", compression={'method': 'gzip', 'compresslevel': 1, 'mtime': 1}, header=None, index=False)
+        ft_table.to_csv('features.tsv.gz', sep="\t", compression={'method': 'gzip', 'compresslevel': 1, 'mtime': 1}, header=None, index=False)
 
 if __name__ == "__main__":
     FilterCountMatrix()
