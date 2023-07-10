@@ -79,13 +79,13 @@ def make_count_matrix(args):
     adata.write(f"{args.sample}.count_matrix.h5ad")
 
     # Write sparse matrix format
-    mtx_file = gzip.open(f'{args.sample}.matrix.mtx.gz', 'w')
+    mtx_file = gzip.open('matrix.mtx.gz', 'w')
     mmwrite(mtx_file, a = sparse_matrix.T, comment='', field='integer', precision=None, symmetry='general')
     # Write feature table
     ft_names['feature_type'] = 'Gene Expression'
-    ft_names.to_csv(f'{args.sample}.features.tsv.gz', sep="\t",compression={'method': 'gzip', 'compresslevel': 1, 'mtime': 1},header=None, index=False)
+    ft_names.to_csv('features.tsv.gz', sep="\t",compression={'method': 'gzip', 'compresslevel': 1, 'mtime': 1},header=None, index=False)
     # Write barcode table
-    adata.obs.index.to_frame().to_csv(f'{args.sample}.barcodes.tsv.gz',sep='\t',compression={'method': 'gzip', 'compresslevel': 1, 'mtime': 1},header=None, index=False)
+    adata.obs.index.to_frame().to_csv('barcodes.tsv.gz',sep='\t',compression={'method': 'gzip', 'compresslevel': 1, 'mtime': 1},header=None, index=False)
 
 
 if __name__ == "__main__":

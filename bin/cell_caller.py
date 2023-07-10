@@ -29,7 +29,7 @@ def parse_arguments():
 def getlog10NucGenes(sample, args):
    '''function to read in sample and get relevant values into adata.obs'''
    # Read in the counts matrix
-   # If the file is empty, output the min_nucGene and an empty .png and .pdf file
+   # If the file is empty, output the min_nucGene and an empty .png file
    try:
       adata = sc.read_h5ad(args.count_matrix)
    except OSError:
@@ -88,15 +88,15 @@ def cell_caller(args):
    min_nucGene = float(args.min_nucGene)
    log10_Nuc_genes = getlog10NucGenes(sample, args)
    if len(set(log10_Nuc_genes)) == 1:
-      cutoff = 2
+      open(f"{args.sample}_pdf_with_cutoff.png", "w").close()
+      print(int(args.min_nucGene), end="")
+      sys.exit(0)
    else:
       pdf_df = get_prob_dens_data(log10_Nuc_genes)
       cutoff = get_cutoff(pdf_df, min_nucGene)   
       make_pd_plots(pdf_df, min_nucGene, cutoff, sample)
    # because cutoff is on a log10 scale, I transform back by 10^ (** in the script) to the value, and round to the nearest integer
    print(round(10 ** cutoff), end="")
-
-   # instead of return, write to txt file and don't forget tests
 
 if __name__ == "__main__":
    args = parse_arguments()
