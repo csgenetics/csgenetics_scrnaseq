@@ -501,7 +501,7 @@ process count_matrix {
   tag "$sample_id"
   label 'c4m4'
 
-  publishDir "${params.outdir}/count_matrix/raw_count_matrix/${sample_id}", mode: 'copy', pattern: "*.{count_matrix.h5ad,.matrix.mtx.gz,.barcodes.tsv.gz,.features.tsv.gz}"
+  publishDir "${params.outdir}/count_matrix/raw_count_matrix/${sample_id}", mode: 'copy', pattern: "*.{count_matrix.h5ad,matrix.mtx.gz,barcodes.tsv.gz,features.tsv.gz}"
   
   input:
   tuple val(sample_id), path(input_file)
@@ -554,7 +554,7 @@ process filter_count_matrix{
   tag "$sample_id"
   label 'c2m2'
 
-  publishDir "${params.outdir}/count_matrix/cell_only_count_matrix/${sample_id}/", mode: 'copy', pattern: "*.cell_only.{count_matrix.h5ad,.matrix.mtx.gz,.barcodes.tsv.gz,.features.tsv.gz}"
+  publishDir "${params.outdir}/count_matrix/cell_only_count_matrix/${sample_id}/", mode: 'copy', pattern: "*.cell_only.{count_matrix.h5ad,matrix.mtx.gz,barcodes.tsv.gz,features.tsv.gz}"
 
   input:
   tuple val(sample_id), val(nuc_gene_threshold), path(h5ad_raw_count_matrix)
