@@ -103,19 +103,28 @@ workflow {
     // Align the good fastqs with STAR
     star(polyA_out_ch.good_fastq, star_index)
 
-    // Create an empty one-line-header bam for the empty fastq samples
-    // and send this into each of the qualimap process
-    // and dedup (i.e. skip )
-    create_valid_empty_bam_star(polyA_out_ch.empty_fastq.map({[it[0], it[1], "_Aligned.sortedByCoord.out"]}))
+    // Filter star outputs by unique alignment counts
+    // If 0 unique alignments need to pass bam into
+    // create_valid_empty_bam_star
+    star.out.out_bam
+          .branch { 
+            good_bam: it[2].toInteger() > 0
+            bad_bam: it[2].toInteger() == 0
+            }
+          .set{star_out_ch}
+
+    // Create an empty one-line-header bam that can be read
+    // by samtools.
+    create_valid_empty_bam_star(polyA_out_ch.empty_fastq.map({[it[0], "_Aligned.sortedByCoord.out"]}).mix(star_out_ch.bad_bam.map({[it[0], "_Aligned.sortedByCoord.out"]})))
 
     // Qualimap on STAR output
     // Annotate the channel objects with dummy counts of either 1 or 0
     // depending on whether the bams are empty are not to either run
     // qualimap or populate an empty qualimap template
-    raw_qualimap(star.out.out_bam.map({[it[0], it[1], 1]}).mix(create_valid_empty_bam_star.out.out_bam.map({[it[0], it[1], 0]})), gtf, empty_qualimap_template, "raw")
+    raw_qualimap(star_out_ch.good_bam.map({[it[0], it[1], 1]}).mix(create_valid_empty_bam_star.out.out_bam.map({[it[0], it[1], 0]})), gtf, empty_qualimap_template, "raw")
 
     // Filter the mapped reads for reads with 1 alignment and max 3 mismatch
-    filter_umr_mismatch(star.out.out_bam.mix(create_valid_empty_bam_star.out.out_bam))
+    filter_umr_mismatch(star_out_ch.good_bam.map({[it[0], it[1]]}).mix(create_valid_empty_bam_star.out.out_bam))
 
     // Qualimap on filtered bam
     filtered_qualimap(filter_umr_mismatch.out.filtered_bam, gtf, empty_qualimap_template, "filtered")

@@ -222,7 +222,7 @@ process star {
   path(index)
 
   output:
-  tuple val(sample_id), path("${sample_id}_Aligned.sortedByCoord.out.bam"), emit: out_bam
+  tuple val(sample_id), path("${sample_id}_Aligned.sortedByCoord.out.bam"), env(uniquely_mapped_reads), emit: out_bam
 
   script:
   """
@@ -234,6 +234,10 @@ process star {
         --outSAMtype BAM SortedByCoordinate \
         --readFilesCommand zcat \
         --outSAMattributes Standard;
+      
+      # Get number of uniquely aligned reads
+      uniquely_mapped_reads=\$(grep "Uniquely mapped reads number" ${sample_id}_Log.final.out | cut -d "|" -f 2 | xargs)
+
   """
 
 }
@@ -252,7 +256,7 @@ process create_valid_empty_bam{
   publishDir "${params.outdir}/STAR", mode: 'copy'
 
   input:
-  tuple val(sample_id), path(r1), val(prefix)
+  tuple val(sample_id), val(prefix)
 
   output:
   tuple val(sample_id), path("${sample_id}${prefix}.bam"), emit: out_bam
