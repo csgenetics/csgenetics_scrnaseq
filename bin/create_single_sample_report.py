@@ -54,6 +54,8 @@ class SingleSampleHTMLReport:
                                             # This dict is required to supply the tooltips, the accordion header ID and the collapse ID for each of the categories of alignment statistics
                                             # The keys match the alignment categories of the metrics dict, and the values (tuples) give the tooltips and IDs.
                                             # We rely on the order of the dictionary to populate the accordions in the output html.
+                                            # NOTE the alignment section has temporarily been disabled by removing the corresponding html.
+                                            # I have left the code in place so that it can be reestablished.
                                             alignment_cat_dict = {
                                                 "Post read QC alignment": ("Mapping of the post QC reads i.e. after trimming (polyX end and internal polyA) and barcode verification.", "qc_accord_header", "qc_collapse"),
                                                 "High confidence read alignment": ("Reads with a single alignment and a maximum of 3 bp mismatch.", "hc_accord_header", "hc_collapse"),

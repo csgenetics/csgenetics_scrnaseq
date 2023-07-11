@@ -84,28 +84,6 @@
           {% endfor %}
         {% endfor %}
 
-        <!-- Write out a subheader and the stats for each of the 3 alignment categories -->
-        <!-- Different structure to above as there is no icon associated with each metric -->
-        <!-- but rather an icon and toold tip is associated to each of the alignment subcategories -->
-        {% for classification, tooltip in alignment_tooltip_dict.items() %}
-          <!-- metric subheader -->
-          <tr>
-            <th scope="rowgroup">
-            <h4>{{ classification }} <i class="bi-info-circle" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="{{ tooltip }}"></i></h4>
-            </th>
-          </tr>
-          {% for metric, metric_val_list in metrics_dict[classification].items() %}
-            <!-- stats for sub category -->
-            <tr>
-              <th scope="row">
-              {{ metric[1] }}
-              </th>
-              {% for metric_val in metric_val_list %}
-                <td>{{ metric_val }}</td>
-              {% endfor %}
-            </tr>
-          {% endfor %}
-        {% endfor %}
       </tbody>
     </table>
   </div>

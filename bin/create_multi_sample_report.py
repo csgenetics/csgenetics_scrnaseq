@@ -45,6 +45,9 @@ class MultipleSampleHTMLReport:
         # We pass the alignmnet_tooltip_dict so that we can provide the tooltips
         # for each of the alignment subcategories rather than for each
         # individual alignment metric.
+        # NOTE the alignment card has temporarily been disabled by removing the
+        # associated html. I am leaving the associated code in place so that it
+        # can be reinstated.
         final_report = self.template.render(
             sample_name_list=self.sample_name_list, metrics_dict=self.metrics_dict,
             alignment_tooltip_dict = {

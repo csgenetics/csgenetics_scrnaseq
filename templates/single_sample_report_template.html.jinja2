@@ -137,48 +137,6 @@
         </div>
       </div>
 
-      <!-- Alignment stats -->
-      <div class="card border-left-success shadow py-2">
-        <div class="card-body">
-          <h2 class="text-xs font-weight-bold me-5 ms-3" style="font-size: 21px; line-height: 1.5">
-            Alignment stats
-          </h2>
-          <div class="accordion accordion-flush" id="alignmentCollapse">
-            <!-- Creates an accordion item for each of the 3 alignment stat categories -->
-            <!-- Post read QC, High confidence, Annotated -->
-            {% for alignment_category, toolTip_headerID_collapseID in alignment_cat_dict.items() %}
-              <div class="accordion-item">
-                <h2 class="accordion-header" id="{{ toolTip_headerID_collapseID[1] }}">
-                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#{{ toolTip_headerID_collapseID[2] }}" aria-expanded="false" aria-controls="{{ toolTip_headerID_collapseID[2] }}">
-                    {{ alignment_category }} <i class="bi-info-circle ms-1" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="{{ toolTip_headerID_collapseID[0] }}">
-                        </i>
-                  </button>
-                </h2>
-                <div id="{{ toolTip_headerID_collapseID[2] }}" class="accordion-collapse collapse" aria-labelledby="{{ toolTip_headerID_collapseID[1] }}" data-bs-parent="#alignmentCollapse">
-                  <div class="accordion-body">
-                    <table class="table" style="font-size:13px; color:grey">
-                      <tbody>
-                        {% for metric, metric_tup in metrics_dict[alignment_category].items() %}
-                          <tr>
-                            <th scope="row">
-                            {{ metric_tup[0] }}
-                            </th>
-                            <td>
-                              {{ metric_tup[1] }}
-                            </td>
-                          </tr>
-                        {% endfor %}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            {% endfor %}
-
-          </div>
-        </div>
-      </div>
-
     </div>
 
   </div>
