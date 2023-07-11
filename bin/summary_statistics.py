@@ -225,7 +225,7 @@ class SummaryStatistics:
     def get_duplication_stats(self):
         # Reads before deduplication
         # Reads after deduplication
-        # Deduplication perc
+        # Sequencing saturation
         with open(sys.argv[5], "r") as dedup_handle:
             for line in dedup_handle:
                 if "INFO Reads: Input Reads:" in line:
@@ -237,9 +237,9 @@ class SummaryStatistics:
                 elif "INFO Number of reads out:" in line:
                     self.metrics_dict["Deduplication"]["reads_after_deduplication"] = ("Reads after deduplication", int(line.split()[-1].strip()), "Number of reads after deduplication.")
         if reads_in != 0:
-            self.metrics_dict["Deduplication"]["duplication_perc"] = ("Deduplication percent", self.as_perc(1 - (self.metrics_dict["Deduplication"]["reads_after_deduplication"][1]/self.metrics_dict["Deduplication"]["reads_before_deduplication"][1])), "Reads before deduplication / reads after deduplication * 100")
+            self.metrics_dict["Deduplication"]["sequencing_saturation"] = ("Sequencing saturation", self.as_perc(1 - (self.metrics_dict["Deduplication"]["reads_after_deduplication"][1]/self.metrics_dict["Deduplication"]["reads_before_deduplication"][1])), "(1 - (Reads after deduplication / reads before deduplication)) * 100")
         else:
-            self.metrics_dict["Deduplication"]["duplication_perc"] = ("Deduplication percent", 0.0, "Reads before deduplication / reads after deduplication * 100")
+            self.metrics_dict["Deduplication"]["sequencing_saturation"] = ("Sequencing saturation", 0.0, "(1 - (Reads after deduplication / reads before deduplication)) * 100")
     
     def get_mapping_stats(self):
         # Populate self.metrics_dict with the raw qualimap stats
