@@ -83,12 +83,6 @@ class SummaryStatistics:
         self.raw_reads_per_cell = 0
         self.mean_total_counts_per_cell = 0
         self.median_total_counts_per_cell = 0
-        self.mean_counts_per_cell_all_genes = 0
-        self.median_counts_per_cell_all_genes = 0
-        self.mean_counts_per_cell_sample_detected_genes = 0
-        self.median_counts_per_cell_sample_detected_genes = 0
-        self.mean_counts_per_cell_cell_detected_genes = 0
-        self.median_counts_per_cell_cell_detected_genes = 0
         self.mean_genes_detected_per_cell = 0
         self.median_genes_detected_per_cell = 0
         self.mean_nuclear_genes_detected_per_cell = 0
@@ -110,12 +104,6 @@ class SummaryStatistics:
         self.raw_reads_per_cell = self.metrics_dict["Read QC"]["reads_pre_qc"][1] / self.num_cells
         self.mean_total_counts_per_cell = np.mean(anndata_array.sum(axis=1))
         self.median_total_counts_per_cell = np.median(anndata_array.sum(axis=1))
-        self.mean_counts_per_cell_all_genes = np.mean(anndata_array.mean(axis=1))
-        self.median_counts_per_cell_all_genes = np.median(np.median(anndata_array, axis=1))
-        self.mean_counts_per_cell_sample_detected_genes = np.mean(self.anndata_array_detected_genes.mean(axis=1))
-        self.median_counts_per_cell_sample_detected_genes = np.median(self.anndata_array_detected_genes.sum(axis=1))
-        self.mean_counts_per_cell_cell_detected_genes = np.mean(np.apply_along_axis(self.get_non_zero_sum, 1, anndata_array))
-        self.median_counts_per_cell_cell_detected_genes = np.median(np.apply_along_axis(self.get_non_zero_sum, 1, anndata_array))
         self.mean_genes_detected_per_cell = np.mean(anndata_array.astype(bool).sum(axis=1))
         self.median_genes_detected_per_cell = int(np.median(anndata_array.astype(bool).sum(axis=1)))
 
@@ -147,21 +135,6 @@ class SummaryStatistics:
         # Median total counts per cell
         self.metrics_dict["Cell metrics"]["median_total_reads_per_cell"] = ("Median total counts per cell", self.median_total_counts_per_cell, "Median of the sum of counts per cell.")
 
-        # Mean single gene counts per cell - all genes (i.e. all counts across all genes considered even those genes not detected in the sample)
-        self.metrics_dict["Cell metrics"]["mean_counts_per_cell_all_genes"] = ("Mean single gene count per cell: all genes", self.mean_counts_per_cell_all_genes, "Mean of the mean individual gene count per cell with all genes considered (including those genes not detected in the sample).")
-        # Median single gene counts per cell - all genes (i.e. all counts across all genes considered even those genes not detected in the sample)
-        self.metrics_dict["Cell metrics"]["median_counts_per_cell_all_genes"] = ("Median single gene count per cell: all genes", self.median_counts_per_cell_all_genes, "Median of the median individual gene count per cell with all genes considered (including those genes not detected in the sample).")
-
-        # Mean single genecounts per cell - sample detected genes (i.e. only those genes that were detected in the sample)
-        self.metrics_dict["Cell metrics"]["mean_counts_per_cell_sample_detected_genes"] = ("Mean single gene count per cell: sample-detected genes", self.mean_counts_per_cell_sample_detected_genes, "Mean of the mean individual gene count per cell with only those genes detected in the sample considered.")
-        # Median single gene counts per cell - sample detected genes (i.e. only those genes that were detected in the sample)
-        self.metrics_dict["Cell metrics"]["median_counts_per_cell_sample_detected_genes"] = ("Median single gene count per cell: sample-detected genes", self.median_counts_per_cell_sample_detected_genes, "Median of the median individual gene count per cell with only those genes detected in the sample considered.")
-
-        # Mean single gene count per cell -  cell detected genes (i.e. only those genes that were detected in the given cell)
-        self.metrics_dict["Cell metrics"]["mean_counts_per_cell_cell_detected_genes"] = ("Mean single gene count per cell: cell-detected genes", self.mean_counts_per_cell_cell_detected_genes, "Mean of the mean individual gene count per cell with only those genes detected in each cell considered.")
-        # Median single gene count per cell -  cell detected genes (i.e. only those genes that were detected in the given cell)
-        self.metrics_dict["Cell metrics"]["median_counts_per_cell_cell_detected_genes"] = ("Median single gene count per cell: cell-detected genes", self.median_counts_per_cell_cell_detected_genes, "Median of the median individual gene count per cell with only those genes detected in each cell considered.")
-        
         # Mean genes detected per cell
         self.metrics_dict["Cell metrics"]["mean_genes_detected_per_cell"] = ("Mean genes detected per cell", self.mean_genes_detected_per_cell, "Mean number of genes detected for each cell (including nuclear and mitochondrial genes).")
         # Median genes detected per cell
