@@ -206,9 +206,9 @@ class SummaryStatistics:
                         reads_in = int(line.split()[-1].strip())
                     except ValueError:
                         reads_in = 0
-                    self.metrics_dict["Deduplication"]["reads_before_deduplication"] = ("High confidence, gene-annotated reads before deduplication", reads_in, "Number of high confidence (unique alignment, max mismatch <= 3bp), gene-annotated (with XT gene_id annotation) reads before deduplication.")
+                    self.metrics_dict["Deduplication"]["reads_before_deduplication"] = ("High confidence gene-annotated reads before deduplication", reads_in, "Number of high confidence (unique alignment; max mismatch <= 3bp) gene-annotated (with XT gene_id annotation) reads before deduplication.")
                 elif "INFO Number of reads out:" in line:
-                    self.metrics_dict["Deduplication"]["reads_after_deduplication"] = ("High confidence, gene-annotated reads after deduplication", int(line.split()[-1].strip()), "Number of high confidence (unique alignment, max mismatch <= 3bp), gene-annotated (with XT gene_id annotation) reads after deduplication.")
+                    self.metrics_dict["Deduplication"]["reads_after_deduplication"] = ("High confidence gene-annotated reads after deduplication", int(line.split()[-1].strip()), "Number of high confidence (unique alignment: max mismatch <= 3bp) gene-annotated (with XT gene_id annotation) reads after deduplication.")
         if reads_in != 0:
             self.metrics_dict["Deduplication"]["sequencing_saturation"] = ("Sequencing saturation", self.as_perc(1 - (self.metrics_dict["Deduplication"]["reads_after_deduplication"][1]/self.metrics_dict["Deduplication"]["reads_before_deduplication"][1])), "(1 - (Reads after deduplication / reads before deduplication)) * 100")
         else:
