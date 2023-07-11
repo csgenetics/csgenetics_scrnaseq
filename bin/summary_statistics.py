@@ -280,8 +280,15 @@ class SummaryStatistics:
             self.metrics_dict["Read QC"]["valid_barcode_reads_perc"] = ("Percentage valid barcode-containing reads", 0, "Number of valid barcode-containing reads / Number of reads pre-QC * 100.")
         # Percentage of barcode bases >= Q30
         self.metrics_dict["Read QC"]["barcode_bases_q30_perc"] = ("Barcode bp >= Q30 percentage", self.as_perc(float(self.multiqc_json_dict["report_general_stats_data"][self.qc_key_to_index_dict["fastp"]][f"{self.sample_id}_R2"]["after_filtering_q30_rate"])), "The percentage of the barcode bases with a Phred score >= 30.")
+        reads_post_qc = int(self.multiqc_json_dict["report_general_stats_data"][self.qc_key_to_index_dict["fastp"]][f"{self.sample_id}_R1.polyA"]["after_filtering_total_reads"])
         # Reads after polyX tail and polyA internal trimming
-        self.metrics_dict["Read QC"]["reads_post_trimming"] = ("Number of reads post-QC trimming", int(self.multiqc_json_dict["report_general_stats_data"][self.qc_key_to_index_dict["fastp"]][f"{self.sample_id}_R1.polyA"]["after_filtering_total_reads"]), "Number of reads after polyX tail and polyA internal trimming.")
+        self.metrics_dict["Read QC"]["reads_post_trimming"] = ("Number of reads post-QC trimming", reads_post_qc, "Number of reads after polyX tail and polyA internal trimming.")
+        # Reads after polyX tail and polyA internal trimming as percentage of valid barcode reads
+        if self.metrics_dict["Read QC"]["valid_barcode_reads"] != 0:
+            self.metrics_dict["Read QC"]["reads_post_trimming_perc"] = ("Percentage reads post-QC trimming", self.as_perc(float(reads_post_qc/self.metrics_dict["Read QC"]["valid_barcode_reads"])), "(Number of reads after polyX tail and polyA internal trimming / Number of valid barcode-containing reads) * 100.")
+        else:
+            self.metrics_dict["Read QC"]["reads_post_trimming_perc"] = ("Percentage reads post-QC trimming", 0, "(Number of reads after polyX tail and polyA internal trimming / Number of valid barcode-containing reads) * 100.")
+
         # Mean read length after polyX tail and polyA internal trimming
         self.metrics_dict["Read QC"]["mean_post_trim_read_length"] = ("Mean read length post-QC trimming", float(self.multiqc_json_dict["report_general_stats_data"][self.qc_key_to_index_dict["fastp"]][f"{self.sample_id}_R1.polyA"]["after_filtering_read1_mean_length"]), "Mean R1 read length post-QC trimming.")
         # Percentage of bases post trimming >= Q30
