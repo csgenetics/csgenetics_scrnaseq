@@ -513,7 +513,7 @@ process count_matrix {
 
   output:
   // Output the h5ad matrix
-  tuple val(sample_id), path("${sample_id}.count_matrix.*h5ad"), emit: h5ad
+  tuple val(sample_id), path("${sample_id}.raw_feature_bc_matrix.*h5ad"), emit: h5ad
   // Output the 3 part barcode, features, matrix 
   tuple val(sample_id), path("barcodes.tsv.gz"), path("features.tsv.gz"), path("matrix.mtx.gz"), optional: true
 
@@ -569,7 +569,7 @@ process filter_count_matrix{
   // Output the 3 part barcode, features, matrix 
   tuple val(sample_id), path("barcodes.tsv.gz"), path("features.tsv.gz"), path("matrix.mtx.gz"), optional: true
   // Output the h5ad matrix
-  tuple val(sample_id), path("${sample_id}.*.cell_only.count_matrix.*h5ad"), emit: cell_only_count_matrix
+  tuple val(sample_id), path("${sample_id}*.filtered_feature_bc_matrix.*h5ad"), emit: cell_only_count_matrix
 
   script:
   """
