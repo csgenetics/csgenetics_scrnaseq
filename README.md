@@ -314,6 +314,23 @@ to the `--star_index_dir` parameter. The pipeline will automatically download th
 If you are working with a different species or wish to create your own indexes for a different genome,
 please follow the instructions for creating a STAR index [here](https://physiology.med.cornell.edu/faculty/skrabanek/lab/angsd/lecture_notes/STARmanual.pdf) (section 'Generating genome indexes').
 
+Differences in STAR build version and when running STAR for alignments can result in errors such as:
+
+`ERROR: Genome version: 20201 is INCOMPATIBLE with running STAR version: 2.5.1b`
+
+To avoid this, it is advised that all genomes are generated using our Docker container:
+
+```bash
+docker run --rm -it -v $PWD:/mnt -w /mnt quay.io/biocontainers/star:2.5.1b--0 \
+STAR \
+--runThreadN NumberOfThreads \
+--runMode genomeGenerate \
+--genomeDir /path/to/genomeDir \
+--genomeFastaFiles /path/to/genome/fasta1 \
+--sjdbGTFfile /path/to/annotations.gtf \
+--sjdbOverhang ReadLength-1
+```
+
 ### `gtf_path`
 
 Path to the gtf annotation file.
