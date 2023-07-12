@@ -31,7 +31,7 @@ def make_count_matrix(args):
     except errors.EmptyDataError:
         # The input file is empty and we simply write out an empty .h5ad
         # to be picked up by the process then exit
-        open(f"{args.sample}.empty.raw_feature_bc_matrix.h5ad", "w").close()
+        open(f"{args.sample}.raw_feature_bc_matrix.empty.h5ad", "w").close()
         sys.exit(0)
 
     counts.columns = ['io', 'ensID']
