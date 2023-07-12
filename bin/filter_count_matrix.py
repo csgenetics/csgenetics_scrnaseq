@@ -30,7 +30,7 @@ class FilterCountMatrix:
         try:
             self.anndata_obj = anndata.read_h5ad(sys.argv[2])
         except OSError:
-            open(f"{self.sample_name}.{self.single_cell_nuc_gene_threshold}.cell_only.count_matrix.empty.h5ad", "w").close()
+            open(f"{self.sample_name}.{self.single_cell_nuc_gene_threshold}.filtered_feature_bc_matrix.empty.h5ad", "w").close()
             sys.exit(0)
 
         # Compute the number of nuclear genes covered per barcode
@@ -43,7 +43,7 @@ class FilterCountMatrix:
         self.anndata_obj_filtered = self.anndata_obj[self.anndata_obj.obs['is_single_cell'] == True]
 
         # Write out the filtered h5ad
-        self.anndata_obj_filtered.write(f"{self.sample_name}.{self.single_cell_nuc_gene_threshold}.cell_only.count_matrix.h5ad")
+        self.anndata_obj_filtered.write(f"{self.sample_name}.{self.single_cell_nuc_gene_threshold}.filtered_feature_bc_matrix.h5ad")
 
         # Write out the barcodes, features, matrix files
         self.write_out_tripartite_filtered_matrix_files()
