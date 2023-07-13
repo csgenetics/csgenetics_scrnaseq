@@ -430,7 +430,7 @@ process dedup{
   tag "$sample_id"
   label 'c4m1'
 
-  publishDir "${params.outdir}/io_count", mode: 'copy'
+  publishDir "${params.outdir}/deduplication", mode: 'copy'
 
   input:
   tuple val (sample_id), path(bam), path(bai), val(alignment_count)
@@ -465,9 +465,6 @@ process dedup{
 process io_count {
   tag "$sample_id"
   label 'c4m1'
-
-  publishDir "${params.outdir}/io_count", mode: 'copy'
-
   input:
   tuple val (sample_id), path(f)
 
