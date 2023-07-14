@@ -7,44 +7,46 @@
 
 ## Contents
 
-- [Introduction](#introduction)
-- [Running the pipeline](#running-the-pipeline)
-  - [Locally with dockerized processes](#locally-with-dockerized-processes)
-  - [Dockerized](#dockerized)
-- [Running the pipeline on MacOS](#running-the-pipeline-on-macos)
-- [Specifying input sequencing files](#specifying-input-sequencing-files)
-- [Testing the pipeline](#testing-the-pipeline)
-- [Launching the pipeline directly from the Github repo](#launching-the-pipeline-directly-from-the-csgeneticcsgenetics_scrnaseq-github-repo)
-- [Updating the pipeline](#updating-the-pipeline)
-- [Specifying a pipeline version](#specifying-a-pipeline-version)
-- [Available profiles](#available-profiles)
-  - [test](#test)
-  - [docker](#docker)
-- [Configurable parameters](#configurable-parameters)
-  - [profile](#profile)
-  - [outdir](#outdir)
-  - [star_index_dir](#star_index_dir)
-  - [gtf_path](#gtf_path)
-  - [whitelist_path](#whitelist_path)
-  - [min_nuc_gene](#min_nuc_gene)
-- [Outputs](#outputs)
-  - [count_matrix](#count_matrix)
-  - [report](#report)
-  - [pipeline_info](#pipeline_info)
-  - [fastp](#fastp)
-  - [fastqc](#fastqc)
-  - [featureCounts](#fastqc)
-  - [io_count](#io_count)
-  - [multiqc](#multiqc)
-  - [plots](#plots)
-  - [qualimap](#qualimap)
-  - [STAR](#star)
-- [Resource allocation](#resource-allocation)
-  - [Error handling](#error-handling)
-- [Log files](#log-files)
-- [Examples](#examples)
-  - [Example 1](#example-1)
-  - [Example 2](#example-2)
+- [CS Genetics scRNA-Seq pipeline](#cs-genetics-scrna-seq-pipeline)
+  - [Contents](#contents)
+  - [Introduction](#introduction)
+  - [Running the pipeline](#running-the-pipeline)
+  - [Running the pipeline on MacOS](#running-the-pipeline-on-macos)
+  - [Specifying input sequencing files](#specifying-input-sequencing-files)
+  - [Testing the pipeline](#testing-the-pipeline)
+  - [Launching the pipeline directly from the csgenetic/csgenetics\_scrnaseq Github repo](#launching-the-pipeline-directly-from-the-csgeneticcsgenetics_scrnaseq-github-repo)
+    - [Updating the pipeline](#updating-the-pipeline)
+    - [Specifying a pipeline version](#specifying-a-pipeline-version)
+  - [Available profiles](#available-profiles)
+    - [test](#test)
+    - [docker](#docker)
+  - [Configurable parameters](#configurable-parameters)
+    - [`profile`](#profile)
+    - [`outdir`](#outdir)
+    - [`star_index_dir`](#star_index_dir)
+      - [Premade STAR indexes](#premade-star-indexes)
+      - [Generating a STAR index](#generating-a-star-index)
+    - [`gtf_path`](#gtf_path)
+    - [`whitelist_path`](#whitelist_path)
+    - [`min_nuc_gene`](#min_nuc_gene)
+  - [Outputs](#outputs)
+    - [`count_matrix`](#count_matrix)
+    - [`report`](#report)
+    - [`pipeline_info`](#pipeline_info)
+    - [`fastp`](#fastp)
+    - [`fastqc`](#fastqc)
+    - [`featureCounts`](#featurecounts)
+    - [`io_count`](#io_count)
+    - [`multiqc`](#multiqc)
+    - [`plots`](#plots)
+    - [`qualimap`](#qualimap)
+    - [`STAR`](#star)
+  - [Log files](#log-files)
+  - [Resource allocation](#resource-allocation)
+    - [Error handling](#error-handling)
+  - [Examples](#examples)
+    - [Example 1](#example-1)
+    - [Example 2](#example-2)
 
 ## Introduction
 
@@ -302,6 +304,7 @@ There are premade remotely hosted STAR indexes for the following species (remote
 
 - Human: s3://csgx.public.readonly/resources/references/refdata-gex-GRCh38/star/
 - Mouse: s3://csgx.public.readonly/resources/references/refdata-gex-GRCm39/star/
+- Drosophila melanogaster s3://csgx.public.readonly/resources/references/refdata-gex-Drosophila-BDGP6/
 
 If you are working with one of these species, you can provide the remotely hosted directory
 to the `--star_index_dir` parameter. The pipeline will automatically download the resource.
@@ -338,6 +341,7 @@ There are remotely hosted GTF files for the following species (remotely hosted p
 
 - Human: s3://csgx.public.readonly/resources/references/refdata-gex-GRCh38/genes/Homo_sapiens.GRCh38.109.gtf
 - Mouse: s3://csgx.public.readonly/resources/references/refdata-gex-GRCm39/genes/Mus_musculus.GRCm39.109.gtf
+- Drosophila melanogaster s3://csgx.public.readonly/resources/references/refdata-gex-Drosophila-BDGP6/genes/Drosophila_melanogaster.BDGP6.32.109.gtf
 
 By default the remotely hosted Human GTF is used.
 
