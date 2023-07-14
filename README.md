@@ -417,7 +417,7 @@ Contains files related to the MultiQC output.
 Plots of the Cell Caller profiles used to generate the minimum detected nuclear genes threshold
 for cell calling.
 
-The density plot describes the number of nuclear genes (log10 Nuclear genes) across cells. The black line describes the default cutoff value for nuclear genes when calling cells. In contrast, the red line describes the threshold determined by the cell caller.
+The density plot describes the number of nuclear genes detected (log10 Nuclear genes) across cells. The black line describes the default cutoff value for nuclear genes when calling cells. In contrast, the red line describes the threshold determined by the cell caller.
 
 If a red line is not present in the plot then, the default (black line) threshold has been used. If the red line is present, then the cell caller threshold has been used.
 
