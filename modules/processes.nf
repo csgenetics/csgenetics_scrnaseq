@@ -430,7 +430,7 @@ process dedup{
   tag "$sample_id"
   label 'c4m1'
 
-  publishDir "${params.outdir}/io_count", mode: 'copy'
+  publishDir "${params.outdir}/deduplication", mode: 'copy'
 
   input:
   tuple val (sample_id), path(bam), path(bai), val(alignment_count)
@@ -465,9 +465,6 @@ process dedup{
 process io_count {
   tag "$sample_id"
   label 'c4m1'
-
-  publishDir "${params.outdir}/io_count", mode: 'copy'
-
   input:
   tuple val (sample_id), path(f)
 
@@ -501,7 +498,7 @@ process count_matrix {
   tag "$sample_id"
   label 'c4m4'
 
-  publishDir "${params.outdir}/count_matrix/raw_count_matrix/${sample_id}/", mode: 'copy', pattern: "*.count_matrix.h5ad"
+  publishDir "${params.outdir}/count_matrix/raw_count_matrix/${sample_id}/", mode: 'copy', pattern: "*.raw_feature_bc_matrix.h5ad"
   publishDir "${params.outdir}/count_matrix/raw_count_matrix/${sample_id}/", mode: 'copy', pattern: "matrix.mtx.gz"
   publishDir "${params.outdir}/count_matrix/raw_count_matrix/${sample_id}/", mode: 'copy', pattern: "barcodes.tsv.gz"
   publishDir "${params.outdir}/count_matrix/raw_count_matrix/${sample_id}/", mode: 'copy', pattern: "features.tsv.gz"
@@ -513,7 +510,7 @@ process count_matrix {
 
   output:
   // Output the h5ad matrix
-  tuple val(sample_id), path("${sample_id}.count_matrix.*h5ad"), emit: h5ad
+  tuple val(sample_id), path("${sample_id}.raw_feature_bc_matrix.*h5ad"), emit: h5ad
   // Output the 3 part barcode, features, matrix 
   tuple val(sample_id), path("barcodes.tsv.gz"), path("features.tsv.gz"), path("matrix.mtx.gz"), optional: true
 
@@ -557,7 +554,7 @@ process filter_count_matrix{
   tag "$sample_id"
   label 'c2m2'
 
-  publishDir "${params.outdir}/count_matrix/cell_only_count_matrix/${sample_id}/", mode: 'copy', pattern: "*.cell_only.count_matrix.h5ad"
+  publishDir "${params.outdir}/count_matrix/cell_only_count_matrix/${sample_id}/", mode: 'copy', pattern: "*.filtered_feature_bc_matrix.h5ad"
   publishDir "${params.outdir}/count_matrix/cell_only_count_matrix/${sample_id}/", mode: 'copy', pattern: "matrix.mtx.gz"
   publishDir "${params.outdir}/count_matrix/cell_only_count_matrix/${sample_id}/", mode: 'copy', pattern: "barcodes.tsv.gz"
   publishDir "${params.outdir}/count_matrix/cell_only_count_matrix/${sample_id}/", mode: 'copy', pattern: "features.tsv.gz"
@@ -569,7 +566,7 @@ process filter_count_matrix{
   // Output the 3 part barcode, features, matrix 
   tuple val(sample_id), path("barcodes.tsv.gz"), path("features.tsv.gz"), path("matrix.mtx.gz"), optional: true
   // Output the h5ad matrix
-  tuple val(sample_id), path("${sample_id}.*.cell_only.count_matrix.*h5ad"), emit: cell_only_count_matrix
+  tuple val(sample_id), path("${sample_id}*.filtered_feature_bc_matrix.*h5ad"), emit: cell_only_count_matrix
 
   script:
   """
