@@ -27,7 +27,6 @@
   - [gtf_path](#gtf_path)
   - [whitelist_path](#whitelist_path)
   - [min_nuc_gene](#min_nuc_gene)
-  - [depth_min](#depth_min)
 - [Outputs](#outputs)
   - [count_matrix](#count_matrix)
   - [report](#report)
@@ -368,16 +367,6 @@ The minimum number of nuclear genes (E.g. 100) that must be detected for a given
 ```bash
 --min_nuc_gene 100
 ```
-
-### `depth_min`
-
-Fastqs with less than this number of raw reads (E.g. 100000) will be removed from the analysis.
-
-```bash
---depth_min 100000
-```
-
-<div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
 ## Outputs
 
