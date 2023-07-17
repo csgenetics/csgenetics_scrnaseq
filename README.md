@@ -304,7 +304,7 @@ There are premade remotely hosted STAR indexes for the following species (remote
 
 - Human: s3://csgx.public.readonly/resources/references/refdata-gex-GRCh38/star/
 - Mouse: s3://csgx.public.readonly/resources/references/refdata-gex-GRCm39/star/
-- Drosophila melanogaster s3://csgx.public.readonly/resources/references/refdata-gex-Drosophila-BDGP6/
+- Drosophila melanogaster s3://csgx.public.readonly/resources/references/refdata-gex-Drosophila-BDGP6/star/
 
 If you are working with one of these species, you can provide the remotely hosted directory
 to the `--star_index_dir` parameter. The pipeline will automatically download the resource.
