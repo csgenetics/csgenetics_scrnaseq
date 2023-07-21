@@ -15,6 +15,7 @@ from scipy.io import mmwrite
 import os
 import anndata
 import numpy as np
+import re
 
 class FilterCountMatrix:
     def __init__(self):
@@ -35,7 +36,7 @@ class FilterCountMatrix:
 
         # Compute the number of nuclear genes covered per barcode
         self.anndata_obj.obs['num_genes_covered_per_barcode'] = self.anndata_obj.X.toarray().astype(bool).sum(axis=1)
-        self.anndata_obj.obs['num_mt_genes_covered_per_barcode'] = self.anndata_obj.X[:,self.anndata_obj.var_names.str.startswith('MT-')].toarray().astype(bool).sum(axis=1)
+        self.anndata_obj.obs['num_mt_genes_covered_per_barcode'] = self.anndata_obj.X[:,self.anndata_obj.var_names.str.contains(sys.argv[4], flags=re.IGNORECASE, regex=True)].toarray().astype(bool).sum(axis=1)
         self.anndata_obj.obs['num_nuc_genes_covered_per_barcode'] = self.anndata_obj.obs['num_genes_covered_per_barcode'] - self.anndata_obj.obs['num_mt_genes_covered_per_barcode']
 
         # Filter for only those barcodes that have >= to the threshold

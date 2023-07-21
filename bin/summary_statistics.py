@@ -94,7 +94,9 @@ class SummaryStatistics:
         self.total_genes_detected_across_samples = 0
 
     def calculate_cell_stats(self):
-        self.anndata.var["is_mito"] = np.where(self.anndata.var['geneSym'].str.startswith("MT-"), True, False)
+         # regex for mitochondrial genes starting with (MT- , mt- , MT:, mt:) 
+        regex_mt = re.compile(sys.argv[9])
+        self.anndata.var["is_mito"] = np.where([re.match(regex_mt, gene_symbol) for gene_symbol in self.anndata.var['geneSym']], True, False)
         # Convert to array for convenience
         anndata_array = self.anndata.X.toarray()
         # Remove genes that have not been detected at all across the sample

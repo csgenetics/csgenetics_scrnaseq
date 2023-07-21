@@ -333,6 +333,10 @@ STAR \
 --sjdbOverhang ReadLength-1
 ```
 
+Note: When creating new genomes it is vital to identify the mitochondrial genes symbol prefix. 
+The regex pattern `^(mt|MT)[:-]` is used by default to extract genes with the MT-, mt-, MT:, or mt: prefixes.
+This pattern can be changed by modifying the `mitochondria_regex` parameter in the nextflow.config file.
+
 ### `gtf_path`
 
 Path to the gtf annotation file.

@@ -479,7 +479,7 @@ process io_count {
   # then keep the 1st (read_ID) and 18th fields (gene name, should be the 'XT:' tag itself) only
   # then split the string by '_' (-d '_'), keep fields 2,3,4 which correspond to 'io_sequence', 'gene_name' (4th field is so that we don't lose gene_names containing one '_')
   # use sed to replace the first '_' in each line, and any 'XT:Z:' strings with empty string with sed
-
+  
   # output has 2 columns: io_sequence and gene_name for every deduplicated alignments with gene assignment
   samtools view !{f} | awk '/XT:/ {match($0, /_[A-Z]+_/); printf substr($0,RSTART+1,RLENGTH-2); match($0, /XT:Z:[A-Za-z0-9_]+/); print "\t" substr($0,RSTART+5,RLENGTH-5)}' > !{sample_id}_bcGeneSummary.txt
   '''
@@ -541,7 +541,7 @@ process cell_caller {
 
   script:
   """
-  cell_caller.py --sample ${sample_id} --min_nucGene ${params.min_nuc_gene} --count_matrix $count_matrix_h5ad
+  cell_caller.py --sample ${sample_id} --min_nucGene ${params.min_nuc_gene} --count_matrix $count_matrix_h5ad --mt_regex '${params.mitochondria_regex}'
   """
 }
 
@@ -570,7 +570,7 @@ process filter_count_matrix{
 
   script:
   """
-  filter_count_matrix.py ${nuc_gene_threshold} ${h5ad_raw_count_matrix} ${sample_id}
+  filter_count_matrix.py ${nuc_gene_threshold} ${h5ad_raw_count_matrix} ${sample_id} '${params.mitochondria_regex}'
   """
 }
 
@@ -585,13 +585,12 @@ process summary_statistics {
   
   input:
   tuple val(sample_id), val(min_nuc_gene_cutoff), path(h5ad), path(annotated_qualimap), path(antisense), path(dedup), path(filtered_qualimap), path(multiqc_data_json), path(raw_qualimap)
-
   output:
   tuple val(sample_id), path("${sample_id}.metrics.csv"), emit: metrics_csv
 
   script:
   """
-  summary_statistics.py $sample_id $h5ad $multiqc_data_json $antisense $dedup $raw_qualimap $filtered_qualimap $annotated_qualimap
+  summary_statistics.py $sample_id $h5ad $multiqc_data_json $antisense $dedup $raw_qualimap $filtered_qualimap $annotated_qualimap '${params.mitochondria_regex}'
   """
 }
 
