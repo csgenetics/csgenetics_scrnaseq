@@ -35,8 +35,8 @@ with gzip.open(fastpOut, 'rb') as f:
         read_id = r1_data[0].split(" ")[0]                
 
         polyA = "A"*15
-        antislip_p = 'GCACG'
-        antislip_p = 'A'*10 + antislip_p
+        antislip_p = 'CG'
+        antislip_p = 'A'*13 + antislip_p
         
         # Deal with polyA
         polya_flag = 0
