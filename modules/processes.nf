@@ -542,7 +542,7 @@ process cell_caller {
   script:
   def mixed_args = params.mixed_species ? "--mixed TRUE --mt_prefix ${params.hsap_mitochondria_prefix} --mt_prefix2 ${params.mmus_mitochondria_prefix}" : "--mixed FALSE --mt_prefix ${params.mitochondria_prefix}"
   """
-  cell_caller.py --sample ${sample_id} --min_nucGene ${params.min_nuc_gene} --count_matrix $count_matrix_h5ad $mixed_args
+  cell_caller.py --sample ${sample_id} --min_nucGene ${params.min_nuc_gene} --count_matrix $count_matrix_h5ad --mt_chromosome '${params.mt_chromosome}'
   """
 }
 
@@ -574,7 +574,11 @@ process filter_count_matrix{
   script:
   def mixed_args = params.mixed_species ? "TRUE ${params.hsap_mitochondria_prefix} ${params.mmus_mitochondria_prefix} ${params.hsap_gene_prefix} ${params.mmus_gene_prefix} ${params.purity}" : "FALSE ${params.mitochondria_prefix}"
   """
+<<<<<<< HEAD
   filter_count_matrix.py ${nuc_gene_threshold} ${h5ad_raw_count_matrix} ${sample_id} $mixed_args
+=======
+  filter_count_matrix.py ${nuc_gene_threshold} ${h5ad_raw_count_matrix} ${sample_id} '${params.mt_chromosome}'
+>>>>>>> add chromosome MT to anndata
   """
 }
 
@@ -595,7 +599,7 @@ process summary_statistics {
   script:
   def mixed_args = params.mixed_species ? "TRUE ${params.hsap_mitochondria_prefix} ${params.mmus_mitochondria_prefix} ${params.hsap_gene_prefix} ${params.mmus_gene_prefix} ${params.purity}" : "FALSE ${params.mitochondria_prefix}"
   """
-  summary_statistics.py $sample_id $raw_h5ad $multiqc_data_json $antisense $dedup $raw_qualimap $filtered_qualimap $annotated_qualimap $mixed_args
+  summary_statistics.py $sample_id $h5ad $multiqc_data_json $antisense $dedup $raw_qualimap $filtered_qualimap $annotated_qualimap
   """
 }
 

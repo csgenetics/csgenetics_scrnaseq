@@ -138,7 +138,7 @@ class FilterCountMatrix:
         self.anndata_obj_filtered.obs.index.to_frame().to_csv('barcodes.tsv.gz', sep='\t', compression={'method': 'gzip', 'compresslevel': 1, 'mtime': 1}, header=None, index=False)
 
         # Write features table
-        ft_table = self.anndata_obj_filtered.var.loc[:, ['ensID', 'geneSym']]
+        ft_table = self.anndata_obj_filtered.var.loc[:, ['gene_id', 'gene_name']]
         ft_table['feature_type'] = 'Gene Expression'
         ft_table.to_csv('features.tsv.gz', sep="\t", compression={'method': 'gzip', 'compresslevel': 1, 'mtime': 1}, header=None, index=False)
 
