@@ -16,11 +16,17 @@ from jinja2 import Template
 from pathlib import Path
 from collections import defaultdict
 import sys
+from create_single_sample_report import get_cell_stat_cat_dict_obj
 
 class MultipleSampleHTMLReport:
     def __init__(self):
         with open(sys.argv[1], "r") as html:
             self.template = Template(html.read())
+
+        if sys.argv[2].upper() == "TRUE":
+            self.mixed = True
+        else:
+            self.mixed = False
 
         self.sample_name_list, self.metrics_dict = self.make_metrics_dict_and_sample_list()
         self.render_and_write_report()
@@ -48,13 +54,26 @@ class MultipleSampleHTMLReport:
         # NOTE the alignment card has temporarily been disabled by removing the
         # associated html. I am leaving the associated code in place so that it
         # can be reinstated.
+        
+        # Populate cell_metric_tooltip_dict here if a mixed sample.
+        # The primary keys will need to match the base metric primary keys that have been used in summary_statistics.py
+        # e.g. "num_cells", "raw_reads_per_cell" etc. etc. Similar to the single sample summary report you may want
+        # to implement tool tips for each of the individual metrics as well. This will require a small modificaiton to the
+        # HTML.
+        cell_metric_tooltip_dict_obj = get_cell_stat_cat_dict_obj(self.mixed)
+        # slim down to just the tool tips (i.e. get rid of the accordian IDs)
+        cell_metric_tooltip_dict_obj = {k: v[0] for k, v in cell_metric_tooltip_dict_obj.items()}
+
+        print(cell_metric_tooltip_dict_obj)
+        print(self.metrics_dict)
         final_report = self.template.render(
             sample_name_list=self.sample_name_list, metrics_dict=self.metrics_dict,
+            mixed=self.mixed,
             alignment_tooltip_dict = {
                 "Post read QC alignment": "Mapping of the post QC reads i.e. after trimming (polyX end and internal polyA) and barcode verification.",
                 "High confidence read alignment": "Reads with a single alignment and a maximum of 3 bp mismatch.",
                 "Annotated reads alignment": "High confidence reads annotated with a gene ID (XT bam tag)."
-                })
+                }, cell_metric_tooltip_dict = cell_metric_tooltip_dict_obj)
 
         # Write out the rendered template.
         with open(f"multisample_report.html", "w") as f_output:

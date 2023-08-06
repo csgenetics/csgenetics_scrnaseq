@@ -63,26 +63,105 @@
           {% endfor%}
         </tr>
         <!-- Write out a subheader and the stats for each of the first 3 metric categories -->
-        {% for classification in ["Read QC", "Cell metrics", "Deduplication"]%}
+        {% if mixed %}
+          <!-- If mixed species then the Cell metrics are in a different -->
+          <!-- format to the Read QC and and Deduplication metrics -->
+          <!-- and requires that we parse the subcategories of the Cell metrics category -->
+          <!-- Read QC -->
+          {% for classification in ["Read QC"]%}
+            <!-- metric subheader -->
+            <tr>
+              <th scope="rowgroup">
+              <h4>{{ classification }}</h4>
+              </th>
+            </tr>
+            {% for metric, metric_val_list in metrics_dict[classification].items() %}
+              <!-- stats for sub category -->
+              <tr>
+                <th scope="row">
+                {{ metric[1] }}
+                <i class="bi-info-circle" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="{{ metric[2] }}"></i>
+                </th>
+                {% for metric_val in metric_val_list %}
+                  <td>{{ metric_val }}</td>
+                {% endfor %}
+              </tr>
+            {% endfor %}
+          {% endfor %}
+
+          <!-- Cell metrics -->
+          <!-- Write out a subheader and the stats for each of the Cell metric subcategories -->
+          <!-- Different structure to above as there is no icon associated with each metric -->
+          <!-- but rather an icon and tool tip is associated to each of the Cell metric subcategories -->
+          
           <!-- metric subheader -->
           <tr>
             <th scope="rowgroup">
-            <h4>{{ classification }}</h4>
+            <h4>Cell metrics</h4>
             </th>
           </tr>
-          {% for metric, metric_val_list in metrics_dict[classification].items() %}
-            <!-- stats for sub category -->
-            <tr>
-              <th scope="row">
-              {{ metric[1] }}
-              <i class="bi-info-circle" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="{{ metric[2] }}"></i>
-              </th>
-              {% for metric_val in metric_val_list %}
-                <td>{{ metric_val }}</td>
-              {% endfor %}
-            </tr>
+          {% for classification, tooltip in cell_metric_tooltip_dict.items() %}
+            <!-- Here, metric is a tuple of (variable_name, human_readable_name, description, classification) -->
+            {% for metric, metric_val_list in metrics_dict[classification].items() %}
+              <!-- stats for sub category -->
+              <tr>
+                <th scope="row">
+                {{ metric[1] }}
+                <i class="bi-info-circle" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="{{ metric[2] }}"></i>
+                </th>
+                {% for metric_val in metric_val_list %}
+                  <td>{{ metric_val }}</td>
+                {% endfor %}
+              </tr>
+            {% endfor %}
           {% endfor %}
-        {% endfor %}
+
+          <!-- Deduplication -->
+          {% for classification in ["Deduplication"]%}
+            <!-- metric subheader -->
+            <tr>
+              <th scope="rowgroup">
+              <h4>{{ classification }}</h4>
+              </th>
+            </tr>
+            {% for metric, metric_val_list in metrics_dict[classification].items() %}
+              <!-- stats for sub category -->
+              <tr>
+                <th scope="row">
+                {{ metric[1] }}
+                <i class="bi-info-circle" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="{{ metric[2] }}"></i>
+                </th>
+                {% for metric_val in metric_val_list %}
+                  <td>{{ metric_val }}</td>
+                {% endfor %}
+              </tr>
+            {% endfor %}
+          {% endfor %}
+
+        {% else %}
+          <!-- If single species then we can simply parse the Cell metrics stats the same as the -->
+          <!-- Read QC and Deduplication stats. -->
+          {% for classification in ["Read QC", "Cell metrics", "Deduplication"]%}
+            <!-- metric subheader -->
+            <tr>
+              <th scope="rowgroup">
+              <h4>{{ classification }}</h4>
+              </th>
+            </tr>
+            {% for metric, metric_val_list in metrics_dict[classification].items() %}
+              <!-- stats for sub category -->
+              <tr>
+                <th scope="row">
+                {{ metric[1] }}
+                <i class="bi-info-circle" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="{{ metric[2] }}"></i>
+                </th>
+                {% for metric_val in metric_val_list %}
+                  <td>{{ metric_val }}</td>
+                {% endfor %}
+              </tr>
+            {% endfor %}
+          {% endfor %}
+        {% endif %}
 
       </tbody>
     </table>

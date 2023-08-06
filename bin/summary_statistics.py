@@ -22,6 +22,26 @@ from collections import defaultdict
 class SummaryStatistics:
     def __init__(self):
         self.sample_id = sys.argv[1]
+        if sys.argv[9] == "TRUE":
+            self.mixed = True
+            # We have a separate mitochondrial-identifying string for each 
+            # of the speices that we can use startsWith with.
+            self.hsap_mito_prefix = sys.argv[10]
+            self.mmus_mito_prefix = sys.argv[11]
+
+            # We have a separate gene prefix string for each
+            # of the species.
+            self.hsap_gene_prefix = sys.argv[12]
+            self.mmus_gene_prefix = sys.argv[13]
+
+            # The purity threshold used to classify a barcode as a cell
+            # (in addition to the num nuc genes detected threshold)
+            # if we are working with a mixed species sample
+            self.purity = sys.argv[14]
+        else:
+            self.mixed = False
+            self.mito_prefix = sys.argv[10]
+
         # Primary keys will be:
         #   Read QC
         #   Cell metrics
@@ -79,53 +99,217 @@ class SummaryStatistics:
         return np.sum(np_1d_array[np.nonzero(np_1d_array)])
 
     def set_cell_stats_to_zero(self):
-        self.num_cells = 0
-        self.raw_reads_per_cell = 0
-        self.mean_total_counts_per_cell = 0
-        self.median_total_counts_per_cell = 0
-        self.mean_genes_detected_per_cell = 0
-        self.median_genes_detected_per_cell = 0
-        self.mean_nuclear_genes_detected_per_cell = 0
-        self.median_nuclear_genes_detected_per_cell = 0
-        self.mean_mito_genes_detected_per_cell = 0
-        self.median_mito_genes_detected_per_cell = 0
-        self.percentage_counts_from_mito = 0
-        self.num_unique_genes_detected_across_sample = 0
-        self.total_genes_detected_across_samples = 0
+        """
+        Set all of the cell stats to 0
+        For the mixed species case we produce the cell stats
+        essentially in triplicate, one for total cells (i.e. 
+        Hsap + Mmus), one Hsap and one Mmus.
+        Because we produce the stats in triplicate we use
+        a list of strings that represent each of the base
+        stats that will be triplicated.
+        """
+        base_stats = [
+            "num_cells",
+            "raw_reads_per_cell",
+            "mean_total_counts_per_cell",
+            "median_total_counts_per_cell",
+            "mean_genes_detected_per_cell",
+            "median_genes_detected_per_cell",
+            "mean_nuclear_genes_detected_per_cell",
+            "median_nuclear_genes_detected_per_cell",
+            "mean_mito_genes_detected_per_cell",
+            "median_mito_genes_detected_per_cell",
+            "percentage_counts_from_mito",
+            "num_unique_genes_detected_across_sample",
+            "total_genes_detected_across_samples"
+        ]
+        if self.mixed:
+            # Output the full set of mixed species cell_stats
+            for base_stat in base_stats:
+                for stat_type in ["_total", "_Hsap", "_Mmus"]:
+                    setattr(self, f"{base_stat}{stat_type}", 0)
+        else:
+            for base_stat in base_stats:
+                setattr(self, f"{base_stat}{stat_type}", 0)
 
     def calculate_cell_stats(self):
-         # regex for mitochondrial genes starting with (MT- , mt- , MT:, mt:) 
-        regex_mt = re.compile(sys.argv[9])
-        self.anndata.var["is_mito"] = np.where([re.match(regex_mt, gene_symbol) for gene_symbol in self.anndata.var['geneSym']], True, False)
-        # Convert to array for convenience
-        anndata_array = self.anndata.X.toarray()
-        # Remove genes that have not been detected at all across the sample
-        self.anndata_array_detected_genes = anndata_array[:, ~np.all(anndata_array == 0, axis=0)]
+        # strip the anndata object down to only the is_single_cell cells
+        # so that all metrics are only caluclated for single_cells.
+        # If single species this means those that meet the nuclear gene threshold
+        # If mixed species then the barcodes must also pass the purity threshold.
+        self.anndata_sc = self.anndata[self.anndata.obs['is_single_cell']]
+        # Subset to get rid of genes that have 0 counts 
+        self.anndata_sc = self.anndata_sc[:,~np.all(self.anndata_sc.X.toarray() == 0, axis=0)]
         
-        self.num_cells = anndata_array.shape[0]
-        self.raw_reads_per_cell = self.metrics_dict["Read QC"]["reads_pre_qc"][1] / self.num_cells
-        self.mean_total_counts_per_cell = np.mean(anndata_array.sum(axis=1))
-        self.median_total_counts_per_cell = np.median(anndata_array.sum(axis=1))
-        self.mean_genes_detected_per_cell = np.mean(anndata_array.astype(bool).sum(axis=1))
-        self.median_genes_detected_per_cell = int(np.median(anndata_array.astype(bool).sum(axis=1)))
+        # Convert to array for convenience
+        anndata_array_sc = self.anndata_sc.to_df()
+        
+        if self.mixed:
+            anndata_array_sc_Hsap = self.anndata_sc[:,self.anndata_sc.var_names.str.startswith(self.hsap_gene_prefix)].to_df()
+            anndata_array_sc_Mmus = self.anndata_sc[:,self.anndata_sc.var_names.str.startswith(self.mmus_gene_prefix)].to_df()
+            # If mixed then we need to caluculate 3 versions of each of the metrics:
+            #   _total, _Hsap, _Mmus
+            self.num_cells_total = anndata_array_sc.shape[0]
+            self.num_cells_Hsap = sum(self.anndata_sc.obs["species_based_on_nuc_gene_purity"] == "Hsap")
+            self.num_cells_Mmus = sum(self.anndata_sc.obs["species_based_on_nuc_gene_purity"] == "Mmus")
 
-        # Get a subset of the array that doesn't contain the mito genes
-        anndata_array_nuc = anndata_array[:,~self.anndata.var["is_mito"]]
-        self.mean_nuclear_genes_detected_per_cell = np.mean(anndata_array_nuc.astype(bool).sum(axis=1))
-        self.median_nuclear_genes_detected_per_cell = np.median(anndata_array_nuc.astype(bool).sum(axis=1))
+            self.raw_reads_per_cell_total = self.metrics_dict["Read QC"]["reads_pre_qc"][1] / self.num_cells_total
+            self.raw_reads_per_cell_Hsap = self.metrics_dict["Read QC"]["reads_pre_qc"][1] / self.num_cells_Hsap
+            self.raw_reads_per_cell_Mmus = self.metrics_dict["Read QC"]["reads_pre_qc"][1] / self.num_cells_Mmus
 
-        # Get a subset of the array that contains only the mito genes
-        anndata_array_mito = anndata_array[:,self.anndata.var["is_mito"]]
-        self.mean_mito_genes_detected_per_cell = np.mean(anndata_array_mito.astype(bool).sum(axis=1))
-        self.median_mito_genes_detected_per_cell = int(np.median(anndata_array_mito.astype(bool).sum(axis=1)))
+            self.mean_total_counts_per_cell_total = np.mean(anndata_array_sc.sum(axis=1))
+            self.mean_total_counts_per_cell_Hsap = np.mean(anndata_array_sc_Hsap.sum(axis=1))
+            self.mean_total_counts_per_cell_Mmus = np.mean(anndata_array_sc_Mmus.sum(axis=1))
 
-        # Calculate percentage of counts or mitochondrial origin
-        self.percentage_counts_from_mito = self.as_perc(anndata_array_mito.sum() / anndata_array.sum())
+            self.median_total_counts_per_cell_total = np.median(anndata_array_sc.sum(axis=1))
+            self.median_total_counts_per_cell_Hsap = np.median(anndata_array_sc_Hsap.sum(axis=1))
+            self.median_total_counts_per_cell_Mmus = np.median(anndata_array_sc_Mmus.sum(axis=1))
 
-        self.num_unique_genes_detected_across_sample = self.anndata_array_detected_genes.shape[1]
-        self.total_genes_detected_across_samples = np.count_nonzero(self.anndata_array_detected_genes)
+            self.mean_genes_detected_per_cell_total = np.mean(anndata_array_sc.astype(bool).sum(axis=1))
+            self.mean_genes_detected_per_cell_Hsap = np.mean(anndata_array_sc_Hsap.astype(bool).sum(axis=1))
+            self.mean_genes_detected_per_cell_Mmus = np.mean(anndata_array_sc_Mmus.astype(bool).sum(axis=1))
 
-    def populate_cell_stats_in_metrics_dict(self):
+            self.median_genes_detected_per_cell_total = int(np.median(anndata_array_sc.astype(bool).sum(axis=1)))
+            self.median_genes_detected_per_cell_Hsap = int(np.median(anndata_array_sc_Hsap.astype(bool).sum(axis=1)))
+            self.median_genes_detected_per_cell_Mmus = int(np.median(anndata_array_sc_Mmus.astype(bool).sum(axis=1)))
+
+            # Get a subset of the arrays that don't contain the mito genes
+            anndata_array_sc_nuc_total = anndata_array_sc.loc[:, (~anndata_array_sc.columns.str.startswith(self.hsap_mito_prefix) & ~anndata_array_sc.columns.str.startswith(self.mmus_mito_prefix))]
+            anndata_array_sc_nuc_Hsap = anndata_array_sc_Hsap.loc[:, ~anndata_array_sc_Hsap.columns.str.startswith(self.hsap_mito_prefix)]
+            anndata_array_sc_nuc_Mmus = anndata_array_sc_Mmus.loc[:, ~anndata_array_sc_Mmus.columns.str.startswith(self.mmus_mito_prefix)]
+            
+            self.mean_nuclear_genes_detected_per_cell_total = np.mean(anndata_array_sc_nuc_total.astype(bool).sum(axis=1))
+            self.mean_nuclear_genes_detected_per_cell_Hsap = np.mean(anndata_array_sc_nuc_Hsap.astype(bool).sum(axis=1))
+            self.mean_nuclear_genes_detected_per_cell_Mmus = np.mean(anndata_array_sc_nuc_Mmus.astype(bool).sum(axis=1))
+
+            self.median_nuclear_genes_detected_per_cell_total = np.median(anndata_array_sc_nuc_total.astype(bool).sum(axis=1))
+            self.median_nuclear_genes_detected_per_cell_Hsap = np.median(anndata_array_sc_nuc_Hsap.astype(bool).sum(axis=1))
+            self.median_nuclear_genes_detected_per_cell_Mmus = np.median(anndata_array_sc_nuc_Mmus.astype(bool).sum(axis=1))
+
+            # Get a subset of the array that contains only the mito genes
+            anndata_array_sc_mito_total = anndata_array_sc.loc[:, (anndata_array_sc.columns.str.startswith(self.hsap_mito_prefix) | anndata_array_sc.columns.str.startswith(self.mmus_mito_prefix))]
+            anndata_array_sc_mito_Hsap = anndata_array_sc_Hsap.loc[:, anndata_array_sc_Hsap.columns.str.startswith(self.hsap_mito_prefix)]
+            anndata_array_sc_mito_Mmus = anndata_array_sc_Mmus.loc[:, anndata_array_sc_Mmus.columns.str.startswith(self.mmus_mito_prefix)]
+
+            self.mean_mito_genes_detected_per_cell_total = np.mean(anndata_array_sc_mito_total.astype(bool).sum(axis=1))
+            self.mean_mito_genes_detected_per_cell_Hsap = np.mean(anndata_array_sc_mito_Hsap.astype(bool).sum(axis=1))
+            self.mean_mito_genes_detected_per_cell_Mmus = np.mean(anndata_array_sc_mito_Mmus.astype(bool).sum(axis=1))
+
+            self.median_mito_genes_detected_per_cell_total = np.median(anndata_array_sc_mito_total.astype(bool).sum(axis=1))
+            self.median_mito_genes_detected_per_cell_Hsap = np.median(anndata_array_sc_mito_Hsap.astype(bool).sum(axis=1))
+            self.median_mito_genes_detected_per_cell_Mmus = np.median(anndata_array_sc_mito_Mmus.astype(bool).sum(axis=1))
+
+            # Calculate percentage of counts or mitochondrial origin
+            self.percentage_counts_from_mito_total = self.as_perc(anndata_array_sc_mito_total.values.sum() / anndata_array_sc.values.sum())
+            self.percentage_counts_from_mito_Hsap = self.as_perc(anndata_array_sc_mito_Hsap.values.sum() / anndata_array_sc_Hsap.values.sum())
+            self.percentage_counts_from_mito_Mmus = self.as_perc(anndata_array_sc_mito_Mmus.values.sum() / anndata_array_sc_Mmus.values.sum())
+
+            self.num_unique_genes_detected_across_sample_total = anndata_array_sc.shape[1]
+            self.num_unique_genes_detected_across_sample_Hsap = anndata_array_sc_Hsap.shape[1]
+            self.num_unique_genes_detected_across_sample_Mmus = anndata_array_sc_Mmus.shape[1]
+            
+            self.total_genes_detected_across_sample_total = np.count_nonzero(anndata_array_sc)
+            self.total_genes_detected_across_sample_Hsap  = np.count_nonzero(anndata_array_sc_Hsap)
+            self.total_genes_detected_across_sample_Mmus  = np.count_nonzero(anndata_array_sc_Mmus)
+        else:
+            # If single species just calculate the single version of each of the metrics.
+            self.num_cells = anndata_array_sc.shape[0]
+            self.raw_reads_per_cell = self.metrics_dict["Read QC"]["reads_pre_qc"][1] / self.num_cells
+            self.mean_total_counts_per_cell = np.mean(anndata_array_sc.sum(axis=1))
+            self.median_total_counts_per_cell = np.median(anndata_array_sc.sum(axis=1))
+            self.mean_genes_detected_per_cell = np.mean(anndata_array_sc.astype(bool).sum(axis=1))
+            self.median_genes_detected_per_cell = int(np.median(anndata_array_sc.astype(bool).sum(axis=1)))
+
+            # Get a subset of the array that doesn't contain the mito genes
+            anndata_array_sc_nuc = anndata_array_sc.loc[:, ~anndata_array_sc.columns.str.startswith(self.mito_prefix)]
+
+            self.mean_nuclear_genes_detected_per_cell = np.mean(anndata_array_sc_nuc.astype(bool).sum(axis=1))
+            self.median_nuclear_genes_detected_per_cell = np.median(anndata_array_sc_nuc.astype(bool).sum(axis=1))
+
+            # Get a subset of the array that contains only the mito genes
+            anndata_array_sc_mito = anndata_array_sc.loc[:, anndata_array_sc.columns.str.startswith(self.mito_prefix)]
+
+            self.mean_mito_genes_detected_per_cell = np.mean(anndata_array_sc_mito.astype(bool).sum(axis=1))
+            self.median_mito_genes_detected_per_cell = int(np.median(anndata_array_sc_mito.astype(bool).sum(axis=1)))
+
+            # Calculate percentage of counts or mitochondrial origin
+            self.percentage_counts_from_mito = self.as_perc(anndata_array_sc_mito.values.sum() / anndata_array_sc.values.sum())
+
+            self.num_unique_genes_detected_across_sample = anndata_array_sc.shape[1]
+
+            self.total_genes_detected_across_sample = np.count_nonzero(anndata_array_sc)
+
+    def populate_cell_stats_in_metrics_dict_mixed_species(self):
+        # Same as the single_species version below except that the primary key will
+        # be the base metric (see the base_stats list above) and then the secondary key will be
+        # the the actual metric.
+        # The first item in the tuple is the name of the metric that will be displayed
+        # in the Html, the second is the value, the third is the tool tip.
+        # NOTE the helper text must NOT have a comma in it as it is going to be written out in a csv.
+        self.metrics_dict["num_cells"]["num_cells_total"] = ("Number of cells total", self.num_cells_total, "Estimated number of Hsap and Mmus cells combined: Number of barcodes passing the nuclear gene detected threshold and the nuclear gene purity threshold.")
+        self.metrics_dict["num_cells"]["num_cells_Hsap"] = ("Number of Hsap cells", self.num_cells_Hsap, "Estimated number of Hsap cells: Number of barcodes passing the nuclear gene detected threshold and the nuclear gene purity threshold as Hsap.")
+        self.metrics_dict["num_cells"]["num_cells_Mmus"] = ("Number of Mmus cells", self.num_cells_Mmus, "Estimated number of Mmus cells: Number of barcodes passing the nuclear gene detected threshold and the nuclear gene purity threshold as Mmus.")
+        
+        self.metrics_dict["raw_reads_per_cell"]["raw_reads_per_cell_total"] = ("Raw reads per cell (Hsap and Mmus)", self.raw_reads_per_cell_total, "Number of reads pre-QC / Number of cells (Hsap and Mmus)")
+        self.metrics_dict["raw_reads_per_cell"]["raw_reads_per_cell_Hsap"] = ("Raw reads per Hsap cell", self.raw_reads_per_cell_Hsap, "Number of reads pre-QC / Number of Hsap cells")
+        self.metrics_dict["raw_reads_per_cell"]["raw_reads_per_cell_Mmus"] = ("Raw reads per Mmus cell", self.raw_reads_per_cell_Mmus, "Number of reads pre-QC / Number of Mmus cells")
+        
+        # Mean total counts per cell
+        self.metrics_dict["mean_total_counts_per_cell"]["mean_total_counts_per_cell_total"] = ("Mean total counts per cell (Hsap and Mmus)", self.mean_total_counts_per_cell_total, "Mean sum of counts per cell (Hsap and Mmus).")
+        self.metrics_dict["mean_total_counts_per_cell"]["mean_total_counts_per_cell_Hsap"] = ("Mean total counts per Hsap cell", self.mean_total_counts_per_cell_Hsap, "Mean sum of counts per Hsap cell.")
+        self.metrics_dict["mean_total_counts_per_cell"]["mean_total_counts_per_cell_Mmus"] = ("Mean total counts per Mmus cell", self.mean_total_counts_per_cell_Mmus, "Mean sum of counts per Mmus cell.")
+
+        # Median total counts per cell
+        self.metrics_dict["median_total_reads_per_cell"]["median_total_reads_per_cell_total"] = ("Median total counts per cell (Hsap and Mmus)", self.median_total_counts_per_cell_total, "Median sum of counts per cell.")
+        self.metrics_dict["median_total_reads_per_cell"]["median_total_reads_per_cell_Hsap"] = ("Median total counts per Hsap cell", self.median_total_counts_per_cell_Hsap, "Median sum of counts per Hsap cell.")
+        self.metrics_dict["median_total_reads_per_cell"]["median_total_reads_per_cell_Mmus"] = ("Median total counts per Mmus cell", self.median_total_counts_per_cell_Mmus, "Median sum of counts per Mmus cell.")
+
+        # Mean genes detected per cell
+        self.metrics_dict["mean_genes_detected_per_cell"]["mean_genes_detected_per_cell_total"] = ("Mean genes detected per cell (Hsap and Mmus)", self.mean_genes_detected_per_cell_total, "Mean number of genes detected per cell (including nuclear and mitochondrial genes).")
+        self.metrics_dict["mean_genes_detected_per_cell"]["mean_genes_detected_per_cell_Hsap"] = ("Mean genes detected per Hsap cell", self.mean_genes_detected_per_cell_Hsap, "Mean number of genes detected per Hsap cell (including nuclear and mitochondrial genes).")
+        self.metrics_dict["mean_genes_detected_per_cell"]["mean_genes_detected_per_cell_Mmus"] = ("Mean genes detected per Mmus cell", self.mean_genes_detected_per_cell_Mmus, "Mean number of genes detected per Mmus cell (including nuclear and mitochondrial genes).")
+
+        # Median genes detected per cell
+        self.metrics_dict["median_genes_detected_per_cell"]["median_genes_detected_per_cell_total"] = ("Median genes detected per cell (Hsap and Mmus)", self.median_genes_detected_per_cell_total, "Median number of genes detected per cell (including nuclear and mitochondrial genes).")
+        self.metrics_dict["median_genes_detected_per_cell"]["median_genes_detected_per_cell_Hsap"] = ("Median genes detected per Hsap cell", self.median_genes_detected_per_cell_Hsap, "Median number of genes detected per Hsap cell (including nuclear and mitochondrial genes).")
+        self.metrics_dict["median_genes_detected_per_cell"]["median_genes_detected_per_cell_Mmus"] = ("Median genes detected per Mmus cell", self.median_genes_detected_per_cell_Mmus, "Median number of genes detected per Mmus cell (including nuclear and mitochondrial genes).")
+
+        # Mean nuclear genes detected per cell
+        self.metrics_dict["mean_nuclear_genes_detected_per_cell"]["mean_nuclear_genes_detected_per_cell_total"] = ("Mean nuclear (non-mitochondrial) genes detected per cell (Hsap and Mmus)", self.mean_nuclear_genes_detected_per_cell_total, "Mean number of nuclear genes detected per cell (Hsap and Mmus).")
+        self.metrics_dict["mean_nuclear_genes_detected_per_cell"]["mean_nuclear_genes_detected_per_cell_Hsap"] = ("Mean nuclear (non-mitochondrial) genes detected per Hsap cell", self.mean_nuclear_genes_detected_per_cell_Hsap, "Mean number of nuclear genes detected per Hsap cell.")
+        self.metrics_dict["mean_nuclear_genes_detected_per_cell"]["mean_nuclear_genes_detected_per_cell_Mmus"] = ("Mean nuclear (non-mitochondrial) genes detected per Mmus cell", self.mean_nuclear_genes_detected_per_cell_Mmus, "Mean number of nuclear genes detected per Mmus cell.")
+
+        # Median nuclear genes detected per cell
+        self.metrics_dict["median_nuclear_genes_detected_per_cell"]["median_nuclear_genes_detected_per_cell_total"] = ("Median nuclear (non-mitochondrial) genes detected per cell (Hsap and Mmus)", self.median_nuclear_genes_detected_per_cell_total, "Median number of nuclear genes detected per cell (Hsap and Mmus).")
+        self.metrics_dict["median_nuclear_genes_detected_per_cell"]["median_nuclear_genes_detected_per_cell_Hsap"] = ("Median nuclear (non-mitochondrial) genes detected per Hsap cell", self.median_nuclear_genes_detected_per_cell_Hsap, "Median number of nuclear genes detected per Hsap cell.")
+        self.metrics_dict["median_nuclear_genes_detected_per_cell"]["median_nuclear_genes_detected_per_cell_Mmus"] = ("Median nuclear (non-mitochondrial) genes detected per Mmus cell", self.median_nuclear_genes_detected_per_cell_Mmus, "Median number of nuclear genes detected per Mmus cell.")
+
+        # Mean mitochondrial genes detected per cell
+        self.metrics_dict["mean_mito_genes_detected_per_cell"]["mean_mito_genes_detected_per_cell_total"] = ("Mean mitochondrial genes detected per cell (Hsap and Mmus)", self.mean_mito_genes_detected_per_cell_total, "Mean number of mitochondrial genes detected per cell (Hsap and Mmus).")
+        self.metrics_dict["mean_mito_genes_detected_per_cell"]["mean_mito_genes_detected_per_cell_Hsap"] = ("Mean mitochondrial genes detected per Hsap cell", self.mean_mito_genes_detected_per_cell_Hsap, "Mean number of mitochondrial genes detected per Hsap cell.")
+        self.metrics_dict["mean_mito_genes_detected_per_cell"]["mean_mito_genes_detected_per_cell_Mmus"] = ("Mean mitochondrial genes detected per Mmus cell", self.mean_mito_genes_detected_per_cell_Mmus, "Mean number of mitochondrial genes detected per Mmus cell.")
+
+        # Median mitochondrial genes detected per cell
+        self.metrics_dict["median_mito_genes_detected_per_cell"]["median_mito_genes_detected_per_cell_total"] = ("Median mitochondrial genes detected per cell (Hsap and Mmus)", self.median_mito_genes_detected_per_cell_total, "Median number of mitochondrial genes detected per cell.")
+        self.metrics_dict["median_mito_genes_detected_per_cell"]["median_mito_genes_detected_per_cell_Hsap"] = ("Median mitochondrial genes detected per Hsap cell", self.median_mito_genes_detected_per_cell_Hsap, "Median number of mitochondrial genes detected per Hsap cell.")
+        self.metrics_dict["median_mito_genes_detected_per_cell"]["median_mito_genes_detected_per_cell_Mmus"] = ("Median mitochondrial genes detected per Mmus cell", self.median_mito_genes_detected_per_cell_Mmus, "Median number of mitochondrial genes detected per Mmus cell.")
+
+        # Percentage of counts from mitochondrial origin
+        self.metrics_dict["percentage_counts_from_mito"]["percentage_counts_from_mito_total"] = ("Percentage of counts of mitochondrial origin (Hsap and Mmus) ", self.percentage_counts_from_mito_total, "(Total mitochonrial counts / total counts) * 100")
+        self.metrics_dict["percentage_counts_from_mito"]["percentage_counts_from_mito_Hsap"] = ("Percentage of counts of mitochondrial origin from Hsap cells", self.percentage_counts_from_mito_Hsap, "(Hsap mitochonrial counts / all Hsap counts) * 100")
+        self.metrics_dict["percentage_counts_from_mito"]["percentage_counts_from_mito_Mmus"] = ("Percentage of counts of mitochondrial origin from Mmus cells", self.percentage_counts_from_mito_Mmus, "(Mmus mitochonrial counts / all Mmus counts) * 100")
+
+        # Unique genes detected across samples (i.e. a gene can only be detected once per sample)
+        self.metrics_dict["num_unique_genes_detected_across_sample"]["num_unique_genes_detected_across_sample_total"] = ("Unique genes detected across sample (Hsap and Mmus) ", self.num_unique_genes_detected_across_sample_total, "Number of unique genes detected across the sample (each gene can be counted only once even if found in multiple cells).")
+        self.metrics_dict["num_unique_genes_detected_across_sample"]["num_unique_genes_detected_across_sample_Hsap"] = ("Unique Hsap genes detected in Hsap cells across sample", self.num_unique_genes_detected_across_sample_Hsap, "Number of unique Hsap genes detected in Hsap cells across the sample (each gene can be counted only once even if found in multiple cells).")
+        self.metrics_dict["num_unique_genes_detected_across_sample"]["num_unique_genes_detected_across_sample_Mmus"] = ("Unique Mmus genes detected in Mmus cells across sample", self.num_unique_genes_detected_across_sample_Mmus, "Number of unique Mmus genes detected in Mmus cells across the sample (each gene can be counted only once even if found in multiple cells).")
+
+        # Total genes detected across samples (i.e. genes detected per cell summed)
+        self.metrics_dict["total_genes_detected_across_samples"]["total_genes_detected_across_samples_total"] = ("Total genes detected across sample (Hsap and Mmus)", self.total_genes_detected_across_sample_total, "Total number of genes detected across the sample (each gene can be counted more than once if detected in more than one cell).")
+        self.metrics_dict["total_genes_detected_across_samples"]["total_genes_detected_across_samples_Hsap"] = ("Total Hsap genes detected across sample", self.total_genes_detected_across_sample_Hsap, "Total number of Hsap genes detected across the sample (each gene can be counted more than once if detected in more than one cell).")
+        self.metrics_dict["total_genes_detected_across_samples"]["total_genes_detected_across_samples_Mmus"] = ("Total Mmus genes detected across sample", self.total_genes_detected_across_sample_Mmus, "Total number of Mmus genes detected across the sample (each gene can be counted more than once if detected in more than one cell).")
+
+    def populate_cell_stats_in_metrics_dict_single_species(self):
         # Estimated number of cells
         self.metrics_dict["Cell metrics"]["num_cells"] = ("Number of cells", self.num_cells, "Estimated number of cells; Number of barcodes passing the nulcear genes detected threshold.")
 
@@ -133,9 +317,9 @@ class SummaryStatistics:
         self.metrics_dict["Cell metrics"]["raw_reads_per_cell"] = ("Raw reads per cell", self.raw_reads_per_cell, "Number of reads pre-QC / Number of cells")
 
         # Mean total counts per cell
-        self.metrics_dict["Cell metrics"]["mean_total_counts_per_cell"] = ("Mean total counts per cell", self.mean_total_counts_per_cell, "Mean of the sum of counts per cell.")
+        self.metrics_dict["Cell metrics"]["mean_total_counts_per_cell"] = ("Mean total counts per cell", self.mean_total_counts_per_cell, "Mean sum of counts per cell.")
         # Median total counts per cell
-        self.metrics_dict["Cell metrics"]["median_total_reads_per_cell"] = ("Median total counts per cell", self.median_total_counts_per_cell, "Median of the sum of counts per cell.")
+        self.metrics_dict["Cell metrics"]["median_total_reads_per_cell"] = ("Median total counts per cell", self.median_total_counts_per_cell, "Median sum of counts per cell.")
 
         # Mean genes detected per cell
         self.metrics_dict["Cell metrics"]["mean_genes_detected_per_cell"] = ("Mean genes detected per cell", self.mean_genes_detected_per_cell, "Mean number of genes detected for each cell (including nuclear and mitochondrial genes).")
@@ -159,29 +343,104 @@ class SummaryStatistics:
         self.metrics_dict["Cell metrics"]["num_unique_genes_detected_across_sample"] = ("Unique genes detected across sample", self.num_unique_genes_detected_across_sample, "Number of unique genes detected across the sample (each gene can be counted only once even if found in multiple cells).")
 
         # Total genes detected across samples (i.e. genes detected per cell summed)
-        self.metrics_dict["Cell metrics"]["total_genes_detected_across_samples"] = ("Total genes detected across sample", self.total_genes_detected_across_samples, "Total number of genes detected across the sample (each gene can be counted more than once if detected in more than one cell).")
+        self.metrics_dict["Cell metrics"]["total_genes_detected_across_samples"] = ("Total genes detected across sample", self.total_genes_detected_across_sample, "Total number of genes detected across the sample (each gene can be counted more than once if detected in more than one cell).")
 
     def get_cell_stats(self):
+        # Try to read in the raw h5ad and handle if it is empty
+        # by checking for an OSError (empty file) or a 0 barcode count.
         try:
             self.anndata = anndata.read_h5ad(sys.argv[2])
         except OSError: # If the h5ad is an empty file, output empty metrics
-            # Populate with 0s
-            self.set_cell_stats_to_zero()
+            self.set_cell_and_purity_stats_to_zero()
         else:
             if self.anndata.shape[0] == 0:
-                # There are no cells and we should set the cell_stats to 0
-                self.set_cell_stats_to_zero()
+                self.set_cell_and_purity_stats_to_zero()
             else:
-                # There are cells and we should calculate the cell stats
-                self.calculate_cell_stats()
-        self.populate_cell_stats_in_metrics_dict()
+                if self.mixed:
+                    # If mixed, we need to check to see if there
+                    # are called cells in the count table that
+                    # we can generate purity metrics from.
+                    # The is_called_cell attribute is annotated in filter_count_matrix.py
+                    if sum(self.anndata.obs["is_called_cell"]) > 0:
+                        # Then we can populate the cell purity
+                        self.calculate_purity_stats()
+                    else:
+                        # If there are no called cells then we set all stats to 0
+                        self.set_purity_metrics_to_zero()
+                    self.populate_purity_stats_in_metrics_dict()
+
+                # Finally we need to calculate the cell stats if there
+                # are cells to call the stats from
+                # else set the cell stats to 0
+                # The is_single_cell attribute is annotated in filter_count_matrix.py
+                if sum(self.anndata.obs["is_single_cell"]) > 0:
+                    # Then we can populate the cell purity
+                    self.calculate_cell_stats()
+                else:
+                    # If there are no called cells then we set all stats to 0
+                    self.set_cell_stats_to_zero()
+        
+        # Once we have either calculated the stats or set them to 0
+        # we need to populate the metrics dicts
+        # This gets done differently depending on whether we are doing a mixed
+        # or single species output.
+        # For the mixed species case we populate with subcategory keys for each
+        # of the base base_stats.
+        # Else for single we use the base_stat directly as the key
+        if self.mixed:
+            self.populate_cell_stats_in_metrics_dict_mixed_species()
+        else:
+            self.populate_cell_stats_in_metrics_dict_single_species()
+
+    def calculate_purity_stats(self):
+        """
+        Calculate num_raw_cells_no_purity
+        and num_multiplet_cells
+        """
+        # The number of cells diregarding purity
+        self.num_raw_cells_no_purity = sum(self.anndata.obs["is_called_cell"])
+
+        # The number of cells that are called cells but do not meet the purity theshold
+        self.num_multiplet_cells = sum(self.anndata.obs["is_called_cell"]) - sum(self.anndata.obs["is_single_cell"])
+
+    def populate_purity_stats_in_metrics_dict(self):
+        """
+        The purity stats that are calculated in calculate_purity_stats
+        need to be added to the metrics_dict.
+        Do something similar to what has been done in populate_cell_stats_in_metrics_dict_mixed_species.
+        """
+        # NOTE we call the subkey "*_total" so that the metric name
+        # matches that triplicate format metrics.
+        self.metrics_dict["num_raw_cells"]["num_raw_cells_total"] = (
+            "Number of cells disregarding purity", self.num_raw_cells_no_purity,
+            "Number of called cells (i.e. meeting the nuclear gene threshold cutoff irrespective of the purity threshold)."
+            )
+        
+        self.metrics_dict["num_multiplet_cells"]["num_multiplet_cells_total"] = (
+            "Number of multiplet cells",
+            self.num_multiplet_cells,
+            "Total number of multiplet cells (called cells not meeting the purity threshold)."
+            )
+
+    def set_purity_metrics_to_zero(self):
+        # The number of cells diregarding purity
+        self.num_raw_cells_no_purity = 0
+        # The number of cells that are called cells but do not meet the purity theshold
+        self.num_multiplet_cells = 0
+
+    def set_cell_and_purity_stats_to_zero(self):
+        if self.mixed:
+            # If mixed we additionally need to set the purity_metrics to 0
+            self.set_purity_metrics_to_zero()
+        self.set_cell_stats_to_zero()
 
     def get_sequencing_stats(self):
         """
         Populate the self.metrics_dict with the stats
         """
         self.get_trimming_qc_stats()
-        self.get_mapping_stats()
+        # Uncomment to reenable the mapping stats
+        # self.get_mapping_stats()
         self.get_duplication_stats()
 
     def get_antisense(self):
@@ -190,7 +449,7 @@ class SummaryStatistics:
         the antisense mapped reads and populate into
         self.metrics_dict
 
-        TODO currently we only collect the antisense for the allocated filtered
+        NOTE currently we only collect the antisense for the allocated filtered
         bam. Ideally we would want this stat for each level of filtering
         I.e. raw, umr filtered and allocated
         """

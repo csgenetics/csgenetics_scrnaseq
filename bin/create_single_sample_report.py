@@ -5,11 +5,32 @@ import base64
 from collections import defaultdict
 import os
 
+def get_cell_stat_cat_dict_obj(mixed):
+    if mixed:
+        return {
+                                "num_cells": ("Estimated number of cells; Number of barcodes passing the nulcear genes detected and purity thresholds.", "num_cells_accord_header", "num_cells_collapse"),
+                                "raw_reads_per_cell": ("Number of reads pre-QC / Number of cells", "raw_reads_per_cell_accord_header", "raw_reads_per_cell_collapse"), 
+                                "mean_total_counts_per_cell": ("Mean sum of counts per cell.", "mean_total_counts_accord_header", "mean_total_counts_collapse"), 
+                                "median_total_reads_per_cell": ("Median sum of counts per cell.", "median_total_reads_accord_header", "median_total_reads_collapse"), 
+                                "mean_genes_detected_per_cell": ("Mean number of genes detected for each cell (including nuclear and mitochondrial genes).", "mean_genes_detected_accord_header", "mean_genes_detected_collapse"), 
+                                "median_genes_detected_per_cell": ("Median number of genes detected for the cells (including nuclear and mitochondrial genes).", "median_genes_detected_accord_header", "median_genes_detected_collapse"), 
+                                "mean_nuclear_genes_detected_per_cell": ("Mean nuclear (non-mitochondrial) genes detected per cell", "mean_nuclear_genes_detected_accord_header", "mean_nuclear_genes_detected_collapse"), 
+                                "median_nuclear_genes_detected_per_cell": ("Median nuclear (non-mitochondrial) genes detected per cell", "median_nuclear_genes_detected_accord_header", "median_nuclear_genes_detected_collapse"), 
+                                "mean_mito_genes_detected_per_cell": ("Mean number of mitochondrial genes detected for each cell.", "mean_mito_genes_detected_accord_header", "mean_mito_genes_detected_collapse"), 
+                                "median_mito_genes_detected_per_cell": ("Median number of mitochondrial genes detected for each cell.", "median_mito_genes_detected_accord_header", "median_mito_genes_detected_collapse"), 
+                                "percentage_counts_from_mito": ("(Mitochonrial counts / all counts) * 100", "percentage_counts_mito_accord_header", "percentage_counts_mito_collapse"), 
+                                "num_unique_genes_detected_across_sample": ("Number of unique genes detected across the sample (each gene can be counted only once even if found in multiple cells).", "num_unique_genes_detected_accord_header", "num_unique_genes_detected_collapse"), 
+                                "total_genes_detected_across_samples": ("Total number of genes detected across the sample (each gene can be counted more than once if detected in more than one cell).", "total_genes_detected_accord_header", "total_genes_detected_collapse"),
+                                "num_raw_cells": ("Number of called cells (i.e. meeting the nuclear gene threshold cutoff irrespective of the purity threshold).", "num_raw_cells_accord_header", "num_raw_cells_collapse"),      
+                                "num_multiplet_cells": ("Total number of multiplet cells (called cells not meeting the purity threshold).", "num_multiplet_cells_accord_header", "num_multiplet_cells_collapse")                                                          
+                                }
+    else:
+        return {}
+
 class SingleSampleHTMLReport:
     """
-        This script will take CSV outputs for:
-        - Sample.metrics.csv file
-        output from the summary_statistics.py script and insert them into the HTML for each sample.
+        This script takes a .csv input from the summary_statistics.py script
+        and inserts the metrics into the HTML for each sample.
         We also inserts a premade png for cell caller.
     """
     def __init__(self):
@@ -28,6 +49,11 @@ class SingleSampleHTMLReport:
         with open(sys.argv[4]) as html_template:
             self.jinja_template = Template(html_template.read())
 
+        if sys.argv[5].upper() == "TRUE":
+            self.mixed = True
+        else:
+            self.mixed = False
+
         # If 'empty' in the name of the Cell Caller plot
         # then set self.show_cell_caller_plot to False.
         # Will cause the Cell Caller plot to be hidden.
@@ -44,14 +70,33 @@ class SingleSampleHTMLReport:
     def generate_encoded_png_str(self):
         with open(f"{self.plot_path}", "rb") as image_file:
             return base64.b64encode(image_file.read()).decode("utf-8")
-        
+
     def render_and_write_report(self):
-        # Render the template.        
+        # For mixed species cell metrics we need to create 'cell_stat_cat_dict'.
+        # This should take exactly the same for as the alignment_cat_dict below.
+        # The key should be the various cell base metric names i.e "num_cells", "raw_reads_per_cell"
+        # (all of the primary keys that we used for the cell metrics in the summary_statistics.py).
+        
+        # The values should be a tuple where the first element is the tool tip,
+        # is the name that will be used for the accordion for that stat e.g. "num_cells_accord_header", "raw_reads_per_cell_accord_header" etc.
+        # and the third the name of the collapse e.g. "num_cells_collapse", "raw_reads_per_cell_accord_header" etc.
+
+        # I have implemented the jinja logic in both of the templates to accept the 'cell_stat_cat_dict" based on what we had for
+        # the alignments (which we deactivated by removing the associated HTML).
+
+        # NOTE, unlike the alignment stats, where there was only a tool tip associated with the alignement type header and not with each of the individual metrics,
+        # we want to implement a tool tip for each of the individual metrics. The tooltips will already
+        # have been created by you in summary_statistics. This would require a small modification to the HTML for the single and multisample template.
+
+        cell_stat_cat_dict_obj = get_cell_stat_cat_dict_obj(self.mixed)
+
+
         final_report = self.jinja_template.render(metrics_dict=self.metrics_dict,
                                             show_cell_caller_plot=self.show_cell_caller_plot,
                                             encoded_png_str=self.encoded_png_str,
                                             sample_id=self.sample_id,
-                                            # This dict is required to supply the tooltips, the accordion header ID and the collapse ID for each of the categories of alignment statistics
+                                            mixed = self.mixed,
+                                            # These dicts are required to supply the tooltips, the accordion header ID and the collapse ID for each of the categories of alignment statistics
                                             # The keys match the alignment categories of the metrics dict, and the values (tuples) give the tooltips and IDs.
                                             # We rely on the order of the dictionary to populate the accordions in the output html.
                                             # NOTE the alignment section has temporarily been disabled by removing the corresponding html.
@@ -60,7 +105,8 @@ class SingleSampleHTMLReport:
                                                 "Post read QC alignment": ("Mapping of the post QC reads i.e. after trimming (polyX end and internal polyA) and barcode verification.", "qc_accord_header", "qc_collapse"),
                                                 "High confidence read alignment": ("Reads with a single alignment and a maximum of 3 bp mismatch.", "hc_accord_header", "hc_collapse"),
                                                 "Annotated reads alignment": ("High confidence reads annotated with a gene ID (XT bam tag).", "ann_accord_header", "ann_collapse")
-                                                })
+                                                },  cell_stat_cat_dict = cell_stat_cat_dict_obj)
+
 
         # Write out the rendered template.
         with open(f"{self.sample_id}_report.html", "w") as f_output:

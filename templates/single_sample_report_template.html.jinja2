@@ -41,6 +41,9 @@
    </h2>
 
   <!-- 1st row is row of headline stats: num_cells, raw_reads_per_cell, median_genes_detected_per_cell -->
+  
+  <!-- The headline metrics must be accessed slightly differently -->
+  <!-- dependent on whether we are working with mixed or single species -->
   <div class="row">
     {% for headline_stat in ["num_cells", "raw_reads_per_cell", "median_genes_detected_per_cell"] %}
       <div class="col headline-stat">
@@ -50,12 +53,21 @@
             <div class="col mr-2">
               <div class="text-xs font-weight-bold mb-1" style="font-size:25px; color:rgb(54, 186, 0)">
               <!-- Metric value -->
-              {{ metrics_dict["Cell metrics"][headline_stat][1] }}
+              {% if mixed %}
+                {{ metrics_dict[headline_stat][headline_stat + "_total"][1] }}
+              {% else %}
+                {{ metrics_dict["Cell metrics"][headline_stat][1] }}
+              {% endif %}
               </div>
               <div class="h5 mb-0 font-weight-bold text-gray-800" style="font-size:12px">
               <!-- Human readable metric name -->
-              {{ metrics_dict["Cell metrics"][headline_stat][0] }}
-              <i class="bi-info-circle" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="{{ metrics_dict["Cell metrics"][headline_stat][2] }}"></i>
+                {% if mixed %}
+                  {{ metrics_dict[headline_stat][headline_stat + "_total"][0] }}
+                  <i class="bi-info-circle" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="{{ metrics_dict[headline_stat][headline_stat + "_total"][2] }}"></i>
+                {% else %}
+                  {{ metrics_dict["Cell metrics"][headline_stat][0] }}
+                  <i class="bi-info-circle" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="{{ metrics_dict["Cell metrics"][headline_stat][2] }}"></i>
+                {% endif %}
               </div>
             </div>
           </div>
@@ -113,27 +125,68 @@
       <!-- Cell stats -->
       <div class="card border-left-success shadow py-2">
         <div class="card-body">
-          <table class="table" style="font-size:13px; color:grey">
-            <tbody>
+         
               <h2 class="text-xs font-weight-bold me-5 ms-3" style="font-size: 21px; line-height: 1.5">
-              Cell stats
+              Cell metrics
               </h2>
-        
-              {% for metric, metric_tup in metrics_dict["Cell metrics"].items() %}
-                <tr>
-                  <th scope="row">
-                    {{ metric_tup[0] }}
-                    <i class="bi-info-circle" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="{{ metric_tup[2] }}">
-                    </i>
-                  </th>
-                    <td>
-                      {{ metric_tup[1] }}
-                    </td>
-                </tr>
-              {% endfor %}
-
-            </tbody>
-          </table>
+              {% if mixed %}
+                <!-- If mixed species, then we want to implement a drop down -->
+                <!-- where we have a header for each of the 'base stats'. -->
+                <!-- and then the the three stats for each of the headers -->
+                <div class="accordion accordion-flush" id="cellStatCollapse">
+                  <!-- Creates an accordion item for each of the sub classes of cell stats -->
+                  {% for cell_stat_cat, toolTip_headerID_collapseID in cell_stat_cat_dict.items() %}
+                    <div class="accordion-item">
+                      <!-- Accordion header -->
+                      <h2 class="accordion-header" id="{{ toolTip_headerID_collapseID[1] }}">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#{{ toolTip_headerID_collapseID[2] }}" aria-expanded="false" aria-controls="{{ toolTip_headerID_collapseID[2] }}">
+                          <!-- The text for the button is the label for the "_total" metrics -->
+                          {{ metrics_dict[cell_stat_cat][cell_stat_cat + "_total"][0] }} <i class="bi-info-circle ms-1" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="{{ toolTip_headerID_collapseID[0] }}">
+                              </i>
+                        </button>
+                      </h2>
+                      <!-- Accordion -->
+                      <div id="{{ toolTip_headerID_collapseID[2] }}" class="accordion-collapse collapse" aria-labelledby="{{ toolTip_headerID_collapseID[1] }}" data-bs-parent="#cellStatCollapse">
+                        <div class="accordion-body">
+                          <!-- Accordion category header -->
+                          <table class="table" style="font-size:13px; color:grey">
+                            <tbody>
+                              {% for metric, metric_tup in metrics_dict[cell_stat_cat].items() %}
+                                <tr>
+                                  <th scope="row">
+                                  {{ metric_tup[0] }}
+                                  </th>
+                                  <td>
+                                    {{ metric_tup[1] }}
+                                  </td>
+                                </tr>
+                              {% endfor %}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  {% endfor %}
+                </div>
+              {% else %}
+                <!-- If single species, make a row per metric -->
+                <table class="table" style="font-size:13px; color:grey">
+                  <tbody>
+                    {% for metric, metric_tup in metrics_dict["Cell metrics"].items() %}
+                      <tr>
+                        <th scope="row">
+                          {{ metric_tup[0] }}
+                          <i class="bi-info-circle" style="font-size:15px" data-bs-toggle="tooltip" data-bs-title="{{ metric_tup[2] }}">
+                          </i>
+                        </th>
+                        <td>
+                          {{ metric_tup[1] }}
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              {% endif %}
         </div>
       </div>
 

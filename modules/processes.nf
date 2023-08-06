@@ -540,8 +540,9 @@ process cell_caller {
   tuple val(sample_id), path("${sample_id}_pdf_with_cutoff.png"), emit: cell_caller_plot
 
   script:
+  def mixed_args = params.mixed_species ? "--mixed TRUE --mt_prefix ${params.hsap_mitochondria_prefix} --mt_prefix2 ${params.mmus_mitochondria_prefix}" : "--mixed FALSE --mt_prefix ${params.mitochondria_prefix}"
   """
-  cell_caller.py --sample ${sample_id} --min_nucGene ${params.min_nuc_gene} --count_matrix $count_matrix_h5ad --mt_regex '${params.mitochondria_regex}'
+  cell_caller.py --sample ${sample_id} --min_nucGene ${params.min_nuc_gene} --count_matrix $count_matrix_h5ad $mixed_args
   """
 }
 
@@ -566,11 +567,14 @@ process filter_count_matrix{
   // Output the 3 part barcode, features, matrix 
   tuple val(sample_id), path("barcodes.tsv.gz"), path("features.tsv.gz"), path("matrix.mtx.gz"), optional: true
   // Output the h5ad matrix
-  tuple val(sample_id), path("${sample_id}*.filtered_feature_bc_matrix.*h5ad"), emit: cell_only_count_matrix
+  tuple val(sample_id), path("${sample_id}*.filtered_feature_bc_matrix.*h5ad")
+  // Output and emit the raw h5ad matrix for use in summary statistics
+  tuple val(sample_id), path("${sample_id}*.raw_feature_bc_matrix.*h5ad"), emit: raw_count_matrix
 
   script:
+  def mixed_args = params.mixed_species ? "TRUE ${params.hsap_mitochondria_prefix} ${params.mmus_mitochondria_prefix} ${params.hsap_gene_prefix} ${params.mmus_gene_prefix} ${params.purity}" : "FALSE ${params.mitochondria_prefix}"
   """
-  filter_count_matrix.py ${nuc_gene_threshold} ${h5ad_raw_count_matrix} ${sample_id} '${params.mitochondria_regex}'
+  filter_count_matrix.py ${nuc_gene_threshold} ${h5ad_raw_count_matrix} ${sample_id} $mixed_args
   """
 }
 
@@ -579,18 +583,19 @@ process filter_count_matrix{
 */
 process summary_statistics {
   tag "$sample_id"
-  label 'c4m4'
+  label 'c1m8'
 
   publishDir "${params.outdir}/report/${sample_id}", mode: 'copy', pattern: "*.csv"
   
   input:
-  tuple val(sample_id), val(min_nuc_gene_cutoff), path(h5ad), path(annotated_qualimap), path(antisense), path(dedup), path(filtered_qualimap), path(multiqc_data_json), path(raw_qualimap)
+  tuple val(sample_id), val(min_nuc_gene_cutoff), path(raw_h5ad), path(annotated_qualimap), path(antisense), path(dedup), path(filtered_qualimap), path(multiqc_data_json), path(raw_qualimap)
   output:
   tuple val(sample_id), path("${sample_id}.metrics.csv"), emit: metrics_csv
 
   script:
+  def mixed_args = params.mixed_species ? "TRUE ${params.hsap_mitochondria_prefix} ${params.mmus_mitochondria_prefix} ${params.hsap_gene_prefix} ${params.mmus_gene_prefix} ${params.purity}" : "FALSE ${params.mitochondria_prefix}"
   """
-  summary_statistics.py $sample_id $h5ad $multiqc_data_json $antisense $dedup $raw_qualimap $filtered_qualimap $annotated_qualimap '${params.mitochondria_regex}'
+  summary_statistics.py $sample_id $raw_h5ad $multiqc_data_json $antisense $dedup $raw_qualimap $filtered_qualimap $annotated_qualimap $mixed_args
   """
 }
 
@@ -613,7 +618,7 @@ process single_summary_report {
 
   script:
   """
-  create_single_sample_report.py $sample_id $plot_png $metrics_csv $html_template
+  create_single_sample_report.py $sample_id $plot_png $metrics_csv $html_template ${params.mixed_species}
   """
 }
 
@@ -635,7 +640,7 @@ process multi_sample_report {
 
   script:
   """
-  create_multi_sample_report.py $template
+  create_multi_sample_report.py $template ${params.mixed_species}
   """
 }
 
