@@ -130,7 +130,7 @@ class SummaryStatistics:
                     setattr(self, f"{base_stat}{stat_type}", 0)
         else:
             for base_stat in base_stats:
-                setattr(self, f"{base_stat}{stat_type}", 0)
+                setattr(self, f"{base_stat}", 0)
 
     def calculate_cell_stats(self):
         # strip the anndata object down to only the is_single_cell cells

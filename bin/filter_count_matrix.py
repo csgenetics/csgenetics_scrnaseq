@@ -32,6 +32,7 @@ class FilterCountMatrix:
             self.anndata_obj = anndata.read_h5ad(sys.argv[2])
         except OSError:
             open(f"{self.sample_name}.{self.single_cell_nuc_gene_threshold}.filtered_feature_bc_matrix.empty.h5ad", "w").close()
+            open(f"{self.sample_name}.{self.single_cell_nuc_gene_threshold}.raw_feature_bc_matrix.empty.h5ad", "w").close()
             sys.exit(0)
 
         # Whether we are working with a Human Mouse mixed samples
