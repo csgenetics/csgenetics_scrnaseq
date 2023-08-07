@@ -23,7 +23,9 @@ def parse_arguments():
    parser.add_argument("--sample", help="Sample ID")
    parser.add_argument("--min_nucGene", default=100, type=int, help="minimal number of nuclear gene to call single cell")
    parser.add_argument("--count_matrix", help="Path to the h5ad count matrix.")
-   parser.add_argument("--mt_regex", help="The regex pattern used to identify mitochondrial genes.")
+   parser.add_argument("--mt_prefix", help="The regex pattern used to identify mitochondrial genes.", required=True)
+   parser.add_argument("--mt_prefix2", help="The second regex pattern used to identify mitochondrial genes (only required for mixed species).", required=False)
+   parser.add_argument("--mixed", help="Is true if the experiment was done on mixed species.")
    return parser.parse_args()
 
 def getlog10NucGenes(sample, args):
@@ -38,8 +40,15 @@ def getlog10NucGenes(sample, args):
       sys.exit(0)
    #calculate QC metrics (total number of genes per cell, total counts per cell)
    sc.pp.calculate_qc_metrics(adata, percent_top=None, log1p=False, inplace=True)
+
+   # Creates regex for mixed species
+   if args.mixed == "TRUE":
+      mt_regex = f"{args.mt_prefix}|{args.mt_prefix2}"
+   else:
+      mt_regex = args.mt_prefix
+
    # calculate the number of NUCLEAR genes per cell
-   adata.obs['nNuc_genes'] = adata.X[:,~adata.var_names.str.contains(args.mt_regex, flags=re.IGNORECASE, regex=True)].toarray().astype(bool).sum(axis=1)
+   adata.obs['nNuc_genes'] = adata.X[:,~adata.var_names.str.contains(mt_regex, flags=re.IGNORECASE, regex=True)].toarray().astype(bool).sum(axis=1)
    # get a log 10 of the number of genes  -  need +1 as some values in nNuc_genes are 0 
    adata.obs['log10_Nuc_genes'] = np.log10(adata.obs['nNuc_genes'] +1)
    log10_Nuc_genes = adata.obs['log10_Nuc_genes'].to_numpy()

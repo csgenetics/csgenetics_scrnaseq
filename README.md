@@ -17,9 +17,12 @@
   - [Launching the pipeline directly from the csgenetic/csgenetics\_scrnaseq Github repo](#launching-the-pipeline-directly-from-the-csgeneticcsgenetics_scrnaseq-github-repo)
     - [Updating the pipeline](#updating-the-pipeline)
     - [Specifying a pipeline version](#specifying-a-pipeline-version)
-  - [Available profiles](#available-profiles)
+  - [Available standard profiles](#available-standard-profiles)
     - [test](#test)
+    - [test\_singularity](#test_singularity)
     - [docker](#docker)
+    - [singularity](#singularity)
+  - [Available species profiles](#available-species-profiles)
   - [Configurable parameters](#configurable-parameters)
     - [`profile`](#profile)
     - [`outdir`](#outdir)
@@ -29,6 +32,7 @@
     - [`gtf_path`](#gtf_path)
     - [`whitelist_path`](#whitelist_path)
     - [`min_nuc_gene`](#min_nuc_gene)
+    - [`purity`](#purity)
   - [Outputs](#outputs)
     - [`count_matrix`](#count_matrix)
     - [`report`](#report)
@@ -194,13 +198,13 @@ For reference, the version will be logged in reports when you run the pipeline.
 
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
-## Available profiles
+## Available standard profiles
 
 Nextflow pipeline configurable parameters can be set in groups by specifying profiles.
 
 See the [Config profiles](https://www.nextflow.io/docs/latest/config.html#config-profiles) section of the Netflow documentation for further details.
 
-There are four profiles available for the CS Genetics scRNA-Seq pipeline:
+There are four standard profiles available for the CS Genetics scRNA-Seq pipeline:
 
 - `test`
   - A profile with a complete configuration for automated testing.
@@ -243,6 +247,8 @@ When running the test profile, do not supply the `--input_csv` argument. A remot
 
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
+### test_singularity
+
 To run the `test` profile using Singualrity to launch the Docker containers use the profile `test_singularity`
 
 E.g.
@@ -259,6 +265,44 @@ E.g.
 
 ```bash
 nextflow run main.nf -profile docker --input_csv $HOME/analysis/input_csv/input_csv.csv
+```
+
+<div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
+
+### singularity
+
+A generic configuration profile that enables use of pre-configured Docker containers for each process run using Singularity.
+
+E.g.
+
+```bash
+nextflow run main.nf -profile singularity --input_csv $HOME/analysis/input_csv/input_csv.csv
+```
+
+<div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
+
+## Available species profiles
+
+In addition to the four [available standard profiles](#available-standard-profiles), species profiles can be used to configure the pipeline for a specific species or mix of species.
+
+Currently avaialable species profiles are:
+- Human; `GRCh38`
+- Mouse; `GRCm39`
+- Drosophila melanogaster; `BDGP6`
+- Mixed (Human - Mouse); `mouse_human_mix`
+
+By passing one of these profiles as a command line argument, the pipeline will automatically be configured to use the relevant set of resources for the following parameters:
+- `star_index_dir`
+- `gtf_path`
+- `mitochondrial_prefix` (`hsap_mitochondria_prefix` & `mmus_mitochondria_prefix` for `mouse_human_mix`)
+- `hsap_gene_prefix` & `hsap_gene_prefix` (mixed species only)
+
+For most use cases, the species profiles will be provided in addition to one of the four [available standard profiles](#available-standard-profiles).
+
+E.g.
+
+```bash
+nextflow run main.nf -profile singularity,GRCh38 --input_csv $HOME/analysis/input_csv/input_csv.csv
 ```
 
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
@@ -308,6 +352,7 @@ There are premade remotely hosted STAR indexes for the following species (remote
 
 If you are working with one of these species, you can provide the remotely hosted directory
 to the `--star_index_dir` parameter. The pipeline will automatically download the resource.
+However, it is recommend that you use the appropriate [species profile](#available-species-profiles) to automatically set the `star_index_dir`.
 
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
@@ -333,10 +378,6 @@ STAR \
 --sjdbOverhang ReadLength-1
 ```
 
-Note: When creating new genomes it is vital to identify the mitochondrial genes symbol prefix. 
-The regex pattern `^(mt|MT)[:-]` is used by default to extract genes with the MT-, mt-, MT:, or mt: prefixes.
-This pattern can be changed by modifying the `mitochondria_regex` parameter in the nextflow.config file.
-
 ### `gtf_path`
 
 Path to the gtf annotation file.
@@ -348,6 +389,8 @@ There are remotely hosted GTF files for the following species (remotely hosted p
 - Drosophila melanogaster s3://csgx.public.readonly/resources/references/refdata-gex-Drosophila-BDGP6/genes/Drosophila_melanogaster.BDGP6.32.109.gtf
 
 By default the remotely hosted Human GTF is used.
+
+However, it is recommend that you use the appropriate [species profile](#available-species-profiles) to automatically set the `gtf_path`.
 
 ```bash
 --gtf_path s3://csgx.public.readonly/resources/references/refdata-gex-GRCh38/genes/Homo_sapiens.GRCh38.109.gtf
@@ -374,6 +417,16 @@ The minimum number of nuclear genes (E.g. 100) that must be detected for a given
 
 ```bash
 --min_nuc_gene 100
+```
+
+### `purity`
+
+A float value e.g. `0.9`. Default is `0.9`. Used only for mixed species runs as a second threshold (in addition to the min_nuc_gene threshold) to call a single cell.
+
+It is the number of nuclear genes detected from a given species divided by the total number of nuclear genes detected. Single cells purity greater or equal to this value.
+
+```bash
+--purity 0.9
 ```
 
 ## Outputs

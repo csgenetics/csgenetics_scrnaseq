@@ -183,24 +183,21 @@ workflow {
     // Output filtered (cells only) count tables
     filter_count_matrix(ch_filter_count_matrix_in)
 
-    // structure of ch_summary_report_in is
-    // [sample_id, min_nuc_gene_cutoff, h5ad, annotated_qualimap,
+    // structure of ch_summary_statistics_in is
+    // [sample_id, min_nuc_gene_cutoff, raw_h5ad, annotated_qualimap,
     // antisense, dedup.log, filtered_qualimap, multiqc_data, raw_qualimap]
-    filter_count_matrix.out.cell_only_count_matrix
-    .mix(multiqc.out.multiqc_json)
-    .mix(sort_index_bam.out.antisense_out)
-    .mix(raw_qualimap.out.qualimap_txt)
-    .mix(filtered_qualimap.out.qualimap_txt)
-    .mix(annotated_qualimap.out.qualimap_txt)
-    .mix(dedup.out.io_dedup_log)
-    .groupTuple(by:0, size: 7, sort:{it.name})
-    .mix(ch_cell_caller_out)
-    .groupTuple(by:0, size:2, sort:{sort:{order_integer_first(it)}})
-    .map({it.flatten()})
-    .set({ch_summary_report_in})
-    
+    ch_cell_caller_out
+    .join(filter_count_matrix.out.raw_count_matrix)
+    .join(annotated_qualimap.out.qualimap_txt)
+    .join(sort_index_bam.out.antisense_out)
+    .join(dedup.out.io_dedup_log)
+    .join(filtered_qualimap.out.qualimap_txt)
+    .join(multiqc.out.multiqc_json)
+    .join(raw_qualimap.out.qualimap_txt)
+    .set({ch_summary_statistics_in})
+
     // Generate summary statistics
-    summary_statistics(ch_summary_report_in)
+    summary_statistics(ch_summary_statistics_in)
 
     ch_summary_metrics_and_plot = summary_statistics.out.metrics_csv.join(cell_caller.out.cell_caller_plot, by:0)
 
