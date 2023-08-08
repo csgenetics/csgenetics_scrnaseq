@@ -45,7 +45,7 @@ def getlog10NucGenes(sample, args):
    if args.mixed == "TRUE":
       adata.obs['nNuc_genes'] = adata.X[:,~np.where(adata.var['seqname'] == args.mt_chromosome, True, False)].toarray().astype(bool).sum(axis=1)
    else:
-      adata.obs['nNuc_genes'] = adata.X[:,~np.where(adata.var['seqname'] == args.mt_chromosome | adata.var['seqname'] == args.mt_chromosome2, True, False)].toarray().astype(bool).sum(axis=1)
+      adata.obs['nNuc_genes'] = adata.X[:,~np.where((adata.var['seqname'] == args.mt_chromosome) | (adata.var['seqname'] == args.mt_chromosome2), True, False)].toarray().astype(bool).sum(axis=1)
 
    # get a log 10 of the number of genes  -  need +1 as some values in nNuc_genes are 0 
    adata.obs['log10_Nuc_genes'] = np.log10(adata.obs['nNuc_genes'] +1)

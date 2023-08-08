@@ -36,7 +36,6 @@ class SummaryStatistics:
             self.purity = sys.argv[12]
         else:
             self.mixed = False
-            self.mito_prefix = sys.argv[10]
 
         # Primary keys will be:
         #   Read QC
