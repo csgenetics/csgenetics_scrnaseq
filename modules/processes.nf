@@ -540,9 +540,9 @@ process cell_caller {
   tuple val(sample_id), path("${sample_id}_pdf_with_cutoff.png"), emit: cell_caller_plot
 
   script:
-  def mixed_args = params.mixed_species ? "--mixed TRUE --mt_prefix ${params.hsap_mitochondria_prefix} --mt_prefix2 ${params.mmus_mitochondria_prefix}" : "--mixed FALSE --mt_prefix ${params.mitochondria_prefix}"
+  def mixed_args = params.mixed_species ? "--mixed TRUE --mt_chromosome ${params.hsap_mitochondria_chromosome} --mt_chromosome2 ${params.mmus_mitochondria_chromosome}" : "--mixed FALSE --mt_chromosome ${params.mitochondria_chromosome}"
   """
-  cell_caller.py --sample ${sample_id} --min_nucGene ${params.min_nuc_gene} --count_matrix $count_matrix_h5ad --mt_chromosome '${params.mt_chromosome}'
+  cell_caller.py --sample ${sample_id} --min_nucGene ${params.min_nuc_gene} --count_matrix ${count_matrix_h5ad} $mixed_args
   """
 }
 
@@ -572,13 +572,11 @@ process filter_count_matrix{
   tuple val(sample_id), path("${sample_id}*.raw_feature_bc_matrix.*h5ad"), emit: raw_count_matrix
 
   script:
-  def mixed_args = params.mixed_species ? "TRUE ${params.hsap_mitochondria_prefix} ${params.mmus_mitochondria_prefix} ${params.hsap_gene_prefix} ${params.mmus_gene_prefix} ${params.purity}" : "FALSE ${params.mitochondria_prefix}"
+  def mixed_args = params.mixed_species ? "TRUE ${params.hsap_mitochondria_chromosome} ${params.mmus_mitochondria_chromosome} ${params.purity}" : "FALSE ${params.mt_chromosome}"
   """
-<<<<<<< HEAD
+
   filter_count_matrix.py ${nuc_gene_threshold} ${h5ad_raw_count_matrix} ${sample_id} $mixed_args
-=======
-  filter_count_matrix.py ${nuc_gene_threshold} ${h5ad_raw_count_matrix} ${sample_id} '${params.mt_chromosome}'
->>>>>>> add chromosome MT to anndata
+
   """
 }
 
@@ -597,9 +595,9 @@ process summary_statistics {
   tuple val(sample_id), path("${sample_id}.metrics.csv"), emit: metrics_csv
 
   script:
-  def mixed_args = params.mixed_species ? "TRUE ${params.hsap_mitochondria_prefix} ${params.mmus_mitochondria_prefix} ${params.hsap_gene_prefix} ${params.mmus_gene_prefix} ${params.purity}" : "FALSE ${params.mitochondria_prefix}"
+  def mixed_args = params.mixed_species ? "TRUE ${params.hsap_gene_prefix} ${params.mmus_gene_prefix} ${params.purity}" : "FALSE"
   """
-  summary_statistics.py $sample_id $h5ad $multiqc_data_json $antisense $dedup $raw_qualimap $filtered_qualimap $annotated_qualimap
+  summary_statistics.py ${sample_id} ${h5ad} ${multiqc_data_json} ${antisense} ${dedup} ${raw_qualimap} ${filtered_qualimap} ${annotated_qualimap} $mixed_args
   """
 }
 
