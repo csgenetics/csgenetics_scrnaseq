@@ -44,12 +44,17 @@ class FilterCountMatrix:
             self.hsap_mito_chr = sys.argv[5]
             self.mmus_mito_chr = sys.argv[6]
 
+            # We have a separate gene prefix string for each
+            # of the species.
+            self.hsap_gene_prefix = sys.argv[7]
+            self.mmus_gene_prefix = sys.argv[8]
+
 
 
             # The purity threshold used to classify a barcode as a cell
             # (in addition to the num nuc genes detected threshold)
             # if we are working with a mixed species sample
-            self.purity = float(sys.argv[7])
+            self.purity = float(sys.argv[9])
         else:
             self.mixed = False
             self.mito_chr = sys.argv[5]
@@ -58,26 +63,23 @@ class FilterCountMatrix:
             # Compute the number of nuclear genes covered per barcode
             # in order to be able to filter according to num_nuc_genes_covered_per_barcode
 
-            self.anndata_obj.var['is_mito'] = np.where(self.anndata_obj.var['seqname'] == self.hsap_mito_chr | self.anndata_obj.var['seqname'] == self.mmus_mito_chr, True, False)
+            self.anndata_obj.var['is_mito'] = np.where((self.anndata_obj.var['seqname'] == self.hsap_mito_chr) | (self.anndata_obj.var['seqname'] == self.mmus_mito_chr), True, False)
             self.anndata_obj.var['is_mito_hsap'] = np.where(self.anndata_obj.var['seqname'] == self.hsap_mito_chr , True, False)
             self.anndata_obj.var['is_mito_mmus'] = np.where(self.anndata_obj.var['seqname'] == self.mmus_mito_chr, True, False)
             self.anndata_obj.obs['num_mt_genes_covered_per_barcode'] = self.anndata_obj.X[:,self.anndata_obj.var['is_mito']].toarray().astype(bool).sum(axis=1)
 
 
             self.anndata_obj.obs['num_genes_covered_per_barcode'] = self.anndata_obj.X.toarray().astype(bool).sum(axis=1)
-            # For the mixed species we have separate strings for each of the Hsap and Mmus mito genes.
-            self.anndata_obj.obs['num_mt_genes_covered_per_barcode'] = self.anndata_obj.X[:, (self.anndata_obj.var_names.str.startswith(self.hsap_mito_prefix) | self.anndata_obj.var_names.str.startswith(self.mmus_mito_prefix))].toarray().astype(bool).sum(axis=1)
-            
             self.anndata_obj.obs['num_nuc_genes_covered_per_barcode'] = self.anndata_obj.obs['num_genes_covered_per_barcode'] - self.anndata_obj.obs['num_mt_genes_covered_per_barcode']
            
             # For mixed species we additionally
             # need to filter according to a purity threshold.
             # The purity threshold is based on the number of gene detected by species.
-            self.anndata_obj.obs['num_genes_detected_Hsap'] = self.anndata_obj.X[:,self.anndata_obj.var_names.str.startswith(self.hsap_mito_chr)].toarray().astype(bool).sum(axis=1)
-            self.anndata_obj.obs['num_genes_detected_Mmus'] = self.anndata_obj.X[:,self.anndata_obj.var_names.str.startswith(self.mmus_mito_chr)].toarray().astype(bool).sum(axis=1)
+            self.anndata_obj.obs['num_genes_detected_Hsap'] = self.anndata_obj.X[:,self.anndata_obj.var_names.str.startswith(self.hsap_gene_prefix)].toarray().astype(bool).sum(axis=1)
+            self.anndata_obj.obs['num_genes_detected_Mmus'] = self.anndata_obj.X[:,self.anndata_obj.var_names.str.startswith(self.mmus_gene_prefix)].toarray().astype(bool).sum(axis=1)
             # To filter for the mitochondrial genes
-            self.anndata_obj.obs['num_mito_genes_detected_Hsap'] = self.anndata_obj.X[:, self.anndata_obj.var_names.str.startswith(self.hsap_mito_prefix)].toarray().astype(bool).sum(axis=1)
-            self.anndata_obj.obs['num_mito_genes_detected_Mmus'] = self.anndata_obj.X[:, self.anndata_obj.var_names.str.startswith(self.mmus_mito_prefix)].toarray().astype(bool).sum(axis=1)
+            self.anndata_obj.obs['num_mito_genes_detected_Hsap'] = self.anndata_obj.X[:, self.anndata_obj.var['is_mito_hsap']].toarray().astype(bool).sum(axis=1)
+            self.anndata_obj.obs['num_mito_genes_detected_Mmus'] = self.anndata_obj.X[:, self.anndata_obj.var['is_mito_mmus']].toarray().astype(bool).sum(axis=1)
             self.anndata_obj.obs['num_nuc_genes_detected_Hsap'] = self.anndata_obj.obs['num_genes_detected_Hsap'] - self.anndata_obj.obs['num_mito_genes_detected_Hsap']
             self.anndata_obj.obs['num_nuc_genes_detected_Mmus'] = self.anndata_obj.obs['num_genes_detected_Mmus'] - self.anndata_obj.obs['num_mito_genes_detected_Mmus']
             self.anndata_obj.obs['num_nuc_genes_detected_total'] = self.anndata_obj.obs['num_nuc_genes_detected_Hsap'] + self.anndata_obj.obs['num_nuc_genes_detected_Mmus']
