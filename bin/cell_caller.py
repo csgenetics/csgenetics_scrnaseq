@@ -23,8 +23,8 @@ def parse_arguments():
    parser.add_argument("--sample", help="Sample ID", required=True)
    parser.add_argument("--min_nucGene", default=100, type=int, help="minimal number of nuclear gene to call single cell")
    parser.add_argument("--count_matrix", help="Path to the h5ad count matrix.", required=True)
-   parser.add_argument("--mt_chromosome", help="The regex pattern used to identify mitochondrial genes.", required=True)
-   parser.add_argument("--mt_chromosome2", help="The second regex pattern used to identify mitochondrial genes (only required for mixed species).", required=False)
+   parser.add_argument("--mt_chromosome", help="The string representing the mitochondrial chromosome.", required=True)
+   parser.add_argument("--mt_chromosome2", help="The string representing the second mitochondrial chromosome (only required for mixed species).", required=False)
    parser.add_argument("--mixed", help="Is true if the experiment was done on mixed species.", required=True)
    return parser.parse_args()
 
@@ -43,9 +43,9 @@ def getlog10NucGenes(sample, args):
 
    # calculate the number of NUCLEAR genes per cell
    if args.mixed == "TRUE":
-      adata.obs['nNuc_genes'] = adata.X[:,~np.where(adata.var['seqname'] == args.mt_chromosome, True, False)].toarray().astype(bool).sum(axis=1)
-   else:
       adata.obs['nNuc_genes'] = adata.X[:,~np.where((adata.var['seqname'] == args.mt_chromosome) | (adata.var['seqname'] == args.mt_chromosome2), True, False)].toarray().astype(bool).sum(axis=1)
+   else:
+      adata.obs['nNuc_genes'] = adata.X[:,~np.where(adata.var['seqname'] == args.mt_chromosome, True, False)].toarray().astype(bool).sum(axis=1)
 
    # get a log 10 of the number of genes  -  need +1 as some values in nNuc_genes are 0 
    adata.obs['log10_Nuc_genes'] = np.log10(adata.obs['nNuc_genes'] +1)
