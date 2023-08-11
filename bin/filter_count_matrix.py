@@ -39,8 +39,7 @@ class FilterCountMatrix:
         # that has been mapped to a synthetic genome.
         if sys.argv[4] == "TRUE":
             self.mixed = True
-            # We have a separate gene prefix string for each
-            # of the species.
+            # String to identify each species' mitochondrial chromosome
             self.hsap_mito_chr = sys.argv[5]
             self.mmus_mito_chr = sys.argv[6]
 
@@ -57,17 +56,17 @@ class FilterCountMatrix:
             self.purity = float(sys.argv[9])
         else:
             self.mixed = False
+
+            # String identifying the mitochondrial chromosome
             self.mito_chr = sys.argv[5]
 
         if self.mixed:
             # Compute the number of nuclear genes covered per barcode
             # in order to be able to filter according to num_nuc_genes_covered_per_barcode
-
             self.anndata_obj.var['is_mito'] = np.where((self.anndata_obj.var['chromosome'] == self.hsap_mito_chr) | (self.anndata_obj.var['chromosome'] == self.mmus_mito_chr), True, False)
             self.anndata_obj.var['is_mito_hsap'] = np.where(self.anndata_obj.var['chromosome'] == self.hsap_mito_chr , True, False)
             self.anndata_obj.var['is_mito_mmus'] = np.where(self.anndata_obj.var['chromosome'] == self.mmus_mito_chr, True, False)
             self.anndata_obj.obs['num_mt_genes_covered_per_barcode'] = self.anndata_obj.X[:,self.anndata_obj.var['is_mito']].toarray().astype(bool).sum(axis=1)
-
 
             self.anndata_obj.obs['num_genes_covered_per_barcode'] = self.anndata_obj.X.toarray().astype(bool).sum(axis=1)
             self.anndata_obj.obs['num_nuc_genes_covered_per_barcode'] = self.anndata_obj.obs['num_genes_covered_per_barcode'] - self.anndata_obj.obs['num_mt_genes_covered_per_barcode']
@@ -91,6 +90,7 @@ class FilterCountMatrix:
             self.anndata_obj.obs['species_based_on_nuc_gene_purity'] = np.where((self.anndata_obj.obs['percent_nuc_genes_detected_Hsap']-self.anndata_obj.obs['percent_nuc_genes_detected_Mmus'])>0, 'Hsap', 'Mmus')
         else:
             # Compute the number of nuclear genes covered per barcode
+            # to enable filtering according to num_nuc_genes_covered_per_barcode
             self.anndata_obj.obs['num_genes_covered_per_barcode'] = self.anndata_obj.X.toarray().astype(bool).sum(axis=1)
             self.anndata_obj.var['is_mito'] = np.where(self.anndata_obj.var['chromosome'] == self.mito_chr, True, False)
             self.anndata_obj.obs['num_mt_genes_covered_per_barcode'] = self.anndata_obj.X[:,self.anndata_obj.var['is_mito']].toarray().astype(bool).sum(axis=1)
