@@ -50,7 +50,7 @@ feature_names_obj['gene_name'] = feature_names_obj.apply(lambda x: replace_na_ge
 
 # Select and rename columns
 feature_names_obj = feature_names_obj.loc[:,['gene_id','gene_name','seqname']]
-feature_names_obj = feature_names_obj.rename(columns={"chromosome":"seqname"})
+feature_names_obj = feature_names_obj.rename(columns={"seqname":"chromosome"})
 
 # write output
 feature_names_obj.to_csv(feature_names_out_path,

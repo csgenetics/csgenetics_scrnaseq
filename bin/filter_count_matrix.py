@@ -63,9 +63,9 @@ class FilterCountMatrix:
             # Compute the number of nuclear genes covered per barcode
             # in order to be able to filter according to num_nuc_genes_covered_per_barcode
 
-            self.anndata_obj.var['is_mito'] = np.where((self.anndata_obj.var['seqname'] == self.hsap_mito_chr) | (self.anndata_obj.var['seqname'] == self.mmus_mito_chr), True, False)
-            self.anndata_obj.var['is_mito_hsap'] = np.where(self.anndata_obj.var['seqname'] == self.hsap_mito_chr , True, False)
-            self.anndata_obj.var['is_mito_mmus'] = np.where(self.anndata_obj.var['seqname'] == self.mmus_mito_chr, True, False)
+            self.anndata_obj.var['is_mito'] = np.where((self.anndata_obj.var['chromosome'] == self.hsap_mito_chr) | (self.anndata_obj.var['chromosome'] == self.mmus_mito_chr), True, False)
+            self.anndata_obj.var['is_mito_hsap'] = np.where(self.anndata_obj.var['chromosome'] == self.hsap_mito_chr , True, False)
+            self.anndata_obj.var['is_mito_mmus'] = np.where(self.anndata_obj.var['chromosome'] == self.mmus_mito_chr, True, False)
             self.anndata_obj.obs['num_mt_genes_covered_per_barcode'] = self.anndata_obj.X[:,self.anndata_obj.var['is_mito']].toarray().astype(bool).sum(axis=1)
 
 
@@ -92,7 +92,7 @@ class FilterCountMatrix:
         else:
             # Compute the number of nuclear genes covered per barcode
             self.anndata_obj.obs['num_genes_covered_per_barcode'] = self.anndata_obj.X.toarray().astype(bool).sum(axis=1)
-            self.anndata_obj.var['is_mito'] = np.where(self.anndata_obj.var['seqname'] == self.mito_chr, True, False)
+            self.anndata_obj.var['is_mito'] = np.where(self.anndata_obj.var['chromosome'] == self.mito_chr, True, False)
             self.anndata_obj.obs['num_mt_genes_covered_per_barcode'] = self.anndata_obj.X[:,self.anndata_obj.var['is_mito']].toarray().astype(bool).sum(axis=1)
             self.anndata_obj.obs['num_nuc_genes_covered_per_barcode'] = self.anndata_obj.obs['num_genes_covered_per_barcode'] - self.anndata_obj.obs['num_mt_genes_covered_per_barcode']
 
