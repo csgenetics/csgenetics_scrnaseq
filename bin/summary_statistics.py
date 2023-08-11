@@ -164,14 +164,6 @@ class SummaryStatistics:
             self.median_genes_detected_per_cell_Mmus = int(np.median(anndata_array_sc_Mmus.astype(bool).sum(axis=1)))
 
             # Get a subset of the arrays that don't contain the mito genes
-            # TODO verify that this is working properly. Look to see
-            # how the what form the is_mito attribute is and how that can filter a subsetted version
-            # of the original anndata_object!
-            # TODO we should surely be working with the is_mito attribute of the anndata_sc object.
-            anndata_array_sc_nuc_total = anndata_array_sc.loc[:, ~self.anndata.var["is_mito"]]
-            # Same here. TODO see if we can simply 
-            # TODO to fix this I think we should fist filter down the anndata object to hsap and mmus
-            # objects and THEN we should make sc array convenience objects out of them.
             anndata_array_sc_nuc_Hsap = anndata_array_sc_Hsap.loc[:, ~self.anndata.var["is_mito_hsap"]]
             anndata_array_sc_nuc_Mmus = anndata_array_sc_Mmus.loc[:, ~self.anndata.var["is_mito_mmus"]]
             
@@ -184,7 +176,6 @@ class SummaryStatistics:
             self.median_nuclear_genes_detected_per_cell_Mmus = np.median(anndata_array_sc_nuc_Mmus.astype(bool).sum(axis=1))
 
             # Get a subset of the array that contains only the mito genes
-            # TODO same considerations as above.
             anndata_array_sc_mito_total = anndata_array_sc.loc[:, self.anndata.var["is_mito"]]
             anndata_array_sc_mito_Hsap = anndata_array_sc_Hsap.loc[:, self.anndata.var["is_mito_hsap"]]
             anndata_array_sc_mito_Mmus = anndata_array_sc_Mmus.loc[:, self.anndata.var["is_mito_mmus"]]
@@ -219,14 +210,12 @@ class SummaryStatistics:
             self.median_genes_detected_per_cell = int(np.median(anndata_array_sc.astype(bool).sum(axis=1)))
 
             # Get a subset of the array that doesn't contain the mito genes
-            # TODO same as above.
-            anndata_array_sc_nuc = anndata_array_sc.loc[:,~self.anndata.var["is_mito"]]
+            anndata_array_sc_nuc = anndata_array_sc.loc[:, ~self.anndata.var["is_mito"]]
 
             self.mean_nuclear_genes_detected_per_cell = np.mean(anndata_array_sc_nuc.astype(bool).sum(axis=1))
             self.median_nuclear_genes_detected_per_cell = np.median(anndata_array_sc_nuc.astype(bool).sum(axis=1))
 
             # Get a subset of the array that contains only the mito genes
-            # TODO same as above.
             anndata_array_sc_mito = anndata_array_sc.loc[:, self.anndata.var["is_mito"]]
 
             self.mean_mito_genes_detected_per_cell = np.mean(anndata_array_sc_mito.astype(bool).sum(axis=1))
