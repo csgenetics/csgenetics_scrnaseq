@@ -294,7 +294,7 @@ Currently avaialable species profiles are:
 By passing one of these profiles as a command line argument, the pipeline will automatically be configured to use the relevant set of resources for the following parameters:
 - `star_index_dir`
 - `gtf_path`
-- `mitochondrial_prefix` (`hsap_mitochondria_prefix` & `mmus_mitochondria_prefix` for `mouse_human_mix`)
+- `mitochondria_chromosome` (`hsap_mitochondria_chromosome` & `mmus_mitochondria_chromosome` for `mouse_human_mix`)
 - `hsap_gene_prefix` & `hsap_gene_prefix` (mixed species only)
 
 For most use cases, the species profiles will be provided in addition to one of the four [available standard profiles](#available-standard-profiles).
@@ -352,6 +352,7 @@ There are premade remotely hosted STAR indexes for the following species (remote
 
 If you are working with one of these species, you can provide the remotely hosted directory
 to the `--star_index_dir` parameter. The pipeline will automatically download the resource.
+
 However, it is recommend that you use the appropriate [species profile](#available-species-profiles) to automatically set the `star_index_dir`.
 
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
