@@ -27,6 +27,9 @@ class SummaryStatistics:
 
             # We have a separate gene prefix string for each
             # of the species.
+            # TODO let's annotate the hsap and mmus genes in the
+            # anndata var df in filter_count_matrix. That way
+            # we don't have to work with these parameters in this script.
             self.hsap_gene_prefix = sys.argv[10]
             self.mmus_gene_prefix = sys.argv[11]
 
