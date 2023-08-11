@@ -574,9 +574,7 @@ process filter_count_matrix{
   script:
   def mixed_args = params.mixed_species ? "TRUE ${params.hsap_mitochondria_chromosome} ${params.mmus_mitochondria_chromosome} ${params.hsap_gene_prefix} ${params.mmus_gene_prefix}  ${params.purity}" : "FALSE ${params.mitochondria_chromosome}"
   """
-
   filter_count_matrix.py ${nuc_gene_threshold} ${h5ad_raw_count_matrix} ${sample_id} $mixed_args
-
   """
 }
 
@@ -595,7 +593,7 @@ process summary_statistics {
   tuple val(sample_id), path("${sample_id}.metrics.csv"), emit: metrics_csv
 
   script:
-  def mixed_args = params.mixed_species ? "TRUE ${params.hsap_gene_prefix} ${params.mmus_gene_prefix} ${params.purity}" : "FALSE"
+  def mixed_args = params.mixed_species ? "TRUE ${params.purity}" : "FALSE"
   """
   summary_statistics.py ${sample_id} ${raw_h5ad} ${multiqc_data_json} ${antisense} ${dedup} ${raw_qualimap} ${filtered_qualimap} ${annotated_qualimap} $mixed_args
   """

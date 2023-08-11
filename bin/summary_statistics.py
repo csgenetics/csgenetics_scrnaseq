@@ -25,18 +25,10 @@ class SummaryStatistics:
         if sys.argv[9] == "TRUE":
             self.mixed = True
 
-            # We have a separate gene prefix string for each
-            # of the species.
-            # TODO let's annotate the hsap and mmus genes in the
-            # anndata var df in filter_count_matrix. That way
-            # we don't have to work with these parameters in this script.
-            self.hsap_gene_prefix = sys.argv[10]
-            self.mmus_gene_prefix = sys.argv[11]
-
             # The purity threshold used to classify a barcode as a cell
             # (in addition to the num nuc genes detected threshold)
             # if we are working with a mixed species sample
-            self.purity = sys.argv[12]
+            self.purity = sys.argv[10]
         else:
             self.mixed = False
 
@@ -143,8 +135,8 @@ class SummaryStatistics:
         anndata_array_sc = self.anndata_sc.to_df()
         
         if self.mixed:
-            anndata_array_sc_Hsap = self.anndata_sc[:,self.anndata_sc.var_names.str.startswith(self.hsap_gene_prefix)].to_df()
-            anndata_array_sc_Mmus = self.anndata_sc[:,self.anndata_sc.var_names.str.startswith(self.mmus_gene_prefix)].to_df()
+            anndata_array_sc_Hsap = self.anndata_sc[:,self.anndata_sc.var["is_hsap"]].to_df()
+            anndata_array_sc_Mmus = self.anndata_sc[:,self.anndata_sc.var["is_mmus"]].to_df()
             # If mixed then we need to caluculate 3 versions of each of the metrics:
             #   _total, _Hsap, _Mmus
             self.num_cells_total = anndata_array_sc.shape[0]

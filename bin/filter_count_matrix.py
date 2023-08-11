@@ -48,8 +48,6 @@ class FilterCountMatrix:
             self.hsap_gene_prefix = sys.argv[7]
             self.mmus_gene_prefix = sys.argv[8]
 
-
-
             # The purity threshold used to classify a barcode as a cell
             # (in addition to the num nuc genes detected threshold)
             # if we are working with a mixed species sample
@@ -74,8 +72,11 @@ class FilterCountMatrix:
             # For mixed species we additionally
             # need to filter according to a purity threshold.
             # The purity threshold is based on the number of gene detected by species.
-            self.anndata_obj.obs['num_genes_detected_Hsap'] = self.anndata_obj.X[:,self.anndata_obj.var_names.str.startswith(self.hsap_gene_prefix)].toarray().astype(bool).sum(axis=1)
-            self.anndata_obj.obs['num_genes_detected_Mmus'] = self.anndata_obj.X[:,self.anndata_obj.var_names.str.startswith(self.mmus_gene_prefix)].toarray().astype(bool).sum(axis=1)
+            self.anndata_obj.var['is_hsap'] = np.where(self.anndata_obj.var_names.str.startswith(self.hsap_gene_prefix), True, False)
+            self.anndata_obj.var['is_mmus'] = np.where(self.anndata_obj.var_names.str.startswith(self.mmus_gene_prefix), True, False)
+
+            self.anndata_obj.obs['num_genes_detected_Hsap'] = self.anndata_obj.X[:, self.anndata_obj.var["is_hsap"]].toarray().astype(bool).sum(axis=1)
+            self.anndata_obj.obs['num_genes_detected_Mmus'] = self.anndata_obj.X[:, self.anndata_obj.var["is_mmus"]].toarray().astype(bool).sum(axis=1)
             # To filter for the mitochondrial genes
             self.anndata_obj.obs['num_mito_genes_detected_Hsap'] = self.anndata_obj.X[:, self.anndata_obj.var['is_mito_hsap']].toarray().astype(bool).sum(axis=1)
             self.anndata_obj.obs['num_mito_genes_detected_Mmus'] = self.anndata_obj.X[:, self.anndata_obj.var['is_mito_mmus']].toarray().astype(bool).sum(axis=1)
