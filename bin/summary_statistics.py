@@ -164,6 +164,8 @@ class SummaryStatistics:
             self.median_genes_detected_per_cell_Mmus = int(np.median(anndata_array_sc_Mmus.astype(bool).sum(axis=1)))
 
             # Get a subset of the arrays that don't contain the mito genes
+            anndata_array_sc_nuc_total = anndata_array_sc.loc[:, ~self.anndata.var["is_mito"]]
+
             anndata_array_sc_nuc_Hsap = anndata_array_sc_Hsap.loc[:, ~self.anndata.var["is_mito_hsap"]]
             anndata_array_sc_nuc_Mmus = anndata_array_sc_Mmus.loc[:, ~self.anndata.var["is_mito_mmus"]]
             
