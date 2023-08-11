@@ -34,27 +34,27 @@ def make_count_matrix(args):
         open(f"{args.sample}.raw_feature_bc_matrix.empty.h5ad", "w").close()
         sys.exit(0)
 
-    counts.columns = ['io', 'ensID']
+    counts.columns = ['io', 'gene_id']
 
      # load feature (gene) names obtained from the genome GTF file
     genes_all_unfiltered = read_table(args.gene_list).drop_duplicates()
-    genes_all = genes_all_unfiltered[genes_all_unfiltered['ensID'].isin(counts['ensID'])]    
+    genes_all = genes_all_unfiltered[genes_all_unfiltered['gene_id'].isin(counts['gene_id'])]    
 
     # first merge by IOs
     counts = merge(wl, counts)
 
     # sum together counts corresponding to the same cell-gene_name pair
-    counts = counts.groupby(['cell', 'ensID']).size().reset_index(name='count')
+    counts = counts.groupby(['cell', 'gene_id']).size().reset_index(name='count')
 
     # second merge by gene ID
     counts = merge(counts, genes_all,how='left')
 
-    zero_genes = genes_all.loc[-genes_all.ensID.isin(counts.ensID)]
+    zero_genes = genes_all.loc[-genes_all.gene_id.isin(counts.gene_id)]
 
     # transform a long counts DataFrame into a sparse matrix
     cell_c = CategoricalDtype(sorted(counts.cell.unique()), ordered=True)
-    name_c = CategoricalDtype(sorted(counts.ensID.unique()), ordered=True)
-    row = counts.ensID.astype(name_c).cat.codes
+    name_c = CategoricalDtype(sorted(counts.gene_id.unique()), ordered=True)
+    row = counts.gene_id.astype(name_c).cat.codes
     col = counts.cell.astype(cell_c).cat.codes
 
     #sparse_matrix = csr_matrix((counts["count"], (col, row)), shape=(cell_c.categories.size, name_c.categories.size))
@@ -66,11 +66,11 @@ def make_count_matrix(args):
     sparse_matrix = csr_matrix(all_matrix)
 
     # create an AnnData object for downstream analysis
-    ft_names= DataFrame(name_c.categories.tolist() + zero_genes.ensID.tolist(),columns=['ensID'])
+    ft_names= DataFrame(name_c.categories.tolist() + zero_genes.gene_id.tolist(),columns=['gene_id'])
     ft_names = merge(genes_all,ft_names,how='right')
 
     adata = AnnData(sparse_matrix,var=ft_names)
-    adata.var_names = ft_names.geneSym.tolist()
+    adata.var_names = ft_names.gene_name.tolist()
     adata.var_names_make_unique()
     adata.obs_names = cell_c.categories
 

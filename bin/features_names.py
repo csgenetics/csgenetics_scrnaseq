@@ -49,8 +49,8 @@ feature_names_obj['seqname'] = feature_names_obj.seqname.str.split(";", expand=T
 feature_names_obj['gene_name'] = feature_names_obj.apply(lambda x: replace_na_gene_names_with_gene_id(x['gene_id'], x['gene_name']), axis=1)
 
 # Select and rename columns
-feature_names_obj = feature_names_obj.loc[:,['gene_id','gene_name']]
-feature_names_obj = feature_names_obj.rename(columns={"gene_id":"ensID", "gene_name":"geneSym"})
+feature_names_obj = feature_names_obj.loc[:,['gene_id','gene_name','seqname']]
+feature_names_obj = feature_names_obj.rename(columns={"seqname":"chromosome"})
 
 # write output
 feature_names_obj.to_csv(feature_names_out_path,

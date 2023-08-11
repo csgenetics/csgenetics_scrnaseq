@@ -24,23 +24,13 @@ class SummaryStatistics:
         self.sample_id = sys.argv[1]
         if sys.argv[9] == "TRUE":
             self.mixed = True
-            # We have a separate mitochondrial-identifying string for each 
-            # of the speices that we can use startsWith with.
-            self.hsap_mito_prefix = sys.argv[10]
-            self.mmus_mito_prefix = sys.argv[11]
-
-            # We have a separate gene prefix string for each
-            # of the species.
-            self.hsap_gene_prefix = sys.argv[12]
-            self.mmus_gene_prefix = sys.argv[13]
 
             # The purity threshold used to classify a barcode as a cell
             # (in addition to the num nuc genes detected threshold)
             # if we are working with a mixed species sample
-            self.purity = sys.argv[14]
+            self.purity = sys.argv[10]
         else:
             self.mixed = False
-            self.mito_prefix = sys.argv[10]
 
         # Primary keys will be:
         #   Read QC
@@ -145,8 +135,8 @@ class SummaryStatistics:
         anndata_array_sc = self.anndata_sc.to_df()
         
         if self.mixed:
-            anndata_array_sc_Hsap = self.anndata_sc[:,self.anndata_sc.var_names.str.startswith(self.hsap_gene_prefix)].to_df()
-            anndata_array_sc_Mmus = self.anndata_sc[:,self.anndata_sc.var_names.str.startswith(self.mmus_gene_prefix)].to_df()
+            anndata_array_sc_Hsap = self.anndata_sc[:,self.anndata_sc.var["is_hsap"]].to_df()
+            anndata_array_sc_Mmus = self.anndata_sc[:,self.anndata_sc.var["is_mmus"]].to_df()
             # If mixed then we need to caluculate 3 versions of each of the metrics:
             #   _total, _Hsap, _Mmus
             self.num_cells_total = anndata_array_sc.shape[0]
@@ -174,9 +164,10 @@ class SummaryStatistics:
             self.median_genes_detected_per_cell_Mmus = int(np.median(anndata_array_sc_Mmus.astype(bool).sum(axis=1)))
 
             # Get a subset of the arrays that don't contain the mito genes
-            anndata_array_sc_nuc_total = anndata_array_sc.loc[:, (~anndata_array_sc.columns.str.startswith(self.hsap_mito_prefix) & ~anndata_array_sc.columns.str.startswith(self.mmus_mito_prefix))]
-            anndata_array_sc_nuc_Hsap = anndata_array_sc_Hsap.loc[:, ~anndata_array_sc_Hsap.columns.str.startswith(self.hsap_mito_prefix)]
-            anndata_array_sc_nuc_Mmus = anndata_array_sc_Mmus.loc[:, ~anndata_array_sc_Mmus.columns.str.startswith(self.mmus_mito_prefix)]
+            anndata_array_sc_nuc_total = anndata_array_sc.loc[:, ~self.anndata.var["is_mito"]]
+
+            anndata_array_sc_nuc_Hsap = anndata_array_sc_Hsap.loc[:, ~self.anndata.var["is_mito_hsap"]]
+            anndata_array_sc_nuc_Mmus = anndata_array_sc_Mmus.loc[:, ~self.anndata.var["is_mito_mmus"]]
             
             self.mean_nuclear_genes_detected_per_cell_total = np.mean(anndata_array_sc_nuc_total.astype(bool).sum(axis=1))
             self.mean_nuclear_genes_detected_per_cell_Hsap = np.mean(anndata_array_sc_nuc_Hsap.astype(bool).sum(axis=1))
@@ -187,9 +178,9 @@ class SummaryStatistics:
             self.median_nuclear_genes_detected_per_cell_Mmus = np.median(anndata_array_sc_nuc_Mmus.astype(bool).sum(axis=1))
 
             # Get a subset of the array that contains only the mito genes
-            anndata_array_sc_mito_total = anndata_array_sc.loc[:, (anndata_array_sc.columns.str.startswith(self.hsap_mito_prefix) | anndata_array_sc.columns.str.startswith(self.mmus_mito_prefix))]
-            anndata_array_sc_mito_Hsap = anndata_array_sc_Hsap.loc[:, anndata_array_sc_Hsap.columns.str.startswith(self.hsap_mito_prefix)]
-            anndata_array_sc_mito_Mmus = anndata_array_sc_Mmus.loc[:, anndata_array_sc_Mmus.columns.str.startswith(self.mmus_mito_prefix)]
+            anndata_array_sc_mito_total = anndata_array_sc.loc[:, self.anndata.var["is_mito"]]
+            anndata_array_sc_mito_Hsap = anndata_array_sc_Hsap.loc[:, self.anndata.var["is_mito_hsap"]]
+            anndata_array_sc_mito_Mmus = anndata_array_sc_Mmus.loc[:, self.anndata.var["is_mito_mmus"]]
 
             self.mean_mito_genes_detected_per_cell_total = np.mean(anndata_array_sc_mito_total.astype(bool).sum(axis=1))
             self.mean_mito_genes_detected_per_cell_Hsap = np.mean(anndata_array_sc_mito_Hsap.astype(bool).sum(axis=1))
@@ -221,13 +212,13 @@ class SummaryStatistics:
             self.median_genes_detected_per_cell = int(np.median(anndata_array_sc.astype(bool).sum(axis=1)))
 
             # Get a subset of the array that doesn't contain the mito genes
-            anndata_array_sc_nuc = anndata_array_sc.loc[:, ~anndata_array_sc.columns.str.startswith(self.mito_prefix)]
+            anndata_array_sc_nuc = anndata_array_sc.loc[:, ~self.anndata.var["is_mito"]]
 
             self.mean_nuclear_genes_detected_per_cell = np.mean(anndata_array_sc_nuc.astype(bool).sum(axis=1))
             self.median_nuclear_genes_detected_per_cell = np.median(anndata_array_sc_nuc.astype(bool).sum(axis=1))
 
             # Get a subset of the array that contains only the mito genes
-            anndata_array_sc_mito = anndata_array_sc.loc[:, anndata_array_sc.columns.str.startswith(self.mito_prefix)]
+            anndata_array_sc_mito = anndata_array_sc.loc[:, self.anndata.var["is_mito"]]
 
             self.mean_mito_genes_detected_per_cell = np.mean(anndata_array_sc_mito.astype(bool).sum(axis=1))
             self.median_mito_genes_detected_per_cell = int(np.median(anndata_array_sc_mito.astype(bool).sum(axis=1)))
