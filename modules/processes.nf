@@ -344,7 +344,7 @@ process feature_counts {
   if [[ $aligned_count > 0 ]] # If the bam is not empty
     then
       # Run featureCounts as normal
-      featureCounts -a $gtf -o ${sample_id}_gene_assigned.txt -R BAM $bam -T 4 -t exon,intron -g gene_id --fracOverlap 0.5 --extraAttributes gene_name
+      featureCounts -a $gtf -o ${sample_id}_gene_assigned.txt -R BAM $bam -T 4 -t gene -g gene_id --fracOverlap 0.5 --extraAttributes gene_name
     else
       # Simply rename the input bam so that it can be collected
       cp $bam ${sample_id}.mapped.sorted.filtered.bam.featureCounts.bam
