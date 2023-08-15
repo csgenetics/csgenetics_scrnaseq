@@ -352,6 +352,9 @@ process feature_counts {
   """
 }
 
+/*
+* Filter for annotated reads, one target and tagged as Assigned
+*/
 process filter_for_annotated {
   tag "$sample_id"
 

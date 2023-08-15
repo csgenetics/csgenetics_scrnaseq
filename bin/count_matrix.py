@@ -36,9 +36,8 @@ def make_count_matrix(args):
 
     counts.columns = ['io', 'gene_id']
 
-     # load feature (gene) names obtained from the genome GTF file
-    genes_all_unfiltered = read_table(args.gene_list).drop_duplicates()
-    genes_all = genes_all_unfiltered[genes_all_unfiltered['gene_id'].isin(counts['gene_id'])]    
+    # load feature (gene) names obtained from the genome GTF file
+    genes_all = read_table(args.gene_list).drop_duplicates()
 
     # first merge by IOs
     counts = merge(wl, counts)
