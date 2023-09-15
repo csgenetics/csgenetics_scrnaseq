@@ -503,7 +503,7 @@ process io_count {
 */
 process count_matrix {
   tag "$sample_id"
-  label 'c4m4'
+  label 'c4m16'
 
   publishDir "${params.outdir}/count_matrix/raw_feature_bc_matrix/${sample_id}/", mode: 'copy', pattern: "*.raw_feature_bc_matrix.h5ad"
   publishDir "${params.outdir}/count_matrix/raw_feature_bc_matrix/${sample_id}/", mode: 'copy', pattern: "matrix.mtx.gz"
