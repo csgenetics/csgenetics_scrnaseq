@@ -547,9 +547,8 @@ process cell_caller {
   tuple val(sample_id), path("${sample_id}_pdf_with_cutoff.png"), emit: cell_caller_plot
 
   script:
-  def mixed_args = params.mixed_species ? "--mixed TRUE --mt_chromosome ${params.hsap_mitochondria_chromosome} --mt_chromosome2 ${params.mmus_mitochondria_chromosome}" : "--mixed FALSE --mt_chromosome ${params.mitochondria_chromosome}"
   """
-  cell_caller.py --sample ${sample_id} --min_nucGene ${params.min_nuc_gene} --count_matrix ${count_matrix_h5ad} $mixed_args
+  cell_caller.py --sample_name ${sample_id} --minimum_count_threshold ${params.minimum_count_threshold} --count_matrix ${count_matrix_h5ad}
   """
 }
 
@@ -595,7 +594,7 @@ process summary_statistics {
   publishDir "${params.outdir}/report/${sample_id}", mode: 'copy', pattern: "*.csv"
   
   input:
-  tuple val(sample_id), val(min_nuc_gene_cutoff), path(raw_h5ad), path(annotated_qualimap), path(antisense), path(dedup), path(filtered_qualimap), path(multiqc_data_json), path(raw_qualimap)
+  tuple val(sample_id), val(minimum_count_threshold), path(raw_h5ad), path(annotated_qualimap), path(antisense), path(dedup), path(filtered_qualimap), path(multiqc_data_json), path(raw_qualimap)
   output:
   tuple val(sample_id), path("${sample_id}.metrics.csv"), emit: metrics_csv
 

@@ -6,106 +6,125 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.signal import argrelextrema
 from scipy.stats import gaussian_kde
-import re
 import sys, argparse
 
-"""This is the cell caller function. This function reads in an anndata object (h5ad), counts total number of genes per cells, and 
-log10 transforms the counts to see multiple peaks in the distribution of number of genes per cell (no second peak when values are
-untransformed as there's too much spread).  From looking at the density plots of the number of genes (on a log 10 scale), it is
-generally fairly obvious that there are multiple peaks. In the more recent versions of the assay, the distribution is usually
-bimodal - one peak for "noise", one peak for "cells". This function aims to find the local minima of the probabilty density
-(i.e. the lowest point) between the two peaks, and use that as the nuclear gene threshold to call cells. This will be called for
-every sample, rather than having a fixed 100 gene threshold for everything. If there are no local minima above 100 nuclear genes,
-then the function will default to 100 - i.e. 2 on the log10 scale, as log10(100) = 2."""
+"""
+This is the cell caller function. It is counts based. It operates on both all counts (i.e. including mito).
 
-def parse_arguments():
-   parser = argparse.ArgumentParser(description = "Arguments for cell caller script to calculate number of genes threshold")
-   parser.add_argument("--sample", help="Sample ID", required=True)
-   parser.add_argument("--min_nucGene", default=100, type=int, help="minimal number of nuclear gene to call single cell")
-   parser.add_argument("--count_matrix", help="Path to the h5ad count matrix.", required=True)
-   parser.add_argument("--mt_chromosome", help="The string representing the mitochondrial chromosome.", required=True)
-   parser.add_argument("--mt_chromosome2", help="The string representing the second mitochondrial chromosome (only required for mixed species).", required=False)
-   parser.add_argument("--mixed", help="Is true if the experiment was done on mixed species.", required=True)
-   return parser.parse_args()
+This function reads in an anndata object (h5ad), get the total counts per cell, and 
+log10 + 1 transforms the counts to find multiple troughs in the distribution of number
+of counts per cell. The transformation is necessary to get the  second peak.
+When values are untransformed as there's too much spread.
 
-def getlog10NucGenes(sample, args):
-   '''function to read in sample and get relevant values into adata.obs'''
-   # Read in the counts matrix
-   # If the file is empty, output the min_nucGene and an empty .png file
-   try:
-      adata = sc.read_h5ad(args.count_matrix)
-   except OSError:
-      open(f"{args.sample}_pdf_with_cutoff.png", "w").close()
-      print(int(args.min_nucGene), end="")
+The distribution is usually bi or trimodal with the last peak representing cells.
+
+This function aims to find the local minima of the probabilty density
+(i.e. the lowest point) between the last two peaks, and use that as the
+counts threshold to call cells.
+
+If there are no local minima above the minimum_count_threshold,
+then the function will default to the minimum_count_threshold. This is generally set to 100 or 2
+on the log10 scale."""
+
+class CellCaller:
+
+   def __init__(self):
+      self.parse_arguments()
+      self.read_in_anndata_and_handle_error()
+      self.derive_count_threshold()
+
+   def parse_arguments(self):
+      parser = argparse.ArgumentParser(description = "Arguments for cell caller script to calculate count threshold for calling cells")
+      parser.add_argument("--sample_name", help="Sample ID", required=True)
+      parser.add_argument("--minimum_count_threshold", default=100, type=float, help="minimal number of counts to call cell")
+      parser.add_argument("--count_matrix", help="Path to the h5ad count matrix.", required=True)
+      
+      args_dict = vars(parser.parse_args())
+      for key in args_dict:
+         setattr(self, key, args_dict[key])
+
+   def derive_count_threshold(self):
+      """
+      Derive the count threshold above which
+      a barcode will be considered a cell
+      """
+      self.log10_counts = np.log10(self.adata.X.sum(axis=1).A1 + 1)
+
+      if len(set(self.log10_counts)) == 1:
+         self.clean_exit_on_error()
+      else:
+         self.pdf_df = self.get_prob_dens_data()
+         self.log_cutoff = self.get_cutoff()
+         self.make_pd_plots()
+
+      # Transform back, and round to the nearest integer
+      print(round(10 ** self.log_cutoff), end="")
+
+   def clean_exit_on_error(self):
+      """
+      If we encounter an error we output an empty figure and return the
+      default minimum_count_threshold
+      """
+      open(f"{self.sample_name}_pdf_with_cutoff.png", "w").close()
+      print(int(self.minimum_count_threshold), end="")
       sys.exit(0)
-   #calculate QC metrics (total number of genes per cell, total counts per cell)
-   sc.pp.calculate_qc_metrics(adata, percent_top=None, log1p=False, inplace=True)
+      
+   def read_in_anndata_and_handle_error(self):
+      try:
+         self.adata = sc.read_h5ad(self.count_matrix)
+      except OSError:
+         # If we encounter an empty h5ad then we output an empty figure and return the
+         # default minimum_count_threshold
+         self.clean_exit_on_error()
 
-   # calculate the number of NUCLEAR genes per cell
-   if args.mixed == "TRUE":
-      adata.obs['nNuc_genes'] = adata.X[:,~np.where((adata.var['chromosome'] == args.mt_chromosome) | (adata.var['chromosome'] == args.mt_chromosome2), True, False)].toarray().astype(bool).sum(axis=1)
-   else:
-      adata.obs['nNuc_genes'] = adata.X[:,~np.where(adata.var['chromosome'] == args.mt_chromosome, True, False)].toarray().astype(bool).sum(axis=1)
+   def get_prob_dens_data(self):
+      """
+      Make a pdf and calculate probability density
+      for the distribution of nuclear genes (log10 scale)
+      """
+      pdf = gaussian_kde(self.log10_counts)
 
-   # get a log 10 of the number of genes  -  need +1 as some values in nNuc_genes are 0 
-   adata.obs['log10_Nuc_genes'] = np.log10(adata.obs['nNuc_genes'] +1)
-   log10_Nuc_genes = adata.obs['log10_Nuc_genes'].to_numpy()
-   return log10_Nuc_genes
+      # return evenly spaced numbers over the number of nuclear genes range
+      data_space = np.linspace(self.log10_counts.min(), self.log10_counts.max(), 200)
 
-def get_prob_dens_data(log10_Nuc_genes):
-   '''function to make a pdf and calculate probability density for the distribution of nuclear genes (log10 scale)'''
-   pdf = gaussian_kde(log10_Nuc_genes)
-   # return evenly spaced numbers over the number of nuclear genes range
-   data_space = np.linspace(log10_Nuc_genes.min(), log10_Nuc_genes.max(), 200)
-   # get probability values based on the pdf and the gene range
-   evaluated = pdf.evaluate(data_space)
-   # make a df
-   pdf_df=pd.DataFrame({'data_space':data_space, 'evaluated':evaluated}) 
-   return pdf_df
+      # get probability values based on the pdf and the gene range
+      evaluated = pdf.evaluate(data_space)
+      
+      # make a df
+      pdf_df=pd.DataFrame({'data_space':data_space, 'evaluated':evaluated}) 
+      return pdf_df
 
-def get_cutoff(pdf_df, min_nucGene):
-   '''function to return a cutoff'''
-   # find the "dips" in the probability density - local minima
-   local_minima = argrelextrema(pdf_df['evaluated'].values, np.less)
-   # find the number of genes at which the minima occur
-   potential_cutoffs = pdf_df['data_space'].values[local_minima]
-   if len(np.where(potential_cutoffs > np.log10(min_nucGene))[0]) == 0:
-      cutoff = np.log10(min_nucGene)
-   # if there are any that are above 2, find the smallest one. because this is on a log10 scale, I transform back by 10^ (** in the script) to the value, and round to the nearest integer. 
-   else: 
-      cutoff = min(potential_cutoffs[np.where(potential_cutoffs>=np.log10(min_nucGene))])
-   return cutoff
+   def get_cutoff(self):
+      """
+      Calculate and return cutoff
+      """
+      # find the "dips" in the probability density - local minima
+      local_minima = argrelextrema(self.pdf_df['evaluated'].values, np.less)
+      # find the number of genes at which the minima occur
+      potential_cutoffs = self.pdf_df['data_space'].values[local_minima]
 
-def make_pd_plots(pdf_df, min_nucGene, cutoff, sample):
-   '''function to plot probability density with the default cutoffs and cell caller cutoff, and save the plot as a png'''
-   plt.plot(pdf_df['data_space'], pdf_df['evaluated'])
-   plt.axvline(cutoff, color = 'red',label = 'Cell Caller'+'\n'+str(round(10 ** cutoff)))
-   plt.axvline(np.log10(min_nucGene), color = 'black',label = 'Default'+'\n'+str(round(min_nucGene)))
-   plt.title("Cell Caller minimum nuclear\ngene threshold calculation", fontdict = {'family':'sans-serif','color':'black','size':12,'fontweight':'bold'})
-   plt.xlabel("log10(nNuc_genes+1)")
-   plt.ylabel("Density")
-   plt.legend(bbox_to_anchor = (1.0, 1), loc = 'upper right', title="Method", fontsize=7)
-   plt.savefig('{0}_pdf_with_cutoff.png'.format(sample), dpi=900) 
-   plt.close()    # close the figure window
+      if len(np.where(potential_cutoffs > np.log10(self.minimum_count_threshold))[0]) == 0:
+         log_cutoff = np.log10(self.minimum_count_threshold)
+      else:
+      # If there are any that are above 2, find the smallest one.
+      # Transform back by 10^ to the value, and round to the nearest integer.
+         log_cutoff = min(potential_cutoffs[np.where(potential_cutoffs>=np.log10(self.minimum_count_threshold))])
+      return log_cutoff
 
-
-def cell_caller(args):
-   '''launch function'''
-   sample = args.sample
-   min_nucGene = float(args.min_nucGene)
-   log10_Nuc_genes = getlog10NucGenes(sample, args)
-   if len(set(log10_Nuc_genes)) == 1:
-      open(f"{args.sample}_pdf_with_cutoff.png", "w").close()
-      print(int(args.min_nucGene), end="")
-      sys.exit(0)
-   else:
-      pdf_df = get_prob_dens_data(log10_Nuc_genes)
-      cutoff = get_cutoff(pdf_df, min_nucGene)   
-      make_pd_plots(pdf_df, min_nucGene, cutoff, sample)
-   # because cutoff is on a log10 scale, I transform back by 10^ (** in the script) to the value, and round to the nearest integer
-   print(round(10 ** cutoff), end="")
+   def make_pd_plots(self):
+      """
+      Plot probability density with the default cutoffs
+      and cell caller cutoff, and save the plot as a png
+      """
+      plt.plot(self.pdf_df['data_space'], self.pdf_df['evaluated'])
+      plt.axvline(self.log_cutoff, color = 'red', label = f"Cell Caller\n {str(round(10 ** self.log_cutoff))}")
+      plt.axvline(np.log10(self.minimum_count_threshold), color = 'black', label = f"Default\n{str(round(self.minimum_count_threshold))}")
+      plt.title("Cell Caller minimum count\nthreshold calculation", fontdict = {'family':'sans-serif','color':'black','size':12,'fontweight':'bold'})
+      plt.xlabel("log10(total_counts + 1)")
+      plt.ylabel("Density")
+      plt.legend(bbox_to_anchor = (1.0, 1), loc = 'upper right', title="Method", fontsize=7)
+      plt.savefig(f"{self.sample_name}_pdf_with_cutoff.png", dpi=900) 
+      plt.close()    # close the figure window
 
 if __name__ == "__main__":
-   args = parse_arguments()
-   # not sure what the best way to return this back to nextflow is, so leaving it like this for now (until I learn more about nextflow). 
-   cell_caller(args)
+   CellCaller()
