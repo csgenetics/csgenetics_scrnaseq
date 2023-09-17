@@ -31,7 +31,7 @@
       - [Generating a STAR index](#generating-a-star-index)
     - [`gtf_path`](#gtf_path)
     - [`whitelist_path`](#whitelist_path)
-    - [`min_nuc_gene`](#min_nuc_gene)
+    - [`minimum_count_threshold`](#minimum_count_threshold)
     - [`purity`](#purity)
   - [Outputs](#outputs)
     - [`count_matrix`](#count_matrix)
@@ -413,19 +413,23 @@ By default the IDT_IO_kit_v2.csv whitelist is used.
 --whitelist_path s3://csgx.public.readonly/resources/whitelists/IDT_IO_kit_v2.csv
 ```
 
-### `min_nuc_gene`
+### `minimum_count_threshold`
 
-The minimum number of nuclear genes (E.g. 100) that must be detected for a given barcode to be considered a cell.
+The minimum number of total counts for a given barcode to be considered a cell.
+
+The cell_caller process of the module will generate a count threshold, above which, barcodes will be considered
+cells. If the cell_caller determines a theshold < --minimum_count_theshold or if a theshold cannot be determined,
+the --minimum_count_theshold will be used.
 
 ```bash
---min_nuc_gene 100
+--minimum_count_threshold 100
 ```
 
 ### `purity`
 
-A float value e.g. `0.9`. Default is `0.9`. Used only for mixed species runs as a second threshold (in addition to the min_nuc_gene threshold) to call a single cell.
+A float value e.g. `0.9`. Default is `0.9`. Used only for mixed species runs as a second threshold (in addition to the minimum_count_threshold threshold) to call a single cell.
 
-It is the number of nuclear genes detected from a given species divided by the total number of nuclear genes detected. Single cells purity greater or equal to this value.
+It is the number of counts from a given species divided by the total number of counts. A called cell (see minimum_count_theshold above) must have a purity greater or equal to this threshold to be considered a single cell.
 
 ```bash
 --purity 0.9

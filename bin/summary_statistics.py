@@ -126,7 +126,7 @@ class SummaryStatistics:
     def calculate_cell_stats(self):
         # strip the anndata object down to only the is_single_cell cells
         # so that all metrics are only caluclated for single_cells.
-        # If single species this means those that meet the nuclear gene threshold
+        # If single species this means those that meet the total counts threshold
         # If mixed species then the barcodes must also pass the purity threshold.
         self.anndata_sc = self.anndata[self.anndata.obs['is_single_cell']]
 
@@ -140,8 +140,8 @@ class SummaryStatistics:
             # For the Hsap and Mmus single cell df we work with
             # only their associated genes. I.e. the metrics do not
             # include genes / counts from the other species.
-            anndata_array_sc_Hsap = self.anndata_sc[self.anndata_sc.obs["species_based_on_nuc_gene_purity"] == "Hsap", self.anndata_sc.var["is_hsap"]].to_df()
-            anndata_array_sc_Mmus = self.anndata_sc[self.anndata_sc.obs["species_based_on_nuc_gene_purity"] == "Mmus", self.anndata_sc.var["is_mmus"]].to_df()
+            anndata_array_sc_Hsap = self.anndata_sc[self.anndata_sc.obs["species_based_on_purity"] == "Hsap", self.anndata_sc.var["is_hsap"]].to_df()
+            anndata_array_sc_Mmus = self.anndata_sc[self.anndata_sc.obs["species_based_on_purity"] == "Mmus", self.anndata_sc.var["is_mmus"]].to_df()
             
             # If mixed then we need to caluculate 3 versions of each of the metrics:
             #   _total, _Hsap, _Mmus
@@ -270,9 +270,9 @@ class SummaryStatistics:
         # The first item in the tuple is the name of the metric that will be displayed
         # in the Html, the second is the value, the third is the tool tip.
         # NOTE the helper text must NOT have a comma in it as it is going to be written out in a csv.
-        self.metrics_dict["num_cells"]["num_cells_total"] = ("Number of cells total", self.num_cells_total, "Estimated number of Hsap and Mmus cells combined: Number of barcodes passing the nuclear gene detected threshold and the nuclear gene purity threshold.")
-        self.metrics_dict["num_cells"]["num_cells_Hsap"] = ("Number of Hsap cells", self.num_cells_Hsap, "Estimated number of Hsap cells: Number of barcodes passing the nuclear gene detected threshold and the nuclear gene purity threshold as Hsap.")
-        self.metrics_dict["num_cells"]["num_cells_Mmus"] = ("Number of Mmus cells", self.num_cells_Mmus, "Estimated number of Mmus cells: Number of barcodes passing the nuclear gene detected threshold and the nuclear gene purity threshold as Mmus.")
+        self.metrics_dict["num_cells"]["num_cells_total"] = ("Number of cells total", self.num_cells_total, "Estimated number of Hsap and Mmus cells combined: Number of barcodes passing the total counts threshold and the purity threshold.")
+        self.metrics_dict["num_cells"]["num_cells_Hsap"] = ("Number of Hsap cells", self.num_cells_Hsap, "Estimated number of Hsap cells: Number of barcodes passing the total counts threshold and the purity threshold as Hsap.")
+        self.metrics_dict["num_cells"]["num_cells_Mmus"] = ("Number of Mmus cells", self.num_cells_Mmus, "Estimated number of Mmus cells: Number of barcodes passing the total counts threshold and the purity threshold as Mmus.")
         
         self.metrics_dict["raw_reads_per_cell"]["raw_reads_per_cell_total"] = ("Raw reads per cell (Hsap and Mmus)", self.raw_reads_per_cell_total, "Number of reads pre-QC / Number of cells (Hsap and Mmus)")
         self.metrics_dict["raw_reads_per_cell"]["raw_reads_per_cell_Hsap"] = ("Raw reads per Hsap cell", self.raw_reads_per_cell_Hsap, "Number of reads pre-QC / Number of Hsap cells")
@@ -335,7 +335,7 @@ class SummaryStatistics:
 
     def populate_cell_stats_in_metrics_dict_single_species(self):
         # Estimated number of cells
-        self.metrics_dict["Cell metrics"]["num_cells"] = ("Number of cells", self.num_cells, "Estimated number of cells; Number of barcodes passing the nulcear genes detected threshold.")
+        self.metrics_dict["Cell metrics"]["num_cells"] = ("Number of cells", self.num_cells, "Estimated number of cells; Number of barcodes passing the total counts threshold.")
 
         # Raw reads per cell
         self.metrics_dict["Cell metrics"]["raw_reads_per_cell"] = ("Raw reads per cell", self.raw_reads_per_cell, "Number of reads pre-QC / Number of cells")
@@ -437,7 +437,7 @@ class SummaryStatistics:
         # matches that triplicate format metrics.
         self.metrics_dict["num_raw_cells"]["num_raw_cells_total"] = (
             "Number of cells disregarding purity", self.num_raw_cells_no_purity,
-            "Number of called cells (i.e. meeting the nuclear gene threshold cutoff irrespective of the purity threshold)."
+            "Number of called cells (i.e. meeting the total count threshold irrespective of the purity threshold)."
             )
         
         self.metrics_dict["num_multiplet_cells"]["num_multiplet_cells_total"] = (
