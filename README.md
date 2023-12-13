@@ -30,7 +30,7 @@
       - [Premade STAR indexes](#premade-star-indexes)
       - [Generating a STAR index](#generating-a-star-index)
     - [`gtf_path`](#gtf_path)
-    - [`whitelist_path`](#whitelist_path)
+    - [`barcode_list_path`](#barcode_list_path)
     - [`minimum_count_threshold`](#minimum_count_threshold)
     - [`purity`](#purity)
   - [Outputs](#outputs)
@@ -400,17 +400,17 @@ However, it is recommend that you use the appropriate [species profile](#availab
 
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
-### `whitelist_path`
+### `barcode_list_path`
 
-Specify the whitelist path to use.
-The following whitelists are hosted remotely at:
+Specify the barcode_list path to use.
+The following barcode_lists are hosted remotely at:
 
-- IDT_IO_kit_v2.csv: s3://csgx.public.readonly/resources/whitelists/IDT_IO_kit_v2.csv
+- IDT_IO_kit_v2.csv: s3://csgx.public.readonly/resources/barcode_lists/IDT_IO_kit_v2.csv
 
-By default the IDT_IO_kit_v2.csv whitelist is used.
+By default the IDT_IO_kit_v2.csv barcode_list is used.
 
 ```bash
---whitelist_path s3://csgx.public.readonly/resources/whitelists/IDT_IO_kit_v2.csv
+--barcode_list_path s3://csgx.public.readonly/resources/barcode_lists/IDT_IO_kit_v2.csv
 ```
 
 ### `minimum_count_threshold`
@@ -559,14 +559,14 @@ Below are some examples of launching the pipeline with explanations of the comma
 ### Example 1
 
 ```bash
-nextflow run main.nf -profile docker --input_csv <path/to/input/csv> --outdir ./results --star_index_dir </local/path/to/STAR_index/dir> --gtf_path </local/path/to/gtf> --whitelist s3://csgx.public.readonly/resources/whitelists/IDT_IO_kit_v2.csv
+nextflow run main.nf -profile docker --input_csv <path/to/input/csv> --outdir ./results --star_index_dir </local/path/to/STAR_index/dir> --gtf_path </local/path/to/gtf> --barcode_list s3://csgx.public.readonly/resources/barcode_lists/IDT_IO_kit_v2.csv
 ```
 
 A pipeline is launched using a locally installed version of
 Nextflow from a locally cloned copy of the csgenetics/csgenetics_scrnaseq repository.
 
 A local path to the STAR index directory and a
-corresponding GTF are provided. The remotely hosted v2 whitelist is selected explicitly.
+corresponding GTF are provided. The remotely hosted v2 barcode_list is selected explicitly.
 
 The output directory is set to `./results`.
 
@@ -587,6 +587,6 @@ Version 0.0.1 of the pipeline is used.
 
 The docker profile is selected, configuring the pipeline to use pre-specified Docker containers for each of the processes.
 
-The remotely hosted Human/Mouse STAR index and GTF files are used by default. The remotely hosted v2 whitelist is used by default.
+The remotely hosted Human/Mouse STAR index and GTF files are used by default. The remotely hosted v2 barcode_list is used by default.
 
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>

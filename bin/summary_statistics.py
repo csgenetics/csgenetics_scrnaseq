@@ -556,9 +556,9 @@ class SummaryStatistics:
         # Reads pre-QC
         reads_pre_qc = int(self.multiqc_json_dict["report_general_stats_data"][self.qc_key_to_index_dict["fastp"]][f"{self.sample_id}_R1"]["before_filtering_total_reads"])
         self.metrics_dict["Read QC"]["reads_pre_qc"] = ("Number of reads pre-QC", reads_pre_qc, "Number of reads in the input R1 fastq files (after merging if applicable).")
-        # Reads containing cellular barcode matching whitelist
-        self.metrics_dict["Read QC"]["valid_barcode_reads"] = ("Number of valid barcode-containing reads", int(self.multiqc_json_dict["report_general_stats_data"][self.qc_key_to_index_dict["fastp"]][f"{self.sample_id}_R1.io_extract"]["before_filtering_total_reads"]), "Number of reads containing a barcode exactly matching the whitelist.")
-        # Percentage of reads containing cellular barcode matching whitelist as percentage of pre-QC reads
+        # Reads containing cellular barcode matching barcode_list
+        self.metrics_dict["Read QC"]["valid_barcode_reads"] = ("Number of valid barcode-containing reads", int(self.multiqc_json_dict["report_general_stats_data"][self.qc_key_to_index_dict["fastp"]][f"{self.sample_id}_R1.io_extract"]["before_filtering_total_reads"]), "Number of reads containing a barcode exactly matching the barcode_list.")
+        # Percentage of reads containing cellular barcode matching barcode_list as percentage of pre-QC reads
         if reads_pre_qc != 0:
             self.metrics_dict["Read QC"]["valid_barcode_reads_perc"] = ("Percentage valid barcode-containing reads", self.as_perc(float(self.metrics_dict["Read QC"]["valid_barcode_reads"][1] / self.metrics_dict["Read QC"]["reads_pre_qc"][1])), "(Number of valid barcode-containing reads / Number of reads pre-QC) * 100.")
         else:

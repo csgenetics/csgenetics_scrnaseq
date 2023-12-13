@@ -83,7 +83,7 @@ process merged_fastp{
 }
 
 /*
-* Use umitools to label reads with IOs from the parameter provided whitelist
+* Use umitools to label reads with IOs from the parameter provided barcode_list
 */
 process io_extract {
   tag "$sample_id"
@@ -91,7 +91,7 @@ process io_extract {
 
   input:
   tuple val(sample_id), path(r1), path(r2)
-  path(whitelist)
+  path(barcode_list)
   val(barcode_pattern)
 
   output:
@@ -100,7 +100,7 @@ process io_extract {
 
   script:
   """
-  cat $whitelist | cut -d ',' -f2 > wl.txt
+  cat $barcode_list | cut -d ',' -f2 > wl.txt
 
   umi_tools extract -I $r2 \
     --bc-pattern=${barcode_pattern} \
@@ -512,7 +512,7 @@ process count_matrix {
 
   input:
   tuple val(sample_id), path(input_file)
-  path(whitelist)
+  path(barcode_list)
   path(features_file)
 
   output:
@@ -523,7 +523,7 @@ process count_matrix {
 
   script:
   """
-  count_matrix.py --white_list ${whitelist} --count_table ${input_file} --gene_list ${features_file} --sample ${sample_id}
+  count_matrix.py --white_list ${barcode_list} --count_table ${input_file} --gene_list ${features_file} --sample ${sample_id}
   """
 }
 

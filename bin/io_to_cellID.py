@@ -45,7 +45,7 @@ def transform_io(sam_file, bam_out_path, wl_dict, to_fastq=True,fastq_out_path='
 
 
 def launch(args):
-    # load CSGX whitelist of IOs
+    # load CSGX barcode_list of IOs
     wl_dict={}
     with open(args.white_list,'r') as inf:
         reader = csv.reader(inf)

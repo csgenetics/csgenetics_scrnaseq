@@ -20,7 +20,7 @@ def parse_arguments(args):
 
 def make_count_matrix(args):
 
-    # load CSGX whitelist of IOs
+    # load CSGX barcode_list of IOs
     wl = read_csv(args.white_list)
     wl.columns = ['cell', 'io','ioID']
     wl = wl.iloc[:,[0,1]]

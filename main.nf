@@ -46,8 +46,8 @@ workflow {
     single_sample_report_template = file(params.single_sample_report_template)
     multi_sample_report_template = file(params.multi_sample_report_template)
 
-    // Create the whitelist object
-    whitelist = file(params.whitelist_path)
+    // Create the barcode_list object
+    barcode_list = file(params.barcode_list_path)
 
     // Make a file object of the STAR dir
     star_index = file(params.star_index_dir)
@@ -69,8 +69,8 @@ workflow {
     merged_fastp(ch_merge_lanes_out, barcode_pattern)
     ch_merged_fastp_multiqc = merged_fastp.out.merged_fastp_multiqc
 
-    // Get the whitelist and extract the IOs from the fastqs using umitools
-    io_extract(ch_merge_lanes_out, whitelist, barcode_pattern)
+    // Get the barcode_list and extract the IOs from the fastqs using umitools
+    io_extract(ch_merge_lanes_out, barcode_list, barcode_pattern)
     ch_io_extract_out = io_extract.out.io_extract_out
     ch_io_extract_log = io_extract.out.io_extract_log
 
@@ -165,7 +165,7 @@ workflow {
     ch_io_count_out = io_count.out.io_count_out
 
     // Generate raw count matrix
-    count_matrix(ch_io_count_out, whitelist, feature_file_out)
+    count_matrix(ch_io_count_out, barcode_list, feature_file_out)
     ch_h5ad = count_matrix.out.h5ad
 
     // Run cell caller
