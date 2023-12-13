@@ -70,9 +70,8 @@ workflow {
     ch_merged_fastp_multiqc = merged_fastp.out.merged_fastp_multiqc
 
     // Get the barcode_list and extract the IOs from the fastqs using umitools
-    io_extract(ch_merge_lanes_out, barcode_list, barcode_pattern)
+    io_extract(ch_merge_lanes_out, barcode_list)
     ch_io_extract_out = io_extract.out.io_extract_out
-    ch_io_extract_log = io_extract.out.io_extract_log
 
     // Trim and remove low quality reads with fastp
     io_extract_fastp(ch_io_extract_out)

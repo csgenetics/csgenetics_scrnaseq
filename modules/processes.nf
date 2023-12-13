@@ -83,7 +83,8 @@ process merged_fastp{
 }
 
 /*
-* Use umitools to label reads with IOs from the parameter provided barcode_list
+* Extract the 13bp barcode from the R2 read and append it to the header of the R1 read.
+* Remove any reads where the barcode does not exactly match a barcode in the barcode list.
 */
 process io_extract {
   tag "$sample_id"
@@ -92,23 +93,15 @@ process io_extract {
   input:
   tuple val(sample_id), path(r1), path(r2)
   path(barcode_list)
-  val(barcode_pattern)
 
   output:
-  tuple val(sample_id), path("${sample_id}_R1.io_extract.fastq.gz"), path("${sample_id}_R2.io_extract.fastq.gz"), emit: io_extract_out
-  tuple val(sample_id), path("extract.log"), emit: io_extract_log
+  tuple val(sample_id), path("${sample_id}_R1.io_extract.fastq.gz"), emit: io_extract_out
 
   script:
   """
-  cat $barcode_list | cut -d ',' -f2 > wl.txt
-
-  umi_tools extract -I $r2 \
-    --bc-pattern=${barcode_pattern} \
-    --read2-in=$r1 \
-    --stdout=${sample_id}_R2.io_extract.fastq.gz \
-    --read2-out=${sample_id}_R1.io_extract.fastq.gz \
-    --whitelist=wl.txt \
-    -L extract.log
+  cat $barcode_list | cut -d ',' -f2 > barcode_list.txt
+  gawk -v r2=${r2} -v bc_length=13 -f ${baseDir}/bin/io_extract.awk barcode_list.txt <(zcat ${r1})
+  mv io_extract.good.R1.fastq.gz ${sample_id}_R1.io_extract.fastq.gz
   """
 }
 
@@ -128,7 +121,7 @@ process io_extract_fastp {
 
   publishDir "${params.outdir}/fastp", pattern: '*.{json,html}', mode: 'copy'
 
-  input: tuple val(sample_id), path(r1), path(r2)
+  input: tuple val(sample_id), path(r1)
 
   output:
   tuple val(sample_id), path("${sample_id}_R1.io_extract.fastp.fastq.gz"), emit: fastp_out
