@@ -80,7 +80,8 @@ workflow {
     ch_io_extract_fastp_multiqc = io_extract_fastp.out.fastp_multiqc
 
     // Trim extra polyA
-    trim_extra_polya(ch_io_extract_fastp_out)
+    trim_polyA_script = file("${baseDir}/bin/trim_poly_A.awk")
+    trim_extra_polya(ch_io_extract_fastp_out, trim_polyA_script)
     ch_trim_extra_polya_out = trim_extra_polya.out.trim_extra_polya_out
 
     // Send the polyA trimmed reads back through

@@ -150,10 +150,9 @@ process io_extract_fastp {
 }
 
 /*
-* Trims reads from the first  AAAAAAAAAAAAAAA or AAAAAAAAAAAAACG 
-* Fastp only trims polyX tails if it is right at the end of 3' end
-* This script finds and trims polyA (of length >=15) regardless of where it is in the read. eg. xxxxxxx[15As]CTG --> xxxxxxx
-* Also remove reads of length <=20 post polyA trimming
+* Trims reads from positions that match the regexs: A{15,} or A{13,}CG 
+* I.e. A homopolymers >= 15 bp or >=13bp + CG are identified and trimmed along with any following bps.
+* Only reads >20bp in length (after trimming) are retained .
 */
 process trim_extra_polya {
   tag "$sample_id"
@@ -161,13 +160,14 @@ process trim_extra_polya {
 
   input:
   tuple val(sample_id), path(fastq)
+  path(trim_polyA_script)
 
   output:
   tuple val(sample_id), path("${sample_id}_R1.polyA_trimmed.fastq.gz"), emit: trim_extra_polya_out
 
   script:
   """
-  zcat $fastq | awk -f ${baseDir}/trim_poly_A.awk
+  zcat $fastq | awk -f $trim_polyA_script
   mv good.fastq.gz ${sample_id}_R1.polyA_trimmed.fastq.gz
   """
 }
