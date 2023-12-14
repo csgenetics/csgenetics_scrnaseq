@@ -18,6 +18,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 import pandas as pd
 pd.options.mode.chained_assignment = None  # default='warn'
 
+
 def isnan(value):
     try:
         return math.isnan(float(value))
@@ -38,9 +39,12 @@ def replace_na_gene_names_with_gene_id(gene_id, gene_name):
 gtf_in_path = sys.argv[1]
 feature_names_out_path = sys.argv[2]
 
+# Keep selected columns
 gtf_obj = read_gtf(gtf_in_path, usecols=['gene_id','seqname','gene_name'])
 
-# Keep selected columns
+# Remove version suffix e.g. ".1" from the gene_id
+gtf_obj["gene_id"] = gtf_obj["gene_id"].str.replace(".\d+$", "", regex=True)
+
 feature_names_obj = gtf_obj.drop_duplicates()
 
 # Split chromosome list and keep first value (they are all identical)

@@ -46,7 +46,7 @@ def make_count_matrix(args):
     counts = counts.groupby(['cell', 'gene_id']).size().reset_index(name='count')
 
     # second merge by gene ID
-    counts = merge(counts, genes_all,how='left')
+    counts = merge(counts, genes_all, how='left')
 
     zero_genes = genes_all.loc[-genes_all.gene_id.isin(counts.gene_id)]
 
