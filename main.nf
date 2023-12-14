@@ -131,7 +131,7 @@ workflow {
     // or do not (0) contain alignments.
     // If alignments are present featureCounts is run,
     // else the empty bam is simply copied for collection from the process.
-    feature_counts(star_out_ch.good_bam.map({[it[0], it[1], 1]}).mix(create_valid_empty_bam_star.out.out_bam.map({[it[0], it[1], 0]})), gtf)
+    feature_counts(star_out_ch.good_bam.map({[it[0], it[1], 1]}).mix(create_valid_empty_bam_star.out.out_bam.map({[it[0], it[1], 0]})), gtf, "${baseDir}/bin/assign_multi_mappers.gawk")
 
     // Produce qualimap output of the annotated bam for metrics
     annotated_qualimap(feature_counts.out.out_bam, gtf, empty_qualimap_template, "annotated")
