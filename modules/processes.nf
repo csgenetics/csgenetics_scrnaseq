@@ -93,6 +93,7 @@ process io_extract {
   input:
   tuple val(sample_id), path(r1), path(r2)
   path(barcode_list)
+  path(io_extract_script)
 
   output:
   tuple val(sample_id), path("${sample_id}_R1.io_extract.fastq.gz"), emit: io_extract_out
@@ -100,7 +101,7 @@ process io_extract {
   script:
   """
   cat $barcode_list | cut -d ',' -f2 > barcode_list.txt
-  gawk -v r2=${r2} -v bc_length=13 -f ${baseDir}/bin/io_extract.awk barcode_list.txt <(zcat ${r1})
+  gawk -v r2=${r2} -v bc_length=13 -f $io_extract_script barcode_list.txt <(zcat ${r1})
   mv io_extract.good.R1.fastq.gz ${sample_id}_R1.io_extract.fastq.gz
   """
 }
@@ -149,7 +150,7 @@ process io_extract_fastp {
 }
 
 /*
-* Trim extra polyA tail using a bespoke python scripts
+* Trims reads from the first  AAAAAAAAAAAAAAA or AAAAAAAAAAAAACG 
 * Fastp only trims polyX tails if it is right at the end of 3' end
 * This script finds and trims polyA (of length >=15) regardless of where it is in the read. eg. xxxxxxx[15As]CTG --> xxxxxxx
 * Also remove reads of length <=20 post polyA trimming
@@ -163,11 +164,11 @@ process trim_extra_polya {
 
   output:
   tuple val(sample_id), path("${sample_id}_R1.polyA_trimmed.fastq.gz"), emit: trim_extra_polya_out
-  tuple val(sample_id), path("${sample_id}_trim_polyA_metrics.csv"), emit: trim_extra_polya_log1
 
   script:
   """
-  trim_extra_polya.py $fastq $sample_id
+  zcat $fastq | awk -f ${baseDir}/trim_poly_A.awk
+  mv good.fastq.gz ${sample_id}_R1.polyA_trimmed.fastq.gz
   """
 }
 
