@@ -23,13 +23,13 @@ import pandas as pd
 class SummaryStatistics:
     def __init__(self):
         self.sample_id = sys.argv[1]
-        if sys.argv[9] == "TRUE":
+        if sys.argv[8] == "TRUE":
             self.mixed = True
 
             # The purity threshold used to classify a barcode as a cell
             # (in addition to the num nuc genes detected threshold)
             # if we are working with a mixed species sample
-            self.purity = sys.argv[10]
+            self.purity = sys.argv[9]
         else:
             self.mixed = False
 
@@ -38,7 +38,6 @@ class SummaryStatistics:
         #   Cell metrics
         #   Deduplication
         #   Post read QC alignment
-        #   High confidence read alignment
         #   Annotated reads alignment
         # The primary keys will be used to group the metrics for display
         # in the html reports. They will also be used as headers.
@@ -502,10 +501,8 @@ class SummaryStatistics:
     def get_mapping_stats(self):
         # Populate self.metrics_dict with the raw qualimap stats
         self.get_qualimap_stats(sys.argv[6], "Post read QC alignment")
-        # Populate self.metrics_dict with the filtered qualimap stats
-        self.get_qualimap_stats(sys.argv[7], "High confidence read alignment")
         # Populate self.metrics_dict with the annotated qualimap stats
-        self.get_qualimap_stats(sys.argv[8], "Annotated reads alignment")
+        self.get_qualimap_stats(sys.argv[7], "Annotated reads alignment")
 
     def get_qualimap_stats(self, path, category):
         # Read in the qualimap output for the unfiltered mapping

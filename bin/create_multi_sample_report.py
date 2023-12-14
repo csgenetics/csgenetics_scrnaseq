@@ -71,7 +71,6 @@ class MultipleSampleHTMLReport:
             mixed=self.mixed,
             alignment_tooltip_dict = {
                 "Post read QC alignment": "Mapping of the post QC reads i.e. after trimming (polyX end and internal polyA) and barcode verification.",
-                "High confidence read alignment": "Reads with a single alignment and a maximum of 3 bp mismatch.",
                 "Annotated reads alignment": "High confidence reads annotated with a gene ID (XT bam tag)."
                 }, cell_metric_tooltip_dict = cell_metric_tooltip_dict_obj)
 
@@ -116,7 +115,6 @@ class MultipleSampleHTMLReport:
                     #   Cell metrics
                     #   Deduplication
                     #   Post read QC alignment
-                    #   High confidence read alignment
                     #   Annotated reads alignment
                     variable_name, value, human_readable_name, description, classification = line.strip().split(",")
                     self.metrics_dict[classification][(variable_name, human_readable_name, description, classification)].append(self.format_number_to_string(value))

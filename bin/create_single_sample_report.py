@@ -103,7 +103,6 @@ class SingleSampleHTMLReport:
                                             # I have left the code in place so that it can be reestablished.
                                             alignment_cat_dict = {
                                                 "Post read QC alignment": ("Mapping of the post QC reads i.e. after trimming (polyX end and internal polyA) and barcode verification.", "qc_accord_header", "qc_collapse"),
-                                                "High confidence read alignment": ("Reads with a single alignment and a maximum of 3 bp mismatch.", "hc_accord_header", "hc_collapse"),
                                                 "Annotated reads alignment": ("High confidence reads annotated with a gene ID (XT bam tag).", "ann_accord_header", "ann_collapse")
                                                 },  cell_stat_cat_dict = cell_stat_cat_dict_obj)
 

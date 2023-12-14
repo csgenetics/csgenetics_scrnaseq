@@ -301,29 +301,10 @@ process run_qualimap {
 }
 
 /*
-* Filter for reads with 1 alignment and max of 3 differences from reference seq.
-*/
-process filter_umr_mismatch{
-tag "$sample_id"
-
-label "c2m2"
-
-input:
-tuple val(sample_id), path(star_out_bam)
-
-output:
-tuple val(sample_id), path("${sample_id}.mapped.sorted.filtered.bam"), env(alignment_count), emit: filtered_bam
-
-script:
-"""
-samtools view -h -b -e '[NH]==1 && ([nM]==0 || [nM]==1 || [nM]==2 || [nM]==3)' -b $star_out_bam > ${sample_id}.mapped.sorted.filtered.bam
-alignment_count=\$(samtools view -c ${sample_id}.mapped.sorted.filtered.bam)
-"""
-}
-
-/*
-* Quantify genes using feature counts
-*/
+* Annotate the bam alignment with gene feature annotations
+* and use these to filter the reads so that only reads with
+* annotations are carried through.
+*/ // TODO Need to implement the filtering from the above process into this process and then delete the above process. will probs need to use the image that we use in internal so that we can use samtools.
 process feature_counts {
   tag "$sample_id"
   label 'c4m4'
@@ -335,38 +316,20 @@ process feature_counts {
   path(gtf)
 
   output:
-  tuple val(sample_id), path('*.bam'), emit: out_bam
+  tuple val(sample_id), path("${sample_id}.mapped.sorted.filtered.annotated.bam"), env(alignment_count), emit: out_bam
 
   shell:
   """
   if [[ $aligned_count > 0 ]] # If the bam is not empty
     then
+      samtools view -h -b -e '[NH]==1 && ([nM]==0 || [nM]==1 || [nM]==2 || [nM]==3)' -b $bam > ${sample_id}.mapped.sorted.filtered.bam
       # Run featureCounts as normal
-      featureCounts -a $gtf -o ${sample_id}_gene_assigned.txt -R BAM $bam -T 4 -t gene -g gene_id --fracOverlap 0.5 --extraAttributes gene_name
+      featureCounts -a $gtf -o ${sample_id}_gene_assigned.txt -R BAM ${sample_id}.mapped.sorted.filtered.bam -T 4 -t gene -g gene_id --fracOverlap 0.5 --extraAttributes gene_name
     else
       # Simply rename the input bam so that it can be collected
       cp $bam ${sample_id}.mapped.sorted.filtered.bam.featureCounts.bam
   fi
-  """
-}
-
-/*
-* Filter for annotated reads, one target and tagged as Assigned
-*/
-process filter_for_annotated {
-  tag "$sample_id"
-
-  label "c2m2"
-
-  input:
-  tuple val(sample_id), path(feature_counts_out_bam)
-
-  output:
-  tuple val(sample_id), path("${sample_id}.mapped.sorted.filtered.annotated.bam"), env(alignment_count), emit: annotated_bam
-
-  script:
-  """
-  samtools view -h -b -e '[XN]==1 && [XT] && [XS]=="Assigned"' -b $feature_counts_out_bam > ${sample_id}.mapped.sorted.filtered.annotated.bam 
+  samtools view -h -b -e '[XN]==1 && [XT] && [XS]=="Assigned"' -b ${sample_id}.mapped.sorted.filtered.bam.featureCounts.bam > ${sample_id}.mapped.sorted.filtered.annotated.bam
   alignment_count=\$(samtools view -c ${sample_id}.mapped.sorted.filtered.annotated.bam)
   """
 }
@@ -588,14 +551,14 @@ process summary_statistics {
   publishDir "${params.outdir}/report/${sample_id}", mode: 'copy', pattern: "*.csv"
   
   input:
-  tuple val(sample_id), val(minimum_count_threshold), path(raw_h5ad), path(annotated_qualimap), path(antisense), path(dedup), path(filtered_qualimap), path(multiqc_data_json), path(raw_qualimap)
+  tuple val(sample_id), val(minimum_count_threshold), path(raw_h5ad), path(annotated_qualimap), path(antisense), path(dedup), path(multiqc_data_json), path(raw_qualimap)
   output:
   tuple val(sample_id), path("${sample_id}.metrics.csv"), emit: metrics_csv
 
   script:
   def mixed_args = params.mixed_species ? "TRUE ${params.purity}" : "FALSE"
   """
-  summary_statistics.py ${sample_id} ${raw_h5ad} ${multiqc_data_json} ${antisense} ${dedup} ${raw_qualimap} ${filtered_qualimap} ${annotated_qualimap} $mixed_args
+  summary_statistics.py ${sample_id} ${raw_h5ad} ${multiqc_data_json} ${antisense} ${dedup} ${raw_qualimap} ${annotated_qualimap} $mixed_args
   """
 }
 

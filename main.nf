@@ -10,8 +10,8 @@ include {
   features_file; merge_lanes; merged_fastp; io_extract; io_extract_fastp;
   trim_extra_polya; post_polyA_fastp; star;
   create_valid_empty_bam as create_valid_empty_bam_star;
-  run_qualimap as raw_qualimap; run_qualimap as filtered_qualimap; run_qualimap as annotated_qualimap;
-  filter_umr_mismatch; feature_counts; filter_for_annotated; multiqc;
+  run_qualimap as raw_qualimap; run_qualimap as annotated_qualimap;
+  feature_counts; multiqc;
   sort_index_bam; dedup; io_count; count_matrix;
   filter_count_matrix; cell_caller; summary_statistics; single_summary_report;
   multi_sample_report
@@ -115,7 +115,9 @@ workflow {
           .set{star_out_ch}
 
     // Create an empty one-line-header bam that can be read
-    // by samtools.
+    // by samtools. We only create this for those samples that
+    // had 0 reads after QC (i.e. after trim_extra_polyA) or
+    // after mapping i.e. after star.
     create_valid_empty_bam_star(polyA_out_ch.empty_fastq.map({[it[0], "_Aligned.sortedByCoord.out"]}).mix(star_out_ch.bad_bam.map({[it[0], "_Aligned.sortedByCoord.out"]})))
 
     // Qualimap on STAR output
@@ -124,21 +126,15 @@ workflow {
     // qualimap or populate an empty qualimap template
     raw_qualimap(star_out_ch.good_bam.map({[it[0], it[1], 1]}).mix(create_valid_empty_bam_star.out.out_bam.map({[it[0], it[1], 0]})), gtf, empty_qualimap_template, "raw")
 
-    // Filter the mapped reads for reads with 1 alignment and max 3 mismatch
-    filter_umr_mismatch(star_out_ch.good_bam.map({[it[0], it[1]]}).mix(create_valid_empty_bam_star.out.out_bam))
-
-    // Qualimap on filtered bam
-    filtered_qualimap(filter_umr_mismatch.out.filtered_bam, gtf, empty_qualimap_template, "filtered")
-
     // Perform featurecount quantification
-    feature_counts(filter_umr_mismatch.out.filtered_bam, gtf)
-
-    // Filter the annotated featureCounts bam
-    // for only annotated/assigned reads with 1 target
-    filter_for_annotated(feature_counts.out.out_bam)
+    // The 1 and 0 being added in the map represent bams that contain (1)
+    // or do not (0) contain alignments.
+    // If alignments are present featureCounts is run,
+    // else the empty bam is simply copied for collection from the process.
+    feature_counts(star_out_ch.good_bam.map({[it[0], it[1], 1]}).mix(create_valid_empty_bam_star.out.out_bam.map({[it[0], it[1], 0]})), gtf)
 
     // Produce qualimap output of the annotated bam for metrics
-    annotated_qualimap(filter_for_annotated.out.annotated_bam, gtf, empty_qualimap_template, "annotated")
+    annotated_qualimap(feature_counts.out.out_bam, gtf, empty_qualimap_template, "annotated")
 
     // Generate input channel containing all the files needed for multiqc per samples. 
     // The final channel structure is [sample_id, [file1, file2, file3, ...]]
@@ -156,7 +152,7 @@ workflow {
     multiqc(ch_multiqc_in)
     
     // Sort and index bam file
-    sort_index_bam(filter_for_annotated.out.annotated_bam)
+    sort_index_bam(feature_counts.out.out_bam)
 
     // Perform deduplication
     dedup(sort_index_bam.out.sort_index_bam_out)
@@ -186,13 +182,12 @@ workflow {
 
     // structure of ch_summary_statistics_in is
     // [sample_id, min_nuc_gene_cutoff, raw_h5ad, annotated_qualimap,
-    // antisense, dedup.log, filtered_qualimap, multiqc_data, raw_qualimap]
+    // antisense, dedup.log, multiqc_data, raw_qualimap]
     ch_cell_caller_out
     .join(filter_count_matrix.out.raw_count_matrix)
     .join(annotated_qualimap.out.qualimap_txt)
     .join(sort_index_bam.out.antisense_out)
     .join(dedup.out.io_dedup_log)
-    .join(filtered_qualimap.out.qualimap_txt)
     .join(multiqc.out.multiqc_json)
     .join(raw_qualimap.out.qualimap_txt)
     .set({ch_summary_statistics_in})
