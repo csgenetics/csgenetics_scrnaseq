@@ -209,6 +209,8 @@ process post_polyA_fastp{
 */
 process star {
   tag "$sample_id"
+  // Note: If running profile mouse_human_mix
+  // the memory and cpu allocations are set in the profile config.
   label 'c8m40'
 
   publishDir "${params.outdir}/STAR", mode: 'copy'
