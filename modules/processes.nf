@@ -156,7 +156,7 @@ process io_extract_fastp {
 */
 process trim_extra_polya {
   tag "$sample_id"
-  label 'c2m4'
+  label 'c1m1'
 
   input:
   tuple val(sample_id), path(fastq)
