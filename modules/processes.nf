@@ -220,7 +220,7 @@ process star {
   path(index)
 
   output:
-  tuple val(sample_id), path("${sample_id}_Aligned.sortedByCoord.out.bam"), env(uniquely_mapped_reads), emit: out_bam
+  tuple val(sample_id), path("${sample_id}_Aligned.out.bam"), env(uniquely_mapped_reads), emit: out_bam
 
   script:
   """
@@ -232,8 +232,6 @@ process star {
         --outSAMtype BAM Unsorted \
         --readFilesCommand zcat \
         --outSAMattributes Standard;
-      
-      samtools sort ${sample_id}_Aligned.out.bam -o ${sample_id}_Aligned.sortedByCoord.out.bam
 
       # Get number of uniquely aligned reads
       uniquely_mapped_reads=\$(grep "Uniquely mapped reads number" ${sample_id}_Log.final.out | cut -d "|" -f 2 | xargs)
@@ -339,15 +337,16 @@ process feature_counts {
   """
   if [[ $aligned_count > 0 ]] # If the bam is not empty
     then
+      samtools sort $bam -o ${sample_id}_Aligned.sortedByCoord.out.bam
       # Start by running feature counts on the star output
       # including strandedness and annotation of multimappers
-      featureCounts -a $gtf -o ${sample_id}.star.featureCounts.gene.txt -R BAM $bam -T 4 -t gene -g gene_id --fracOverlap 0.5 --extraAttributes gene_name -s 1 -M
+      featureCounts -a $gtf -o ${sample_id}.star.featureCounts.gene.txt -R BAM ${sample_id}_Aligned.sortedByCoord.out.bam -T 4 -t gene -g gene_id --fracOverlap 0.5 --extraAttributes gene_name -s 1 -M
 
       # Process the multimapped and uniquely mapped reads separately.
       # Generate the UMRs
-      samtools view -h -b -e '[NH]==1 && ([nM]==0 || [nM]==1 || [nM]==2 || [nM]==3)' -b ${bam}.featureCounts.bam > ${sample_id}.UMRs.bam.featureCounts.bam
+      samtools view -h -b -e '[NH]==1 && ([nM]==0 || [nM]==1 || [nM]==2 || [nM]==3)' -b ${sample_id}_Aligned.sortedByCoord.out.bam.featureCounts.bam > ${sample_id}.UMRs.bam.featureCounts.bam
       # Generate the multimapped reads
-      samtools view -h -b -e '[NH]>1 && ([nM]==0 || [nM]==1 || [nM]==2 || [nM]==3)' -b ${bam}.featureCounts.bam > ${sample_id}.multimapped.bam.featureCounts.bam
+      samtools view -h -b -e '[NH]>1 && ([nM]==0 || [nM]==1 || [nM]==2 || [nM]==3)' -b ${sample_id}_Aligned.sortedByCoord.out.bam.featureCounts.bam > ${sample_id}.multimapped.bam.featureCounts.bam
 
       ##### UMR processing ####
       # Filter out the reads that were 'Assigned' a gene target

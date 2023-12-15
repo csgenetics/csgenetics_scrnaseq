@@ -43,7 +43,7 @@ feature_names_out_path = sys.argv[2]
 gtf_obj = read_gtf(gtf_in_path, usecols=['gene_id','seqname','gene_name'])
 
 # Remove version suffix e.g. ".1" from the gene_id
-gtf_obj["gene_id"] = gtf_obj["gene_id"].str.replace(".\d+$", "", regex=True)
+gtf_obj["gene_id"] = gtf_obj["gene_id"].str.replace("\.\d+$", "", regex=True)
 
 feature_names_obj = gtf_obj.drop_duplicates()
 
