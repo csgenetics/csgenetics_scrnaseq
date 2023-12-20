@@ -43,8 +43,8 @@ workflow {
     gtf = file("${params.gtf_path}")
 
     // Create path objects to HTML report templates
-    single_sample_report_template = file(params.single_sample_report_template)
-    multi_sample_report_template = file(params.multi_sample_report_template)
+    single_sample_report_template = file("${baseDir}/templates/single_sample_report_template.html.jinja2")
+    multi_sample_report_template = file("${baseDir}/templates/multi_sample_report_template.html.jinja2")
 
     // Create the barcode_list object
     barcode_list = file(params.barcode_list_path)
