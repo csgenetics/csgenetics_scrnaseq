@@ -59,7 +59,7 @@
           <!-- Create one empty header for the col that will contain the row labels -->
           <th scope="col"></th>
           {% for sample in sample_name_list %}
-            <th scope="col">{{ sample }}</th>
+            <th scope="col"><a href="{{ sample }}/{{ sample }}_report.html">{{ sample }}</a></th>
           {% endfor%}
         </tr>
         <!-- Write out a subheader and the stats for each of the first 3 metric categories -->
