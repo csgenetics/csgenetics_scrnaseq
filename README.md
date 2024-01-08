@@ -79,12 +79,12 @@ With Nextflow, Docker and git installed, clone the csgenetics_scrnaseq repositor
 git clone https://github.com/csgenetics/csgenetics_scrnaseq.git $HOME/analysis && cd $HOME/analysis
 ```
 
-The pipeline is then run using the Nextflow executable and in this case the `docker` profile.
+The pipeline is then run using the Nextflow executable, and in this case, the `docker` profile.
 
 For specification of input sequences see [Specifying input sequencing files](#specifying-input-sequencing-files).
 
 ```bash
-nextflow run main.nf -profile docker --input_csv $HOME/analysis/input_csv/input_csv.csv
+nextflow run main.nf -profile docker --input_csv $HOME/analysis/input_csv/input_csv.csv --genome GRCh38
 ```
 
 For a full list of the configurable parameters that can be can be supplied to the pipeline
@@ -96,7 +96,7 @@ and other options for configuration [Configurable parameters](#configurable-para
 
 While the pipeline can be launched on MacOS, some of the processes are RAM intensive.
 
-In particular, the STAR mapping process is currently configured to run in a container that is allocated 40GB of RAM.
+In particular, the STAR mapping process is currently configured to run in a container that is allocated 40GB or 60GB of RAM.
 The qualimap process is configured to use 16GB of RAM.
 
 The actual resources utilized will depend on the character of the samples being analysed.
@@ -122,7 +122,7 @@ The full path to the input csv should be supplied to the pipeline using the `--i
 E.g.
 
 ```bash
-nextflow run main.nf -profile docker --input_csv <path/to/csv_dir/input_csv.csv>
+nextflow run main.nf -profile docker --input_csv <path/to/csv_dir/input_csv.csv> --genome GRCh38
 ```
 
 Multiple sets of sequencing files (e.g. from multiple lanes of sequencing)
@@ -204,7 +204,7 @@ Nextflow pipeline configurable parameters can be set in groups by specifying pro
 
 See the [Config profiles](https://www.nextflow.io/docs/latest/config.html#config-profiles) section of the Netflow documentation for further details.
 
-There are four standard profiles available for the CS Genetics scRNA-Seq pipeline:
+There are five standard profiles available for the CS Genetics scRNA-Seq pipeline:
 
 - `test`
   - A profile with a complete configuration for automated testing.
@@ -219,8 +219,10 @@ There are four standard profiles available for the CS Genetics scRNA-Seq pipelin
 - `singularity`
   - A generic configuration profile that enables use of pre-configured Docker containers for each process run using Singularity.
   - See the Nextflow documentation on [Singularity](https://www.nextflow.io/docs/latest/container.html#singularity) for further details.
+- `local`
+  - Uses the [local executor](https://www.nextflow.io/docs/latest/executor.html#local). Software required for each process should be pre-installed on your local system.
 
-If no profile is set, then the [local executor](https://www.nextflow.io/docs/latest/executor.html#local) will be used and software required for each process to run should be pre-installed on your local system.
+One of the above profiles must be used for the pipeline to be configured correctly.
 
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
@@ -264,7 +266,7 @@ Launching the pipeline with this profile configures the pipeline to use pre-spec
 E.g.
 
 ```bash
-nextflow run main.nf -profile docker --input_csv $HOME/analysis/input_csv/input_csv.csv
+nextflow run main.nf -profile docker --input_csv $HOME/analysis/input_csv/input_csv.csv --genome GRCh38
 ```
 
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
@@ -276,35 +278,35 @@ A generic configuration profile that enables use of pre-configured Docker contai
 E.g.
 
 ```bash
-nextflow run main.nf -profile singularity --input_csv $HOME/analysis/input_csv/input_csv.csv
+nextflow run main.nf -profile singularity --input_csv $HOME/analysis/input_csv/input_csv.csv --genome GRCh38
 ```
 
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
-## Available species profiles
+## Available curated genomic resources
 
-In addition to the four [available standard profiles](#available-standard-profiles), species profiles can be used to configure the pipeline for a specific species or mix of species.
+A set of genomic resources are provided to automatically configure a pipeline run for a specific species or mix of species. To use these resources provide the relevant species key (see below) to the `--genome` commandline parameter.
 
-Currently avaialable species profiles are:
+Resources are available for the following species:
 - Human; `GRCh38`
 - Mouse; `GRCm39`
 - Drosophila melanogaster; `BDGP6`
 - Pig; `Sscrofa11`
 - Mixed (Human - Mouse); `mouse_human_mix`
 
-By passing one of these profiles as a command line argument, the pipeline will automatically be configured to use the relevant set of resources for the following parameters:
+By passing one of these keys as an argument to `--genome`, the pipeline will automatically be configured to use the relevant set of resources for the following parameters:
 - `star_index_dir`
 - `gtf_path`
 - `mitochondria_chromosome` (`hsap_mitochondria_chromosome` & `mmus_mitochondria_chromosome` for `mouse_human_mix`)
 - `hsap_gene_prefix` & `hsap_gene_prefix` (mixed species only)
 
-For most use cases, the species profiles will be provided in addition to one of the four [available standard profiles](#available-standard-profiles).
-
 E.g.
 
 ```bash
-nextflow run main.nf -profile singularity,GRCh38 --input_csv $HOME/analysis/input_csv/input_csv.csv
+nextflow run main.nf -profile singularity --genome GRCh38 --input_csv $HOME/analysis/input_csv/input_csv.csv
 ```
+
+For supplying custom genomic resources, see the [`star_index_dir`](#star_index_dir) and [`gtf_path`](#gtf_path) sections below.
 
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
@@ -333,28 +335,12 @@ The output directory where the results will be saved.
 
 ### `star_index_dir`
 
-Specify the path of the STAR index directory. Required for mapping.
+Specify the path (local or cloud-based) of the STAR index directory. Required for mapping.
 
-By default the remotely hosted Human STAR index is used see [below](#premade-star-indexes).
 
 ```bash
---star_index_dir s3://csgx.public.readonly/resources/references/refdata-gex-GRCh38/star/
+--star_index_dir s3://csgx.public.readonly/resources/references/Ensembl_Gencode_resources/GRCh38.Ensembl110.GENCODEv44/star/
 ```
-
-<div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
-
-#### Premade STAR indexes
-
-There are premade remotely hosted STAR indexes for the following species (remotely hosted path given):
-
-- Human: s3://csgx.public.readonly/resources/references/refdata-gex-GRCh38/star/
-- Mouse: s3://csgx.public.readonly/resources/references/refdata-gex-GRCm39/star/
-- Drosophila melanogaster s3://csgx.public.readonly/resources/references/refdata-gex-Drosophila-BDGP6/star/
-
-If you are working with one of these species, you can provide the remotely hosted directory
-to the `--star_index_dir` parameter. The pipeline will automatically download the resource.
-
-However, it is recommend that you use the appropriate [species profile](#available-species-profiles) to automatically set the `star_index_dir`.
 
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
@@ -382,20 +368,11 @@ STAR \
 
 ### `gtf_path`
 
-Path to the gtf annotation file.
+Path to the gtf (local or cloud-based) annotation file.
 
-There are remotely hosted GTF files for the following species (remotely hosted path given):
-
-- Human: s3://csgx.public.readonly/resources/references/refdata-gex-GRCh38/genes/Homo_sapiens.GRCh38.109.gtf
-- Mouse: s3://csgx.public.readonly/resources/references/refdata-gex-GRCm39/genes/Mus_musculus.GRCm39.109.gtf
-- Drosophila melanogaster s3://csgx.public.readonly/resources/references/refdata-gex-Drosophila-BDGP6/genes/Drosophila_melanogaster.BDGP6.32.109.gtf
-
-By default the remotely hosted Human GTF is used.
-
-However, it is recommend that you use the appropriate [species profile](#available-species-profiles) to automatically set the `gtf_path`.
 
 ```bash
---gtf_path s3://csgx.public.readonly/resources/references/refdata-gex-GRCh38/genes/Homo_sapiens.GRCh38.109.gtf
+--gtf_path s3://csgx.public.readonly/resources/references/Ensembl_Gencode_resources/GRCh38.Ensembl110.GENCODEv44/genes/gencode.v44.primary_assembly.annotation.modified_seq_names.gene_subset.gtf
 ```
 
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
@@ -508,35 +485,14 @@ As standard, Nextflow produces a `.nextflow.log` file in the directory from whic
 
 ## Resource allocation
 
-Resource allocation is acheived through the labelling of processes.
+Resource allocation uses the `withName` [process selector](https://www.nextflow.io/docs/latest/config.html#process-selectors) in the `conf/base.config` file.
 
-E.g. the process
-
-```nextflow
-process features_file {
-  label 'c2m8'
-
-  ...
-}
-```
-
-The labels relate to resource allocation in the [base.config](conf/base.config) configuration file.
-
-E.g.
-
-```
-withLabel: c2m8 {
-    cpus = { check_max (2, 'cpus')}
-    memory = { check_max( 8.GB * task.attempt, 'memory' ) }
-  }
-```
+To adjust the resources allocated to a process, modify this file.
 
 Default resource allocations have been made that suit a wide variety of sample types (e.g. number of barcodes, number of reads). However, you may wish to adjust the resources allocated.
 
-To do this, you will need to either change the label of the process, the ``withLabel`` configuration in [base.config](conf/base.config), or provide an additional configuration file that overwrites the [base.config](conf/base.config) configurations using the `-c` flag. See the [Nextflow documantation on configuration](https://www.nextflow.io/docs/latest/config.html) for more details on pipeline configuration. NF-core also provide [useful documentation](https://nf-co.re/docs/usage/configuration#tuning-workflow-resources) on resource allocation through configuration files.
-
-In addition the executor scope in nextflow.config should be modified to use appropriate maximum resources.
-(Currently set to use a maximum of 128 CPUs and 220 GB of RAM)
+In addition the executor scope in nextflow.config can be modified to use appropriate maximum resources.
+(Currently set to use a maximum of 128 CPUs and 256 GB of RAM)
 
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
@@ -579,7 +535,7 @@ The 'work' directory will by created by default at `./work`.
 ### Example 2
 
 ```bash
-nextflow run csgenetics/csgenetics_scrnaseq -r 0.0.1 -profile docker --input_csv <path/to/input/csv>
+nextflow run csgenetics/csgenetics_scrnaseq -r 0.0.1 -profile docker --input_csv <path/to/input/csv> --genome GRCh38
 ```
 
 A pipeline is launched by directly specifying the GitHub repository.
@@ -587,6 +543,8 @@ Version 0.0.1 of the pipeline is used.
 
 The docker profile is selected, configuring the pipeline to use pre-specified Docker containers for each of the processes.
 
-The remotely hosted Human/Mouse STAR index and GTF files are used by default. The remotely hosted v2 barcode_list is used by default.
+The remotely hosted Human STAR index and GTF file are used.
+
+The remotely hosted v2 barcode_list is used by default.
 
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>

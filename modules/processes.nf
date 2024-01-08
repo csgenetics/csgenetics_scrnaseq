@@ -10,8 +10,6 @@ nextflow.enable.dsl=2
 * Convert GTF into features file
 */
 process features_file {
-  label 'c2m8'
-
   input:
   path(gtf)
 
@@ -31,7 +29,6 @@ process features_file {
 */
 process merge_lanes {
   tag "$sample_id"
-  label 'c1m4'
 
   input:
   tuple val(sample_id), path(fastq_1), path(fastq_2)
@@ -48,7 +45,6 @@ process merge_lanes {
 
 process merged_fastp{
   tag "$sample_id"
-  label 'c4m2'
 
   publishDir "${params.outdir}/fastp", mode: 'copy'
 
@@ -88,7 +84,6 @@ process merged_fastp{
 */
 process io_extract {
   tag "$sample_id"
-  label 'c2m4'
 
   input:
   tuple val(sample_id), path(r1), path(r2)
@@ -117,8 +112,6 @@ process io_extract {
 */
 process io_extract_fastp {
   tag "$sample_id"
-
-  label 'c4m2'
 
   publishDir "${params.outdir}/fastp", pattern: '*.{json,html}', mode: 'copy'
 
@@ -156,7 +149,6 @@ process io_extract_fastp {
 */
 process trim_extra_polya {
   tag "$sample_id"
-  label 'c1m1'
 
   input:
   tuple val(sample_id), path(fastq)
@@ -174,8 +166,6 @@ process trim_extra_polya {
 
 process post_polyA_fastp{
   tag "$sample_id"
-
-  label 'c4m2'
 
   publishDir "${params.outdir}/fastp", pattern: '*.{json,html}', mode: 'copy'
 
@@ -209,9 +199,6 @@ process post_polyA_fastp{
 */
 process star {
   tag "$sample_id"
-  // Note: If running profile mouse_human_mix
-  // the memory and cpu allocations are set in the profile config.
-  label 'c8m40'
 
   publishDir "${params.outdir}/STAR", mode: 'copy'
 
@@ -249,8 +236,6 @@ process star {
 process create_valid_empty_bam{
   tag "$sample_id"
 
-  label 'c1m1'
-
   publishDir "${params.outdir}/STAR", mode: 'copy'
 
   input:
@@ -272,8 +257,6 @@ process create_valid_empty_bam{
 process run_qualimap {
   tag "$sample_id"
   
-  label 'c8m16'
-
   publishDir "${params.outdir}/qualimap", mode: 'copy'
 
   input:
@@ -321,7 +304,6 @@ process run_qualimap {
 */
 process feature_counts {
   tag "$sample_id"
-  label 'c4m4'
 
   publishDir "${params.outdir}/featureCounts", mode: 'copy'
 
@@ -433,8 +415,6 @@ process feature_counts {
 * Run multiqc
 */
 process multiqc {
-  label 'c1m1'
-
   publishDir "${params.outdir}/multiqc/${sample_id}", mode: 'copy'
 
   input:
@@ -464,7 +444,6 @@ process multiqc {
 */
 process sort_index_bam {
   tag "$sample_id"
-  label 'c1m2'
 
   input:
   tuple val (sample_id), path(bam), val(count)
@@ -487,7 +466,6 @@ process sort_index_bam {
 */
 process dedup{
   tag "$sample_id"
-  label 'c4m1'
 
   publishDir "${params.outdir}/deduplication", mode: 'copy'
 
@@ -523,7 +501,7 @@ process dedup{
 */
 process io_count {
   tag "$sample_id"
-  label 'c4m1'
+
   input:
   tuple val (sample_id), path(f)
 
@@ -555,7 +533,6 @@ process io_count {
 */
 process count_matrix {
   tag "$sample_id"
-  label 'c4m16'
 
   publishDir "${params.outdir}/count_matrix/raw_feature_bc_matrix/${sample_id}/", mode: 'copy', pattern: "*.raw_feature_bc_matrix.h5ad"
   publishDir "${params.outdir}/count_matrix/raw_feature_bc_matrix/${sample_id}/", mode: 'copy', pattern: "matrix.mtx.gz"
@@ -587,7 +564,6 @@ process count_matrix {
 */
 process cell_caller {
   tag "$sample_id"
-  label 'c4m2'
 
   publishDir "${params.outdir}/plots", pattern: "${sample_id}_pdf_with_cutoff.png", mode: 'copy'
 
@@ -611,7 +587,6 @@ process cell_caller {
 */
 process filter_count_matrix{
   tag "$sample_id"
-  label 'c2m2'
 
   publishDir "${params.outdir}/count_matrix/filtered_feature_bc_matrix/${sample_id}/", mode: 'copy', pattern: "*.filtered_feature_bc_matrix.h5ad"
   publishDir "${params.outdir}/count_matrix/filtered_feature_bc_matrix/${sample_id}/", mode: 'copy', pattern: "matrix.mtx.gz"
@@ -641,7 +616,6 @@ process filter_count_matrix{
 */
 process summary_statistics {
   tag "$sample_id"
-  label 'c1m8'
 
   publishDir "${params.outdir}/report/${sample_id}", mode: 'copy', pattern: "*.csv"
   
@@ -662,7 +636,6 @@ process summary_statistics {
 */
 process single_summary_report {
   tag "$sample_id"
-  label 'c4m4'
 
   publishDir "${params.outdir}/report/${sample_id}", mode: 'copy'
   
@@ -684,8 +657,6 @@ process single_summary_report {
 * Generate an experiment summary report containing statistics for multiple samples
 */
 process multi_sample_report {
-  label 'c2m4'
-
   publishDir "${params.outdir}/report/", mode: 'copy'
 
   input:
