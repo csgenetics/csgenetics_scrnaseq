@@ -132,7 +132,7 @@ process io_extract_fastp {
   fastp -i !{r1} \
     -f !{params.sss_nmer} \
     -x --poly_x_min_len 15 \
-    -l 20 \
+    -l 5 \
     -A \
     -G \
     -j !{sample_id}_R1.io_extract.fastp.json \
@@ -218,7 +218,8 @@ process star {
         --outReadsUnmapped Fastx \
         --outSAMtype BAM Unsorted \
         --readFilesCommand zcat \
-        --outSAMattributes Standard;
+        --outSAMattributes Standard \
+        --outFilterMultimapNmax 1000
 
       # Get number of uniquely aligned reads
       uniquely_mapped_reads=\$(grep "Uniquely mapped reads number" ${sample_id}_Log.final.out | cut -d "|" -f 2 | xargs)
@@ -322,7 +323,7 @@ process feature_counts {
       samtools sort $bam -o ${sample_id}_Aligned.sortedByCoord.out.bam
       # Start by running feature counts on the star output
       # including strandedness and annotation of multimappers
-      featureCounts -a $gtf -o ${sample_id}.star.featureCounts.gene.txt -R BAM ${sample_id}_Aligned.sortedByCoord.out.bam -T 4 -t gene -g gene_id --fracOverlap 0.5 --extraAttributes gene_name -s 1 -M
+      featureCounts -a $gtf -o ${sample_id}.star.featureCounts.gene.txt -R BAM ${sample_id}_Aligned.sortedByCoord.out.bam -T 4 -t transcript -g gene_id --fracOverlap 0.5 --extraAttributes gene_name -s 1 -M
 
       # Process the multimapped and uniquely mapped reads separately.
       # Generate the UMRs
