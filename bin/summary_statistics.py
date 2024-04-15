@@ -111,7 +111,7 @@ class SummaryStatistics:
             "median_mito_genes_detected_per_cell",
             "percentage_counts_from_mito",
             "num_unique_genes_detected_across_sample",
-            "total_genes_detected_across_samples"
+            "total_genes_detected_across_sample"
         ]
         if self.mixed:
             # Output the full set of mixed species cell_stats
@@ -328,9 +328,9 @@ class SummaryStatistics:
         self.metrics_dict["num_unique_genes_detected_across_sample"]["num_unique_genes_detected_across_sample_Mmus"] = ("Unique Mmus genes detected in Mmus cells across sample", self.num_unique_genes_detected_across_sample_Mmus, "Number of unique Mmus genes detected in Mmus cells across the sample (each gene can be counted only once even if found in multiple cells).")
 
         # Total genes detected across samples (i.e. genes detected per cell summed)
-        self.metrics_dict["total_genes_detected_across_samples"]["total_genes_detected_across_samples_total"] = ("Total genes detected across sample (Hsap and Mmus)", self.total_genes_detected_across_sample_total, "Total number of genes detected across the sample (each gene can be counted more than once if detected in more than one cell; Both Hsap and Mmus genes are counted for each single cell).")
-        self.metrics_dict["total_genes_detected_across_samples"]["total_genes_detected_across_samples_Hsap"] = ("Total Hsap genes detected across sample", self.total_genes_detected_across_sample_Hsap, "Total number of Hsap genes detected across the sample (each gene can be counted more than once if detected in more than one cell); Mmus gene detections are not included.")
-        self.metrics_dict["total_genes_detected_across_samples"]["total_genes_detected_across_samples_Mmus"] = ("Total Mmus genes detected across sample", self.total_genes_detected_across_sample_Mmus, "Total number of Mmus genes detected across the sample (each gene can be counted more than once if detected in more than one cell); Hsap gene detections are not included.")
+        self.metrics_dict["total_genes_detected_across_sample"]["total_genes_detected_across_sample_total"] = ("Total genes detected across sample (Hsap and Mmus)", self.total_genes_detected_across_sample_total, "Total number of genes detected across the sample (each gene can be counted more than once if detected in more than one cell; Both Hsap and Mmus genes are counted for each single cell).")
+        self.metrics_dict["total_genes_detected_across_sample"]["total_genes_detected_across_sample_Hsap"] = ("Total Hsap genes detected across sample", self.total_genes_detected_across_sample_Hsap, "Total number of Hsap genes detected across the sample (each gene can be counted more than once if detected in more than one cell); Mmus gene detections are not included.")
+        self.metrics_dict["total_genes_detected_across_sample"]["total_genes_detected_across_sample_Mmus"] = ("Total Mmus genes detected across sample", self.total_genes_detected_across_sample_Mmus, "Total number of Mmus genes detected across the sample (each gene can be counted more than once if detected in more than one cell); Hsap gene detections are not included.")
 
     def populate_cell_stats_in_metrics_dict_single_species(self):
         # Estimated number of cells
@@ -366,7 +366,7 @@ class SummaryStatistics:
         self.metrics_dict["Cell metrics"]["num_unique_genes_detected_across_sample"] = ("Unique genes detected across sample", self.num_unique_genes_detected_across_sample, "Number of unique genes detected across the sample (each gene can be counted only once even if found in multiple cells).")
 
         # Total genes detected across samples (i.e. genes detected per cell summed)
-        self.metrics_dict["Cell metrics"]["total_genes_detected_across_samples"] = ("Total genes detected across sample", self.total_genes_detected_across_sample, "Total number of genes detected across the sample (each gene can be counted more than once if detected in more than one cell).")
+        self.metrics_dict["Cell metrics"]["total_genes_detected_across_sample"] = ("Total genes detected across sample", self.total_genes_detected_across_sample, "Total number of genes detected across the sample (each gene can be counted more than once if detected in more than one cell).")
 
     def get_cell_stats(self):
         # Try to read in the raw h5ad and handle if it is empty
