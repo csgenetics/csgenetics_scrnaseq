@@ -15,22 +15,31 @@ jobs:
     steps:
       - checkout
       - run:
+          name: Create the NAME environment variable
+          command: |
+            echo "BASH_ENV is $BASH_ENV"
+            NAME=$(echo CI_$(echo $CIRCLE_SHA1 | cut -c -7)_$(date +"%H_%M_%S"))
+            echo "NAME is $NAME"
+            echo "export NAME=$NAME" >> "$BASH_ENV"
+            echo "BASH_ENV is $BASH_ENV"
+      - run:
           name: Create a new endpoint for the current branch
           command: |
             myvar=`curl -X POST "https://api.tower.nf/actions?workspaceId=$TOWER_WORKSPACE_ID" \
             -H "Accept: application/json" \
             -H "Authorization: Bearer $TOWER_AUTH_TOKEN" \
             -H "Content-Type: application/json" \
-            -d '{"name":"'"$(echo $CIRCLE_SHA1 | cut -c -7)"'","source":"tower","launch":{"configProfiles":["test"], "computeEnvId":"'"$TOWER_COMPUTE_ENV_ID"'","pipeline":"https://github.com/csgenetics/private_csgenetics_scrnaseq","workDir":"s3://csg-tower-bucket","revision":"'"$(echo $CIRCLE_BRANCH)"'","pullLatest":true}}'`
+            -d '{"name":"'"$NAME"'","source":"tower","launch":{"configProfiles":["test"], "computeEnvId":"'"$TOWER_COMPUTE_ENV_ID"'","pipeline":"https://github.com/csgenetics/private_csgenetics_scrnaseq","workDir":"s3://csg-tower-bucket","revision":"'"$(echo $CIRCLE_BRANCH)"'","pullLatest":true}}'`
             id=`echo $myvar | awk -F: {'print $2'} | sed 's/}//g'`
             echo "export ACTION_ID=$id" >> $BASH_ENV
             echo $id
       - run:
           name: Start the pipeline using the newly created endpoint
           command: |
-            SHA=$(echo $CIRCLE_SHA1 | cut -c -7)
-            echo $SHA
-            outdir="s3://csg-nextflow/circleci/"$SHA
+            echo "NAME is $NAME"
+            SHA=$NAME
+            echo $NAME
+            outdir="s3://csg-nextflow/circleci/"$NAME
             echo $outdir
             myvar=`curl -X POST "https://api.tower.nf/actions/$ACTION_ID/launch?workspaceId=$TOWER_WORKSPACE_ID" \
             -H "Authorization: Bearer $TOWER_AUTH_TOKEN" \
