@@ -4,7 +4,7 @@ from pandas import read_csv, read_table, merge, DataFrame, errors
 from pandas.api.types import CategoricalDtype
 from scipy.sparse import csr_matrix
 from scipy.io import mmwrite
-from numpy import zeros,hstack
+from numpy import zeros,hstack,float32
 from anndata import AnnData
 import sys, argparse, gzip
 
@@ -73,8 +73,13 @@ def make_count_matrix(args):
     adata.var_names_make_unique()
     adata.obs_names = cell_c.categories
 
-
     # write AnnData object into H5 file
+    # Have to specify float32 so that it is compatible with BPCells package in R for Seurat v5
+    # and anndata package in Seurat v4.
+    adata.X = adata.X.astype(float32)
+    # It is important to add the sample name to make the barcode names unique
+    # for use in Seurat v5.
+    adata.obs_names = [args.sample + "_" + _ for _ in adata.obs_names]
     adata.write(f"{args.sample}.raw_feature_bc_matrix.h5ad")
 
     # Write sparse matrix format
