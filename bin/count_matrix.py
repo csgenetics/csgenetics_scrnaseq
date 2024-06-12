@@ -7,6 +7,7 @@ from scipy.io import mmwrite
 from numpy import zeros,hstack,float32
 from anndata import AnnData
 import sys, argparse, gzip
+import numpy as np
 
 # Parse the command line arguments
 def parse_arguments(args):
@@ -68,15 +69,16 @@ def make_count_matrix(args):
     ft_names= DataFrame(name_c.categories.tolist() + zero_genes.gene_id.tolist(),columns=['gene_id'])
     ft_names = merge(genes_all,ft_names,how='right')
 
-    adata = AnnData(sparse_matrix,var=ft_names)
+    # Have to specify float32 so that it is compatible with BPCells package in R for Seurat v5
+    # and anndata package in Seurat v4.
+    # Convert sparse matrix to float32, and create new AnnData object
+    # If you try to convert adata.X directly on anndata with only 1 row, it will throw an error
+    sparse_matrix_float32 = sparse_matrix.astype(np.float32)
+    adata = AnnData(sparse_matrix_float32,var=ft_names)
     adata.var_names = ft_names.gene_name.tolist()
     adata.var_names_make_unique()
     adata.obs_names = cell_c.categories
 
-    # write AnnData object into H5 file
-    # Have to specify float32 so that it is compatible with BPCells package in R for Seurat v5
-    # and anndata package in Seurat v4.
-    adata.X = adata.X.astype(float32)
     # It is important to add the sample name to make the barcode names unique
     # for use in Seurat v5.
     adata.obs_names = [args.sample + "_" + _ for _ in adata.obs_names]
