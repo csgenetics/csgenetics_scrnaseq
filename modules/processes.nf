@@ -97,7 +97,13 @@ process io_extract {
   """
   cat $barcode_list | cut -d ',' -f2 > barcode_list.txt
   gawk -v r2=${r2} -v bc_length=13 -f $io_extract_script barcode_list.txt <(zcat ${r1})
-  mv io_extract.good.R1.fastq.gz ${sample_id}_R1.io_extract.fastq.gz
+  # Check if the output file exists and rename it to the sample_id
+  # If it doesn't exist, create an empty file
+  if [ -f "io_extract.good.R1.fastq.gz" ]; then
+    mv io_extract.good.R1.fastq.gz ${sample_id}_R1.io_extract.fastq.gz
+  else
+    touch ${sample_id}_R1.io_extract.fastq && gzip ${sample_id}_R1.io_extract.fastq
+  fi
   """
 }
 
@@ -160,7 +166,13 @@ process trim_extra_polya {
   script:
   """
   zcat $fastq | awk -f $trim_polyA_script
-  mv good.fastq.gz ${sample_id}_R1.polyA_trimmed.fastq.gz
+  # Check if the output file exists and rename it to the sample_id
+  # If it doesn't exist, create an empty file
+  if [ -f "good.fastq.gz" ]; then
+    mv good.fastq.gz ${sample_id}_R1.polyA_trimmed.fastq.gz
+  else
+    touch ${sample_id}_R1.polyA_trimmed.fastq && gzip ${sample_id}_R1.polyA_trimmed.fastq
+  fi
   """
 }
 
