@@ -38,8 +38,27 @@ process merge_lanes {
 
   shell:
   '''
-  cat !{fastq_1} > !{sample_id}_R1.merged.fastq.gz
-  cat !{fastq_2} > !{sample_id}_R2.merged.fastq.gz
+  #cat !{fastq_1} > !{sample_id}_R1.merged.fastq.gz
+  #cat !{fastq_2} > !{sample_id}_R2.merged.fastq.gz
+
+
+  # merging R1 and R2
+  # globs are ordered so lane merging will happen in same order for R1 and R2
+  # If there's only one file for R1 or R2, we just rename it
+  R1_files=$(ls !{fastq_1} | wc -l)
+  if [ "$R1_files" -gt 1 ]; then
+    cat *R1*.f*q.gz > !{sample_id}_R1.merged.fastq.gz
+  elif [ "$R1_files" -eq 1 ]; then
+    mv *R1*.f*q.gz !{sample_id}_R1.merged.fastq.gz
+  fi
+
+  # For R2 files
+  R2_files=$(ls !{fastq_2} | wc -l)
+  if [ "$R2_files" -gt 1 ]; then
+    cat *R2*.f*q.gz > !{sample_id}_R2.merged.fastq.gz
+  elif [ "$R2_files" -eq 1 ]; then
+    mv *R2*.f*q.gz !{sample_id}_R2.merged.fastq.gz
+  fi
   '''
 }
 
