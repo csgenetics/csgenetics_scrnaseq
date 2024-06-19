@@ -1,0 +1,150 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "$id": "https://raw.githubusercontent.com/csgenetics_scrnaseq/master/nextflow_schema.json",
+  "title": "csgenetics_scrnaseq pipeline parameters",
+  "description": "Pipeline for processing CS Genetics single cell RNA-Seq data",
+  "type": "object",
+  "definitions": {
+      "input_output_options": {
+          "title": "Input/output options",
+          "type": "object",
+          "fa_icon": "fas fa-terminal",
+          "description": "Define where the pipeline should find input data and save output data.",
+          "required": [
+              "input_csv",
+              "outdir"
+          ],
+          "properties": {
+              "input_csv": {
+                  "type": "string",
+                  "description": "The input .CSV files used to define the sample names and full paths to corresponding fastq files.",
+                  "format": "file-path",
+                  "mimetype": "text/csv"
+              },
+              "outdir": {
+                  "type": "string",
+                  "format": "directory-path",
+                  "description": "The output directory where the results will be saved. You have to use absolute paths to storage on Cloud infrastructure.",
+                  "fa_icon": "fas fa-folder-open",
+                  "default": "./results"
+              },
+              "tracedir": {
+                  "type": "string",
+                  "default": "./results/pipeline_info",
+                  "hidden": true,
+                  "format": "directory-path",
+                  "description": "The output directory for files related to pipeline execution summary."
+              }
+          }
+      },
+      "max_job_request_options": {
+          "title": "Max job request options",
+          "type": "object",
+          "fa_icon": "fab fa-acquisitions-incorporated",
+          "description": "Set the top limit for requested resources for any single job.",
+          "help_text": "If you are running on a smaller system, a pipeline step requesting more resources than are available may cause the Nextflow to stop the run with an error. These options allow you to cap the maximum resources requested by any single job so that the pipeline will run on your system.\n\nNote that you can not _increase_ the resources requested by any job using these options. For that you will need your own configuration file. See [the nf-core website](https://nf-co.re/usage/configuration) for details.",
+          "properties": {
+              "max_cpus": {
+                  "type": "integer",
+                  "description": "Maximum number of CPUs that can be requested for any single job.",
+                  "default": 16,
+                  "fa_icon": "fas fa-microchip",
+                  "hidden": true,
+                  "help_text": "Use to set an upper-limit for the CPU requirement for each process. Should be an integer e.g. `--max_cpus 1`"
+              },
+              "max_memory": {
+                  "type": "string",
+                  "description": "Maximum amount of memory that can be requested for any single job.",
+                  "default": "256 GB",
+                  "fa_icon": "fas fa-memory",
+                  "pattern": "^\\d+(\\.\\d+)?\\.?\\s*(K|M|G|T)?B$",
+                  "hidden": true,
+                  "help_text": "Use to set an upper-limit for the memory requirement for each process. Should be a string in the format integer-unit e.g. `--max_memory '8.GB'`"
+              },
+              "max_time": {
+                  "type": "string",
+                  "description": "Maximum amount of time that can be requested for any single job.",
+                  "default": "10d",
+                  "fa_icon": "far fa-clock",
+                  "pattern": "^(\\d+\\.?\\s*(s|m|h|d|day)\\s*)+$",
+                  "hidden": true,
+                  "help_text": "Use to set an upper-limit for the time requirement for each process. Should be a string in the format integer-unit e.g. `--max_time '2.h'`"
+              }
+          }
+      },
+      "genomic_references": {
+          "title": "Genomic references",
+          "type": "object",
+          "description": "Configure which STAR index and GTF resources should be used, either by setting the --genome parameter to use available, pre-configured resources, or by providing custom paths to a STAR index and corresponding GTF.",
+          "default": "",
+          "properties": {
+              "genome": {
+                  "type": "string",
+                  "default": "GRCh38",
+                  "description": "A string representing the preconfigured genomic resources to use. One of 'GRCh38', 'GRCm39', 'mouse_human_mix', 'BDGP6' or 'Sscrofa11'. If this is set, DO NOT set the star_index_dir, gtf_dir or mitochondra_chromosome variables. These will automatically be set to the correct values for you."
+              },
+              "star_index_dir": {
+                  "type": "string",
+                  "default": "s3://csgx.public.readonly/resources/references/Ensembl_Gencode_resources/GRCh38.Ensembl109.GENCODEv44_with_pcLoF_without_readthrough/star/",
+                  "description": "The STAR index directory to use for mapping. DO NOT set this value if using a preconfigured set of genomic resources (see the 'genome' parameter above').",
+                  "format": "directory-path"
+              },
+              "gtf_path": {
+                  "type": "string",
+                  "default": "s3://csgx.public.readonly/resources/references/Ensembl_Gencode_resources/GRCh38.Ensembl109.GENCODEv44_with_pcLoF_without_readthrough/genes/gencode.v44.primary_assembly.annotation.modified_seq_names.gene_subset.gtf",
+                  "description": "The GTF file corresponding to the STAR index provided above. DO NOT set this value if using a preconfigured set of genomic resources (see the 'genome' parameter above').",
+                  "format": "file-path"
+              },
+              "mitochondria_chromosome": {
+                  "type": "string",
+                  "default": "MT",
+                  "description": "The name of the mitochondrial chromosome in the genome fasta used to build the STAR index. DO NOT set this value if using a preconfigured set of genomic resources (see the 'genome' parameter above')."
+              }
+          }
+      }
+  },
+  "allOf": [
+      {
+          "$ref": "#/definitions/input_output_options"
+      },
+      {
+          "$ref": "#/definitions/max_job_request_options"
+      },
+      {
+          "$ref": "#/definitions/genomic_references"
+      }
+  ],
+  "properties": {
+      "barcode_list_path": {
+          "type": "string",
+          "default": "s3://csgx.public.readonly/resources/barcode_lists/IDT_IO_kit_v2.csv",
+          "description": "The path to the CS Genetics barcode list .CSV.",
+          "hidden": true,
+          "format": "file-path",
+          "mimetype": "text/csv"
+      },
+      "minimum_count_threshold": {
+          "type": "integer",
+          "default": 100,
+          "description": "The minimum number of counts associated with a given barcode to be considered a cell. If unsure, leave as default.",
+          "hidden": true
+      },
+      "sss_nmer": {
+          "type": "integer",
+          "default": 8,
+          "hidden": true,
+          "description": "The number of bases to trim 5' from R1 due to being SSSmer in origin. If unsure, leave as default."
+      },
+      "awsregion": {
+          "type": "string",
+          "description": "Only required if running the aws profile."
+      },
+      "awsqueue": {
+          "type": "string",
+          "description": "Only required if running the aws profile."
+      }
+  },
+  "required": [
+      "barcode_list_path"
+  ]
+}

@@ -7,6 +7,7 @@
 
 nextflow.enable.dsl=2
 include {
+  download_star_index; download_gtf; download_input_csv; download_barcode_list; download_public_fastq;
   features_file; merge_lanes; merged_fastp; io_extract; io_extract_fastp;
   trim_extra_polya; post_polyA_fastp; star;
   create_valid_empty_bam as create_valid_empty_bam_star;
@@ -29,40 +30,98 @@ def order_integer_first(it){
 }
 
 workflow {
-  // Create channels from rows in CSV file
-  // tuples are grouped by sample_id so FQs from different lanes may be merged
-    Channel
-      .fromPath(params.input_csv)
-      .ifEmpty { exit 1, "Cannot find input file : ${params.input_csv}" }
-      .splitCsv(header:true, sep:',', strip: true)
-      .map {row -> [ row.sample_id, file(row.fastq_1), file(row.fastq_2)] }
-      .groupTuple(by: 0)
-      .set {ch_input}
 
-    // Create path object to the GTF
-    gtf = file("${params.gtf_path}")
-
-    // Create path objects to HTML report templates
-    single_sample_report_template = file("${baseDir}/templates/single_sample_report_template.html.jinja2")
-    multi_sample_report_template = file("${baseDir}/templates/multi_sample_report_template.html.jinja2")
-
-    // Create the barcode_list object
-    barcode_list = file(params.barcode_list_path)
-
-    // Make a file object of the STAR dir
+  // Some users have issues accessing the S3 resources we have hosted publicly in our
+  // s3://csgx.public.readonly bucket due to their local AWS configurations.
+  // One workaround is to use anonymous access to the S3 resources
+  // using aws.client.anonymous = true configuration.
+  // However, this may then prevent the users from accessing their own S3 resources.
+  // To solve this issue, to access public S3 resources, we will run a process that 
+  // uses the AWS CLI but with no user configuration using the --no-sign-request flag.
+  // We will perform this for all resources starting with 's3://csgx.public.readonly'
+  // The following paths need to be checked:
+  // params.star_index_dir
+  // params.gtf_path
+  // params.input_csv
+  
+  // Check whether params.star_index_dir starts with s3://csgx.public.readonly
+  // and if it does, download the file in a process and set the star_index_dir to the downloaded file
+  if (params.star_index_dir.startsWith("s3://csgx.public.readonly")){
+    star_index = download_star_index()
+  } else {
     star_index = file(params.star_index_dir)
+  }
+  
+  // Check whether params.gtf_path starts with s3://csgx.public.readonly
+  // and if it does, download the file in a process and set the gtf_path to the downloaded file
+  if (params.gtf_path.startsWith("s3://csgx.public.readonly")){
+    gtf = download_gtf()
+  } else {
+    gtf = file(params.gtf_path)
+  }
 
-    // Create feature file for count_matrix from GTF
-    features_file(gtf)
-    feature_file_out = features_file.out.modified_gtf
+  // Check whether params.input_csv starts with s3://csgx.public.readonly
+  // and if it does, download the file in a process and set the input_csv to the downloaded file
+  if (params.input_csv.startsWith("s3://csgx.public.readonly")){
+    input_csv = download_input_csv()
+  } else {
+    input_csv = file(params.input_csv)
+  }
 
-    // Create empty qualimap output template path object
-    empty_qualimap_template = file(params.empty_qualimap_template)
+  // Finally, we need to check the fastq files to see if they
+  // are hosted in the s3://csgx.public.readonly bucket.
+  // If so, download via a process, else directly make a file object
+  // so that locally configured AWS credentials can be used.
+  // We make the assumption that if R1 and R2 for each row are hosted in the same bucket.
+  input_csv
+    .splitCsv(header:true, sep:',', strip: true)
+    .map {row ->
+        def fastq_1 = row.fastq_1
+        def fastq_2 = row.fastq_2
+        def download = fastq_1.startsWith('s3://csgx.public.readonly') && fastq_2.startsWith('s3://csgx.public.readonly') ? 'download' : 'no_download'
+        return [ row.sample_id, fastq_1, fastq_2, download]
+    }
+    .branch {
+        download: it[3] == 'download'
+        no_download: it[3] == 'no_download'
+    }
+    .set { split_ch }
 
-    // This process will merge fastqs split over multiple lanes 
-    // and count the number of reads in the merged fastq
-    merge_lanes(ch_input)
-    ch_merge_lanes_out = merge_lanes.out.merge_lanes_out
+  split_ch.download
+    .map { it[0..2] } // remove the 'download' string from the tuple
+    .set { to_download_ch }
+
+  split_ch.no_download
+    .map { it[0..2] } // remove the 'no_download' string from the tuple
+    .map { [it[0], file(it[1]), file(it[2])] } // convert the paths to File objects
+    .set { no_download_ch }
+
+  // Download the fastq files from the s3://csgx.public.readonly bucket
+  download_public_fastq(to_download_ch)
+
+  download_public_fastq.out.downloaded_fastqs
+    .mix(no_download_ch)
+    .groupTuple(by:0)
+    .set { ch_input }
+
+  // The following paths will always need to be downloaded from the s3://csgx.public.readonly bucket:
+  // params.barcode_list_path
+  barcode_list = download_barcode_list()
+
+  // Create path objects to HTML report templates
+  single_sample_report_template = file("${baseDir}/templates/single_sample_report_template.html.jinja2")
+  multi_sample_report_template = file("${baseDir}/templates/multi_sample_report_template.html.jinja2")
+  // Create empty qualimap output template path object
+  empty_qualimap_template = file("${baseDir}/templates/empty_qualmap_template.txt")
+
+  // Create feature file for count_matrix from GTF
+  features_file(gtf)
+  feature_file_out = features_file.out.modified_gtf
+
+  // This process will merge fastqs split over multiple lanes 
+  // and count the number of reads in the merged fastq
+  merge_lanes(ch_input)
+  ch_merge_lanes_out = merge_lanes.out.merge_lanes_out
 
     // Set the barcode_pattern 
     barcode_pattern="CCCCCCCCCCCCC"

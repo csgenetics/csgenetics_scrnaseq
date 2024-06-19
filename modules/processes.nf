@@ -1,10 +1,83 @@
 #!/usr/bin/env nextflow
 
-/*
-* This script contains all of the processes used by the daily R&D pipeline
-*/
-
 nextflow.enable.dsl=2
+
+/*
+* Download the star index from the s3://csgx.public.readonly bucket
+*/
+process download_star_index {
+  tag "Download STAR index"
+
+  output:
+  path("star"), emit: star_index
+
+  script:
+  """
+  mkdir star
+  aws s3 cp --no-sign-request ${params.star_index_dir} ./star --recursive
+  """
+}
+
+/* Download the gtf file from the s3://csgx.public.readonly bucket */
+process download_gtf {
+  tag "Download GTF"
+
+  output:
+  path("*.gtf")
+
+  script:
+  """
+  aws s3 cp --no-sign-request ${params.gtf_path} .
+  """
+}
+
+/* Download the input_csv file from the s3://csgx.public.readonly bucket */
+process download_input_csv {
+  tag "Download input csv"
+
+  output:
+  path("*.csv")
+
+  script:
+  """
+  aws s3 cp --no-sign-request ${params.input_csv} .
+  """
+}
+
+/* Download the csgx hosted templates and barcode list
+* from the s3://csgx.public.readonly bucket.
+*/
+process download_barcode_list {
+  tag "Get barcode list"
+
+  output:
+  path("*.csv")
+
+  script:
+  """
+  aws s3 cp --no-sign-request ${params.barcode_list_path} .
+  """
+}
+
+/* Download a fastq hosted on the s3://csgx.public.readonly bucket */
+process download_public_fastq {
+  tag "${sample_id} ${fastq_1.tokenize('/').last()}"
+
+  input:
+  tuple val(sample_id), val(fastq_1), val(fastq_2)
+
+  output:
+  tuple val(sample_id), path("${fastq_1.tokenize('/').last()}"), path("${fastq_2.tokenize('/').last()}"), emit: downloaded_fastqs
+
+  script:
+  def fastq_1_name = fastq_1.tokenize('/').last()
+  def fastq_2_name = fastq_2.tokenize('/').last()
+  """
+  echo $fastq_1_name
+  aws s3 cp --no-sign-request $fastq_1 $fastq_1_name
+  aws s3 cp --no-sign-request $fastq_2 $fastq_2_name
+  """
+}
 
 /*
 * Convert GTF into features file
@@ -25,7 +98,7 @@ process features_file {
 }
 
 /*
-* Merge Illumina Lanes
+* Merge Lanes
 */
 process merge_lanes {
   tag "$sample_id"

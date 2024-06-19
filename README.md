@@ -355,7 +355,7 @@ Differences in STAR build version and when running STAR for alignments can resul
 To avoid this, it is advised that all genomes are generated using our Docker container:
 
 ```bash
-docker run --rm -it -v $PWD:/mnt -w /mnt quay.io/biocontainers/star:2.5.1b--0 \
+docker run --rm -it -v $PWD:/mnt -w /mnt quay.io/didillysquat/samtools_star:0.0.1 \
 STAR \
 --runThreadN NumberOfThreads \
 --runMode genomeGenerate \
