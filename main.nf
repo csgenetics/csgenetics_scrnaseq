@@ -113,7 +113,7 @@ workflow {
   single_sample_report_template = file("${baseDir}/templates/single_sample_report_template.html.jinja2")
   multi_sample_report_template = file("${baseDir}/templates/multi_sample_report_template.html.jinja2")
   // Create empty qualimap output template path object
-  empty_qualimap_template = file("${baseDir}/templates/empty_qualmap_template.txt")
+  empty_qualimap_template = file("${baseDir}/templates/empty_qualmap.txt")
 
   // Create feature file for count_matrix from GTF
   features_file(gtf)
