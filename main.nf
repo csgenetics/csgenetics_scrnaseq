@@ -65,9 +65,12 @@ workflow {
   if (params.input_csv.startsWith("s3://csgx.public.readonly")){
     input_csv = download_input_csv()
   } else {
-    input_csv = file(params.input_csv)
+    input_csv = Channel.fromPath(params.input_csv)
   }
 
+  // // Print the class of the input_csv variable to check if it is a file object
+  // println(input_csv.getClass()) 
+  
   // Finally, we need to check the fastq files to see if they
   // are hosted in the s3://csgx.public.readonly bucket.
   // If so, download via a process, else directly make a file object
