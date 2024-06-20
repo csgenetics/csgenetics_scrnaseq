@@ -75,7 +75,7 @@
       "genomic_references": {
           "title": "Genomic references",
           "type": "object",
-          "description": "Configure which STAR index and GTF resources should be used, either by setting the --genome parameter to use available, pre-configured resources, or by providing custom paths to a STAR index and corresponding GTF.",
+          "description": "Configure which STAR index and GTF resources should be used, either by setting the --genome parameter to use available, pre-configured resources, or by providing custom paths to a STAR index and corresponding GTF. To show the STAR index and GTF parameters, please click 'Show hidden params'.",
           "default": "",
           "properties": {
               "genome": {
@@ -85,20 +85,20 @@
               },
               "star_index_dir": {
                   "type": "string",
-                  "default": "s3://csgx.public.readonly/resources/references/Ensembl_Gencode_resources/GRCh38.Ensembl109.GENCODEv44_with_pcLoF_without_readthrough/star/",
                   "description": "The STAR index directory to use for mapping. DO NOT set this value if using a preconfigured set of genomic resources (see the 'genome' parameter above').",
-                  "format": "directory-path"
+                  "format": "directory-path",
+                  "hidden": true
               },
               "gtf_path": {
                   "type": "string",
-                  "default": "s3://csgx.public.readonly/resources/references/Ensembl_Gencode_resources/GRCh38.Ensembl109.GENCODEv44_with_pcLoF_without_readthrough/genes/gencode.v44.primary_assembly.annotation.modified_seq_names.gene_subset.gtf",
                   "description": "The GTF file corresponding to the STAR index provided above. DO NOT set this value if using a preconfigured set of genomic resources (see the 'genome' parameter above').",
-                  "format": "file-path"
+                  "format": "file-path",
+                  "hidden": true
               },
               "mitochondria_chromosome": {
                   "type": "string",
-                  "default": "MT",
-                  "description": "The name of the mitochondrial chromosome in the genome fasta used to build the STAR index. DO NOT set this value if using a preconfigured set of genomic resources (see the 'genome' parameter above')."
+                  "description": "The name of the mitochondrial chromosome in the genome fasta used to build the STAR index. DO NOT set this value if using a preconfigured set of genomic resources (see the 'genome' parameter above'). E.g. 'MT'",
+                  "hidden": true
               },
               "mixed_species": {
                   "type": "boolean",
@@ -142,11 +142,13 @@
       },
       "awsregion": {
           "type": "string",
-          "description": "Only required if running the aws profile. If launching from Seqera Platform, AWS is usually configured in the compute environment."
+          "description": "Only required if running the aws profile. If launching from Seqera Platform, AWS is usually configured in the compute environment.",
+          "hidden": true
       },
       "awsqueue": {
           "type": "string",
-          "description": "Only required if running the aws profile. If launching from Seqera Platform, AWS is usually configured in the compute environment."
+          "description": "Only required if running the aws profile. If launching from Seqera Platform, AWS is usually configured in the compute environment.",
+          "hidden": true
       }
   },
   "required": [

@@ -68,8 +68,6 @@ workflow {
     input_csv = Channel.fromPath(params.input_csv)
   }
 
-  // // Print the class of the input_csv variable to check if it is a file object
-  // println(input_csv.getClass()) 
   
   // Finally, we need to check the fastq files to see if they
   // are hosted in the s3://csgx.public.readonly bucket.
