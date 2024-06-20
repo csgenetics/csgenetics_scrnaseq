@@ -17,6 +17,7 @@
   - [Launching the pipeline directly from the csgenetic/csgenetics\_scrnaseq Github repo](#launching-the-pipeline-directly-from-the-csgeneticcsgenetics_scrnaseq-github-repo)
     - [Updating the pipeline](#updating-the-pipeline)
     - [Specifying a pipeline version](#specifying-a-pipeline-version)
+  - [Launching the pipeline from Seqera Platform](#launching-the-pipeline-from-seqera-platform)
   - [Available standard profiles](#available-standard-profiles)
     - [test](#test)
     - [test\_singularity](#test_singularity)
@@ -196,6 +197,14 @@ Alternatively, the releases can be viewed [online](https://github.com/csgenetics
 For reference, the version will be logged in reports when you run the pipeline.
 
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
+
+## Launching the pipeline from Seqera Platform
+
+The pipeline can be launched from Seqera Platform.
+
+The repository includes a `nextflow_schema.json` file that will automatically display required parameters when launching the pipeline from your Launchpad on Seqera Platform.
+
+To make use of containerization, don't forget to add an appropriate profile e.g. `docker` in the 'Config profiles' section of the 'Add pipeline' dialog.
 
 ## Available standard profiles
 
