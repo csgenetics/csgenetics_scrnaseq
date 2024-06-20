@@ -1,0 +1,11 @@
+reports:
+  "**/report/multisample_report.html":
+    display: "Multi Sample HTML report"
+  "**/report/**/*_report.html":
+    display: "Per-sample HTML report"
+  "**/pipeline_info/execution_timeline_*.html":
+    display: "Execution timeline report"
+  "**/pipeline_info/execution_report_*.html":
+    display: "Execution overview report"
+  "**/plots/*.pdf_with_cutoff.png":
+    display: "Cell calling plots"
