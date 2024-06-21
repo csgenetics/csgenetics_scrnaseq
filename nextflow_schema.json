@@ -81,7 +81,7 @@
               "genome": {
                   "type": "string",
                   "default": "GRCh38",
-                  "description": "A string representing the preconfigured genomic resources to use. One of 'GRCh38', 'GRCm39', 'mouse_human_mix', 'BDGP6' or 'Sscrofa11'. If this is set, DO NOT set the star_index_dir, gtf_dir or mitochondra_chromosome variables. These will automatically be set to the correct values for you.",
+                  "description": "A string representing the preconfigured genomic resources to use. One of 'GRCh38', 'GRCm39', 'mouse_human_mix', 'BDGP6' or 'Sscrofa11'. If using a preconfigured reference, do not set the star_index_dir, gtf_dir or mitochondra_chromosome variables, they will automatically be set to the correct values for you. If using a custom set of references, set this to 'custom'.",
                   "enum": [
                       "GRCh38",
                       "GRCm39",
