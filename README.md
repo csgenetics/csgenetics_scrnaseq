@@ -357,14 +357,13 @@ Specify the path (local or cloud-based) of the STAR index directory. Required fo
 If you are working with a different species or wish to create your own indexes for a different genome,
 please follow the instructions for creating a STAR index [here](https://physiology.med.cornell.edu/faculty/skrabanek/lab/angsd/lecture_notes/STARmanual.pdf) (section 'Generating genome indexes').
 
-Differences in STAR build version and when running STAR for alignments can result in errors such as:
+Differences in STAR build version and when running STAR for alignments can result in errors.
 
-`ERROR: Genome version: 20201 is INCOMPATIBLE with running STAR version: 2.5.1b`
-
-To avoid this, it is advised that all genomes are generated using our Docker container:
+To avoid this, it is advised that all genomes are generated using our Docker container
+that runs STAR version 2.7.11b:
 
 ```bash
-docker run --rm -it -v $PWD:/mnt -w /mnt quay.io/didillysquat/samtools_star:0.0.1 \
+docker run --rm -it -v $PWD:/mnt -w /mnt quay.io/didillysquat/samtools_star:0.0.2 \
 STAR \
 --runThreadN NumberOfThreads \
 --runMode genomeGenerate \
