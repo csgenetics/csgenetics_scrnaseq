@@ -75,13 +75,21 @@
       "genomic_references": {
           "title": "Genomic references",
           "type": "object",
-          "description": "Configure which STAR index and GTF resources should be used, either by setting the --genome parameter to use available, pre-configured resources, or by providing custom paths to a STAR index and corresponding GTF. To show the STAR index and GTF parameters, please click 'Show hidden params'. If setting the star_index_dir and gtf_path, to work with custom resources, leave this field blank.",
+          "description": "Configure which STAR index and GTF resources should be used, either by setting the --genome parameter to use available, pre-configured resources, or by providing custom paths to a STAR index and corresponding GTF. To show the STAR index and GTF parameters, please click 'Show hidden params'.",
           "default": "",
           "properties": {
               "genome": {
                   "type": "string",
                   "default": "GRCh38",
-                  "description": "A string representing the preconfigured genomic resources to use. One of 'GRCh38', 'GRCm39', 'mouse_human_mix', 'BDGP6' or 'Sscrofa11'. If this is set, DO NOT set the star_index_dir, gtf_dir or mitochondra_chromosome variables. These will automatically be set to the correct values for you."
+                  "description": "A string representing the preconfigured genomic resources to use. One of 'GRCh38', 'GRCm39', 'mouse_human_mix', 'BDGP6' or 'Sscrofa11'. If this is set, DO NOT set the star_index_dir, gtf_dir or mitochondra_chromosome variables. These will automatically be set to the correct values for you.",
+                  "enum": [
+                      "GRCh38",
+                      "GRCm39",
+                      "mouse_human_mix",
+                      "BDGP6",
+                      "Sscrofa11",
+                      "custom"
+                  ]
               },
               "star_index_dir": {
                   "type": "string",
