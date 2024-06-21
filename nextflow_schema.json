@@ -75,7 +75,7 @@
       "genomic_references": {
           "title": "Genomic references",
           "type": "object",
-          "description": "Configure which STAR index and GTF resources should be used, either by setting the --genome parameter to use available, pre-configured resources, or by providing custom paths to a STAR index and corresponding GTF. To show the STAR index and GTF parameters, please click 'Show hidden params'.",
+          "description": "Configure which STAR index and GTF resources should be used, either by setting the --genome parameter to use available, pre-configured resources, or by providing custom paths to a STAR index and corresponding GTF. To show the STAR index and GTF parameters, please click 'Show hidden params'. If setting the star_index_dir and gtf_path, to work with custom resources, leave this field blank.",
           "default": "",
           "properties": {
               "genome": {
