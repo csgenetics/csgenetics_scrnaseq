@@ -72,11 +72,6 @@
                   "type": "string",
                   "description": "The name of the mitochondrial chromosome in the genome fasta used to build the STAR index. DO NOT set this value if using a preconfigured set of genomic resources (see the 'genome' parameter above'). E.g. 'MT'",
                   "hidden": true
-              },
-              "mixed_species": {
-                  "type": "boolean",
-                  "hidden": true,
-                  "description": "Whether this is a mixed species genomic reference. The CS Genetics pipeline currently only supports preconfigured mixed species run. To run the preconfigured Hsap Mmus reference, set --genome to 'mouse_human_mix'."
               }
           }
       },
