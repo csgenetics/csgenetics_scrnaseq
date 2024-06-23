@@ -40,13 +40,13 @@
       "genomic_references": {
           "title": "Genomic references",
           "type": "object",
-          "description": "Configure which STAR index and GTF resources should be used, either by setting the --genome parameter to use available, pre-configured resources, or by providing custom paths to a STAR index and corresponding GTF. To show the STAR index and GTF parameters, please click 'Show hidden params'.",
+          "description": "Configure which STAR index and GTF resources should be used, either by setting the --genome parameter to use available pre-configured resources, or by providing custom paths to a STAR index and corresponding GTF. To set custom paths, please click 'Show hidden params' and set the --genome parameter to 'custom'.",
           "default": "",
           "properties": {
               "genome": {
                   "type": "string",
                   "default": "GRCh38",
-                  "description": "A string representing the preconfigured genomic resources to use. One of 'GRCh38', 'GRCm39', 'mouse_human_mix', 'BDGP6' or 'Sscrofa11'. If using a preconfigured reference, do not set the star_index_dir, gtf_dir or mitochondra_chromosome variables, they will automatically be set to the correct values for you. If using a custom set of references, set this to 'custom'.",
+                  "description": "A string representing the preconfigured genomic resources to use. If using a preconfigured reference, do not set the star_index_dir, gtf_dir or mitochondra_chromosome variables, they will automatically be set to the correct values for you. If using a custom set of references, set this to 'custom'.",
                   "enum": [
                       "GRCh38",
                       "GRCm39",
@@ -64,7 +64,7 @@
               },
               "gtf_path": {
                   "type": "string",
-                  "description": "The GTF file corresponding to the STAR index provided above. DO NOT set this value if using a preconfigured set of genomic resources (see the 'genome' parameter above'). The file must not be compressed i.e. end in .gtf, not .gtf.gz.",
+                  "description": "The GTF file corresponding to the STAR index provided above. DO NOT set this value if using a preconfigured set of genomic resources (see the 'genome' parameter above'). The file must not be compressed i.e. it should end in .gtf, not .gtf.gz.",
                   "format": "file-path",
                   "hidden": true
               },
