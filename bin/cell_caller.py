@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import scanpy as sc 
+import anndata as ad
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -71,7 +71,7 @@ class CellCaller:
       
    def read_in_anndata_and_handle_error(self):
       try:
-         self.adata = sc.read_h5ad(self.count_matrix)
+         self.adata = ad.read_h5ad(self.count_matrix)
       except OSError:
          # If we encounter an empty h5ad then we output an empty figure and return the
          # default minimum_count_threshold
