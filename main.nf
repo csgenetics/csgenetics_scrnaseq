@@ -40,24 +40,24 @@ workflow {
   // uses the AWS CLI but with no user configuration using the --no-sign-request flag.
   // We will perform this for all resources starting with 's3://csgx.public.readonly'
   // The following paths need to be checked:
-  // params.star_index_dir
-  // params.gtf_path
+  // params.star_index
+  // params.gtf
   // params.input_csv
   
-  // Check whether params.star_index_dir starts with s3://csgx.public.readonly
-  // and if it does, download the file in a process and set the star_index_dir to the downloaded file
-  if (params.star_index_dir.startsWith("s3://csgx.public.readonly")){
+  // Check whether params.star_index starts with s3://csgx.public.readonly
+  // and if it does, download the file in a process and set the star_index to the downloaded file
+  if (params.star_index.startsWith("s3://csgx.public.readonly")){
     star_index = download_star_index()
   } else {
-    star_index = file(params.star_index_dir)
+    star_index = file(params.star_index)
   }
   
-  // Check whether params.gtf_path starts with s3://csgx.public.readonly
-  // and if it does, download the file in a process and set the gtf_path to the downloaded file
-  if (params.gtf_path.startsWith("s3://csgx.public.readonly")){
+  // Check whether params.gtf starts with s3://csgx.public.readonly
+  // and if it does, download the file in a process and set the gtf to the downloaded file
+  if (params.gtf.startsWith("s3://csgx.public.readonly")){
     gtf = download_gtf()
   } else {
-    gtf = file(params.gtf_path)
+    gtf = file(params.gtf)
   }
 
   // Check whether params.input_csv starts with s3://csgx.public.readonly

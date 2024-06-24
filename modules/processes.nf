@@ -14,7 +14,7 @@ process download_star_index {
   script:
   """
   mkdir star
-  aws s3 cp --no-sign-request ${params.star_index_dir} ./star --recursive
+  aws s3 cp --no-sign-request ${params.star_index} ./star --recursive
   """
 }
 
@@ -27,7 +27,7 @@ process download_gtf {
 
   script:
   """
-  aws s3 cp --no-sign-request ${params.gtf_path} .
+  aws s3 cp --no-sign-request ${params.gtf} .
   """
 }
 

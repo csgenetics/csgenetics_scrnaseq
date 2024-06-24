@@ -27,9 +27,9 @@
   - [Configurable parameters](#configurable-parameters)
     - [`profile`](#profile)
     - [`outdir`](#outdir)
-    - [`star_index_dir`](#star_index_dir)
+    - [`star_index`](#star_index)
       - [Generating a STAR index](#generating-a-star-index)
-    - [`gtf_path`](#gtf_path)
+    - [`gtf`](#gtf)
     - [`barcode_list_path`](#barcode_list_path)
     - [`minimum_count_threshold`](#minimum_count_threshold)
     - [`purity`](#purity)
@@ -303,8 +303,8 @@ Resources are available for the following species:
 - Mixed (Human - Mouse); `mouse_human_mix`
 
 By passing one of these keys as an argument to `--genome`, the pipeline will automatically be configured to use the relevant set of resources for the following parameters:
-- `star_index_dir`
-- `gtf_path`
+- `star_index`
+- `gtf`
 - `mitochondria_chromosome` (`hsap_mitochondria_chromosome` & `mmus_mitochondria_chromosome` for `mouse_human_mix`)
 - `hsap_gene_prefix` & `hsap_gene_prefix` (mixed species only)
 
@@ -314,7 +314,7 @@ E.g.
 nextflow run main.nf -profile singularity --genome GRCh38 --input_csv $HOME/analysis/input_csv/input_csv.csv
 ```
 
-For supplying custom genomic resources, see the [`star_index_dir`](#star_index_dir) and [`gtf_path`](#gtf_path) sections below.
+For supplying custom genomic resources, see the [`star_index`](#star_index) and [`gtf`](#gtf) sections below.
 
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
@@ -341,13 +341,13 @@ The output directory where the results will be saved.
 --outdir <path/to/output/dir>
 ```
 
-### `star_index_dir`
+### `star_index`
 
 Specify the path (local or cloud-based) of the STAR index directory. Required for mapping.
 
 
 ```bash
---star_index_dir s3://csgx.public.readonly/resources/references/Ensembl_Gencode_resources/GRCh38.Ensembl110.GENCODEv44/star/
+--star_index s3://csgx.public.readonly/resources/references/Ensembl_Gencode_resources/GRCh38.Ensembl110.GENCODEv44/star/
 ```
 
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
@@ -373,13 +373,13 @@ STAR \
 --sjdbOverhang ReadLength-1
 ```
 
-### `gtf_path`
+### `gtf`
 
 Path to the gtf (local or cloud-based) annotation file.
 
 
 ```bash
---gtf_path s3://csgx.public.readonly/resources/references/Ensembl_Gencode_resources/GRCh38.Ensembl110.GENCODEv44/genes/gencode.v44.primary_assembly.annotation.modified_seq_names.gene_subset.gtf
+--gtf s3://csgx.public.readonly/resources/references/Ensembl_Gencode_resources/GRCh38.Ensembl110.GENCODEv44/genes/gencode.v44.primary_assembly.annotation.modified_seq_names.gene_subset.gtf
 ```
 
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
@@ -522,7 +522,7 @@ Below are some examples of launching the pipeline with explanations of the comma
 ### Example 1
 
 ```bash
-nextflow run main.nf -profile docker --input_csv <path/to/input/csv> --outdir ./results --star_index_dir </local/path/to/STAR_index/dir> --gtf_path </local/path/to/gtf> --barcode_list s3://csgx.public.readonly/resources/barcode_lists/IDT_IO_kit_v2.csv
+nextflow run main.nf -profile docker --input_csv <path/to/input/csv> --outdir ./results --star_index </local/path/to/STAR_index/dir> --gtf </local/path/to/gtf> --barcode_list s3://csgx.public.readonly/resources/barcode_lists/IDT_IO_kit_v2.csv
 ```
 
 A pipeline is launched using a locally installed version of
