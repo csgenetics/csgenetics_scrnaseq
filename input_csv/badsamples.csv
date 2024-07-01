@@ -1,4 +1,4 @@
-sample_id,fastq_1,fastq_2
+sample,fastq_1,fastq_2
 Sample1.badbarcode,s3://csg-reference/Hsap_Mmus/test_bad_fastqs/output/bad_barcodes/Sample1.badbarcode_L001_R1_001.fastq.gz,s3://csg-reference/Hsap_Mmus/test_bad_fastqs/output/bad_barcodes/Sample1.badbarcode_L001_R2_001.fastq.gz
 Sample2.badbarcode,s3://csg-reference/Hsap_Mmus/test_bad_fastqs/output/bad_barcodes/Sample2.badbarcode_L001_R1_001.fastq.gz,s3://csg-reference/Hsap_Mmus/test_bad_fastqs/output/bad_barcodes/Sample2.badbarcode_L001_R2_001.fastq.gz
 Sample310,s3://csg-reference/Hsap_Mmus/test_bad_fastqs/output/intergenic_reads/output_final_fastqs/Sample310_L001_R1_001_INTERGENIC.fastq.gz,s3://csg-reference/Hsap_Mmus/test_bad_fastqs/output/intergenic_reads/output_final_fastqs/Sample310_L001_R2_001_INTERGENIC.fastq.gz

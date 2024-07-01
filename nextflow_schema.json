@@ -17,7 +17,7 @@
           "properties": {
               "input_csv": {
                   "type": "string",
-                  "description": "The input .CSV files used to define the sample names and full paths to corresponding fastq files. The first line of the csv must be 'sample_id,fastq_1,fastq_2'. The following lines should have the sample_id in the first column, and the full path to the fastq files in the second and third columns. Lines with the same sample_id will have their R1 and R2 fastq files merged together (i.e. for multiple lanes of sequencing data per sample).",
+                  "description": "The input .CSV files used to define the sample names and full paths to corresponding fastq files. The first line of the csv must be 'sample,fastq_1,fastq_2'. The following lines should have the sample name in the first column, and the full path to the fastq files in the second and third columns. Lines with the same sample name will have their R1 and R2 fastq files merged together (i.e. for multiple lanes of sequencing data per sample).",
                   "format": "file-path",
                   "mimetype": "text/csv"
               },

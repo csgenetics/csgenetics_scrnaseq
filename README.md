@@ -133,7 +133,7 @@ on separate lines.
 E.g.
 
 ```bash
-sample_id,fastq_1,fastq_2
+sample,fastq_1,fastq_2
 Sample1,/home/example_user/analysis/raw_reads/example_Sample1_L001_R1_001.fastq.gz,/home/example_user/analysis/raw_reads/example_Sample1_L001_R2_001.fastq.gz
 Sample1,/home/example_user/analysis/raw_reads/example_Sample1_L002_R1_001.fastq.gz,/home/example_user/analysis/raw_reads/example_Sample1_L002_R2_001.fastq.gz
 Sample2,/home/example_user/analysis/raw_reads/example_Sample2_L001_R1_001.fastq.gz,/home/example_user/analysis/raw_reads/example_Sample2_L001_R2_001.fastq.gz
