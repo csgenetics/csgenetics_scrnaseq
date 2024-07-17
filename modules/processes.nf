@@ -91,7 +91,7 @@ process features_file {
 
   shell:
   '''
-  features_names.py !{gtf} !{gtf.baseName}_features_names_tmp.tsv
+  features_names.py !{gtf} !{gtf.baseName}_features_names.tsv
   '''
 }
 
