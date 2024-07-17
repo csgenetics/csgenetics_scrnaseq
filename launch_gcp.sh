@@ -3,11 +3,12 @@
 ## Define GCP parameters
 GCP_PROJECT="eric-sandbox-421120"
 GCP_REGION="us-central1"
-GCP_REGISTRY="us-central1-docker.pkg.dev/eric-sandbox-421120/csgenetics"
+GCP_REPO="csgenetics"
+GCP_REGISTRY="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${GCP_REPO}"
 
 ## Define image names
 RUN_NAME="nextflow-run-test" # Must be lowercase, no underscores
-IMAGE_NAME="csgenetics-nextflow-run:${RUN_NAME}"
+IMAGE_NAME="${GCP_REPO}-nextflow-run:${RUN_NAME}"
 GCP_IMAGE="${GCP_REGISTRY}/${IMAGE_NAME}"
 
 ## Build image locally
