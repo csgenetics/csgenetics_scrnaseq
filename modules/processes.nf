@@ -185,16 +185,41 @@ process io_extract {
 
   script:
   """
-  cat $barcode_list | cut -d ',' -f2 > barcode_list.txt
-  gawk -v r2=${r2} -v bc_length=13 -f $io_extract_script barcode_list.txt <(zcat ${r1})
-  # Check if the output file exists and rename it to the sample_id
+  # Format barcode file
+  cut -d ',' -f 2 ${barcode_list} > barcode_list.tsv
+  # Manually create umi-tools compatible whitelist with all barcodes + alts with 1 edit distance
+  awk -f ${io_extract_script} barcode_list.tsv > modified_barcode_list.tsv
+
+  # UMI-tools expects the io to be the stdin, so we set this to r2, and read2-in to r1
+  umi_tools extract --stdin=${r2} --read2-in=${r1} --whitelist=modified_barcode_list.tsv -L ${sample_id}_io_extract.log --bc-pattern="CCCCCCCCCCCCC" --error-correct-cell --stdout "${sample_id}_R2.io_extract.fastq.gz" --filtered-out="${sample_id}_R2.io_extract_bad.fastq.gz" --read2-out="${sample_id}_R1.io_extract.fastq.gz" --filtered-out2="${sample_id}_R1.io_extract_bad.fastq.gz"
+  
+  # Get number of reads passing filter from log and write to file
+  if [ -f "${sample_id}_io_extract.log" ]; then
+    grep "Reads output:" ${sample_id}_io_extract.log | cut -d' ' -f4- > io_extract.log
+  else
+    echo "Reads output: 0" > io_extract.log
+  fi
+
+  # Check if the output file exists
   # If it doesn't exist, create an empty file
-  if [ -f "io_extract.good.R1.fastq.gz" ]; then
-    mv io_extract.good.R1.fastq.gz ${sample_id}_R1.io_extract.fastq.gz
+  if [ -f "${sample_id}_R1.io_extract.fastq.gz" ]; then
+    echo "${sample_id}_R1.io_extract.fastq.gz file exists"
   else
     touch ${sample_id}_R1.io_extract.fastq && gzip ${sample_id}_R1.io_extract.fastq
   fi
   """
+
+  // """
+  // cat $barcode_list | cut -d ',' -f2 > barcode_list.txt
+  // gawk -v r2=${r2} -v bc_length=13 -f $io_extract_script barcode_list.txt <(zcat ${r1})
+  // # Check if the output file exists and rename it to the sample_id
+  // # If it doesn't exist, create an empty file
+  // if [ -f "io_extract.good.R1.fastq.gz" ]; then
+  //   mv io_extract.good.R1.fastq.gz ${sample_id}_R1.io_extract.fastq.gz
+  // else
+  //   touch ${sample_id}_R1.io_extract.fastq && gzip ${sample_id}_R1.io_extract.fastq
+  // fi
+  // """
 }
 
 /*
