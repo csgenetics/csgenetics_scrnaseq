@@ -31,6 +31,7 @@
     - [`star_index`](#star_index)
       - [Generating a STAR index](#generating-a-star-index)
     - [`gtf`](#gtf)
+    - [`mitochondria_chromosome`](#mitochondria_chromosome)
     - [`barcode_list_path`](#barcode_list_path)
     - [`minimum_count_threshold`](#minimum_count_threshold)
     - [`purity`](#purity)
@@ -318,13 +319,13 @@ E.g.
 nextflow run main.nf -profile singularity --genome GRCh38 --input_csv $HOME/analysis/input_csv/input_csv.csv
 ```
 
-For supplying custom genomic resources, see the [`star_index`](#star_index) and [`gtf`](#gtf) sections below.
+For supplying custom genomic resources, see the [`star_index`](#star_index), [`gtf`](#gtf), and [`mitochondria_chromosome`](#mitochondria_chromosome) sections below.
 
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
 ## Configuring custom genomic resources
 
-To run the pipeline against a user-specified STAR index and corresponding GTF, `--genome` should be set to `custom` and the `--star_index` and `--gtf` arguments should point to the user-provided resources (see the [Examples](#examples), [`star_index`](#star_index) and [`gtf`](#gtf) sections below).
+To run the pipeline against a user-specified STAR index and corresponding GTF, `--genome` should be set to `custom` and the `--star_index` and `--gtf` arguments should point to the user-provided resources. The `--mitochondria_chromosome` argument should be set to the name of the mitochondrial chromosome in the genome fasta used to build the STAR index (see the [Examples](#examples), [`star_index`](#star_index), [`gtf`](#gtf), and [`mitochondria_chromosome`](#mitochondria_chromosome) sections below).
 
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
@@ -390,6 +391,17 @@ Path to the gtf (local or cloud-based) annotation file.
 
 ```bash
 --gtf s3://csgx.public.readonly/resources/references/Ensembl_Gencode_resources/GRCh38.Ensembl110.GENCODEv44/genes/gencode.v44.primary_assembly.annotation.modified_seq_names.gene_subset.gtf
+```
+
+<div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
+
+### `mitochondria_chromosome`
+
+The name of the mitochondrial chromosome in the genome fasta used to build the STAR index. DO NOT set this value if using the preconfigured set of genomic resources (see the 'genome' parameter above').
+
+
+```bash
+--mitochondria_chromosome 'MT'
 ```
 
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
