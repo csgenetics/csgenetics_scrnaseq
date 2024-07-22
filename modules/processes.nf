@@ -191,7 +191,7 @@ process io_extract {
   awk -f ${io_extract_script} barcode_list.tsv > modified_barcode_list.tsv
 
   # UMI-tools expects the io to be the stdin, so we set this to r2, and read2-in to r1
-  umi_tools extract --stdin=${r2} --read2-in=${r1} --whitelist=modified_barcode_list.tsv -L ${sample_id}_io_extract.log --bc-pattern="CCCCCCCCCCCCC" --error-correct-cell --stdout "${sample_id}_R2.io_extract.fastq.gz" --filtered-out="${sample_id}_R2.io_extract_bad.fastq.gz" --read2-out="${sample_id}_R1.io_extract.fastq.gz" --filtered-out2="${sample_id}_R1.io_extract_bad.fastq.gz"
+  umi_tools extract --stdin=${r2} --read2-in=${r1} --whitelist=modified_barcode_list.tsv -L ${sample_id}_io_extract.log --bc-pattern="CCCCCCCCCCCCC" --error-correct-cell --read2-out="${sample_id}_R1.io_extract.fastq.gz"
   
   # Get number of reads passing filter from log and write to file
   if [ -f "${sample_id}_io_extract.log" ]; then
