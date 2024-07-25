@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 """
-Creates a multi sample report that summarises the single summary report metrics
+Creates a multi sample report that summarizes the single summary report metrics
 for each sample.
 
 It reads in a single csv per sample that contains the metrics.

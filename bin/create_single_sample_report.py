@@ -8,7 +8,7 @@ import os
 def get_cell_stat_cat_dict_obj(mixed):
     if mixed:
         return {
-                                "num_cells": ("Estimated number of cells; Number of barcodes passing the nulcear genes detected and purity thresholds.", "num_cells_accord_header", "num_cells_collapse"),
+                                "num_cells": ("Estimated number of cells; Number of barcodes passing the counts thresholds.", "num_cells_accord_header", "num_cells_collapse"),
                                 "raw_reads_per_cell": ("Number of reads pre-QC / Number of cells", "raw_reads_per_cell_accord_header", "raw_reads_per_cell_collapse"), 
                                 "mean_total_counts_per_cell": ("Mean sum of counts per cell.", "mean_total_counts_accord_header", "mean_total_counts_collapse"), 
                                 "median_total_reads_per_cell": ("Median sum of counts per cell.", "median_total_reads_accord_header", "median_total_reads_collapse"), 
@@ -21,8 +21,8 @@ def get_cell_stat_cat_dict_obj(mixed):
                                 "percentage_counts_from_mito": ("(Mitochonrial counts / all counts) * 100", "percentage_counts_mito_accord_header", "percentage_counts_mito_collapse"), 
                                 "num_unique_genes_detected_across_sample": ("Number of unique genes detected across the sample (each gene can be counted only once even if found in multiple cells).", "num_unique_genes_detected_accord_header", "num_unique_genes_detected_collapse"), 
                                 "total_genes_detected_across_sample": ("Total number of genes detected across the sample (each gene can be counted more than once if detected in more than one cell).", "total_genes_detected_accord_header", "total_genes_detected_collapse"),
-                                "num_raw_cells": ("Number of called cells (i.e. meeting the nuclear gene threshold cutoff irrespective of the purity threshold).", "num_raw_cells_accord_header", "num_raw_cells_collapse"),      
-                                "num_multiplet_cells": ("Total number of multiplet cells (called cells not meeting the purity threshold).", "num_multiplet_cells_accord_header", "num_multiplet_cells_collapse")                                                          
+                                "num_raw_cells": ("Number of called cells (i.e. barcodes meeting either of the species count thresholds).", "num_raw_cells_accord_header", "num_raw_cells_collapse"),      
+                                "num_multiplet_cells": ("Total number of multiplet cells (barcodes where Hsap counts exceed the Hsap threshold AND Mmus counts exceed the Mmus threshold).", "num_multiplet_cells_accord_header", "num_multiplet_cells_collapse")                                                          
                                 }
     else:
         return {}

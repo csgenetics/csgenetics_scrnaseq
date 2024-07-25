@@ -67,7 +67,6 @@ workflow {
   } else {
     input_csv = Channel.fromPath(params.input_csv)
   }
-
   
   // Finally, we need to check the fastq files to see if they
   // are hosted in the s3://csgx.public.readonly bucket.
@@ -238,7 +237,7 @@ workflow {
   // Sort the groupTuple so that the int is always
   // first and then flatten the tuple list to return a 3mer
   // N.B. We were originally sorting by class (sort:{it.getClass() == sun.nio.fs.UnixPath ? 1 : 0})
-  // But for some reason this only worked locally and not on NextFlow tower
+  // but for some reason this only worked locally and not on Seqera Platform
   ch_filter_count_matrix_in = ch_cell_caller_out.mix(ch_h5ad)
   .groupTuple(by: 0, size:2, sort:{order_integer_first(it)})
   .map{[it[0], it[1][0], it[1][1]]}

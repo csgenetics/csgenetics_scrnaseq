@@ -19,10 +19,23 @@ import re
 
 class FilterCountMatrix:
     def __init__(self):
-        # The number of nuclear genes that must have
-        # been covered in order to consider a barcode a cell
-        self.single_cell_count_threshold = int(sys.argv[1])
+        # Whether we are working with a Human Mouse mixed samples
+        # that has been mapped to a synthetic genome.
+        if sys.argv[4] == "TRUE":
+            self.mixed = True
+            # The counts required to consider a barcode a cell
+            # hsap_counts >= hsap_count_threshold & mmus_counts <= mmus_count_threshold is a single-cell (human).
+            # mmus_counts >= mmus_count_threshold & hsap_counts <= hsap_count_threshold is a single-cell (mouse).
+            # mmus_counts < mmus_count_threshold & hsap_counts < hsap_count_threshold is a noisy barcode.
+            # mmus_counts > mmus_count_threshold & hsap_counts > hsap_count_threshold is a multiplet.
+            self.hsap_count_threshold = int(sys.argv[1].split("_")[0])
+            self.mmus_count_threshold = int(sys.argv[1].split("_")[1])
 
+        else:
+            self.mixed = False
+            # The counts required to consider a barcode a cell
+            self.single_cell_count_threshold = int(sys.argv[1])
+       
         self.sample_name = sys.argv[3]
 
         # Read in the h5ad matrix to an anndata object
@@ -31,85 +44,41 @@ class FilterCountMatrix:
         try:
             self.anndata_obj = anndata.read_h5ad(sys.argv[2])
         except OSError:
-            open(f"{self.sample_name}.{self.single_cell_count_threshold}.filtered_feature_bc_matrix.empty.h5ad", "w").close()
-            open(f"{self.sample_name}.{self.single_cell_count_threshold}.raw_feature_bc_matrix.empty.h5ad", "w").close()
+            open(f"{self.sample_name}.{sys.argv[1]}.filtered_feature_bc_matrix.empty.h5ad", "w").close()
+            open(f"{self.sample_name}.{sys.argv[1]}.raw_feature_bc_matrix.empty.h5ad", "w").close()
             sys.exit(0)
 
-        # Whether we are working with a Human Mouse mixed samples
-        # that has been mapped to a synthetic genome.
-        if sys.argv[4] == "TRUE":
-            self.mixed = True
-            # String to identify each species' mitochondrial chromosome
-            self.hsap_mito_chr = sys.argv[5]
-            self.mmus_mito_chr = sys.argv[6]
-
-            # We have a separate gene prefix string for each
-            # of the species.
-            self.hsap_gene_prefix = sys.argv[7]
-            self.mmus_gene_prefix = sys.argv[8]
-
-            # The purity threshold used to classify a barcode as a cell
-            # (in addition to the num nuc genes detected threshold)
-            # if we are working with a mixed species sample
-            self.purity_theshold = float(sys.argv[9])
-        else:
-            self.mixed = False
-
-            # String identifying the mitochondrial chromosome
-            self.mito_chr = sys.argv[5]
-
         if self.mixed:
-            # Compute the number of nuclear genes covered per barcode
-            # in order to be able to filter according to num_nuc_genes_covered_per_barcode
-            self.anndata_obj.var['is_mito'] = np.where((self.anndata_obj.var['chromosome'] == self.hsap_mito_chr) | (self.anndata_obj.var['chromosome'] == self.mmus_mito_chr), True, False)
-            self.anndata_obj.var['is_mito_hsap'] = np.where(self.anndata_obj.var['chromosome'] == self.hsap_mito_chr , True, False)
-            self.anndata_obj.var['is_mito_mmus'] = np.where(self.anndata_obj.var['chromosome'] == self.mmus_mito_chr, True, False)
-           
-            # For mixed species we additionally
-            # need to filter according to a purity threshold.
-            # The purity threshold is based on the number of gene detected by species.
-            self.anndata_obj.var['is_hsap'] = np.where(self.anndata_obj.var_names.str.startswith(self.hsap_gene_prefix), True, False)
-            self.anndata_obj.var['is_mmus'] = np.where(self.anndata_obj.var_names.str.startswith(self.mmus_gene_prefix), True, False)
-
-            self.anndata_obj.obs['total_counts_Hsap'] = self.anndata_obj.X[:, self.anndata_obj.var["is_hsap"]].toarray().sum(axis=1)
-            self.anndata_obj.obs["total_counts"] = self.anndata_obj.X.toarray().sum(axis=1)
-            self.anndata_obj.obs['purity_Hsap'] = self.anndata_obj.obs['total_counts_Hsap'] / self.anndata_obj.obs["total_counts"]
-            self.anndata_obj.obs["purity"] = self.anndata_obj.obs['purity_Hsap'].apply(lambda x: x if x > 0.5 else 1 - x)
-            self.anndata_obj.obs['species_based_on_purity'] = np.where(self.anndata_obj.obs['purity_Hsap'] > 0.5, 'Hsap', 'Mmus')
-        else:
-            # Compute the number of nuclear genes covered per barcode
-            # to enable filtering according to num_nuc_genes_covered_per_barcode
-            self.anndata_obj.obs['total_counts'] = self.anndata_obj.X.toarray().sum(axis=1)
-            self.anndata_obj.var['is_mito'] = np.where(self.anndata_obj.var['chromosome'] == self.mito_chr, True, False)
-
-
-        if self.mixed:
-            # Filter for those barcodes that meet the num nuclear gene detected threshold AND
-            # the purity threshold
-            # We do this in two separate processes to collect the set of barcodes that meet
-            # the num nuclear genes detected threshold independent of the purity (i.e. including
-            # impure cells) as this designation will be used in internal metrics.
-            self.anndata_obj.obs["is_called_cell"] = np.where(
-                self.anndata_obj.obs['total_counts']>= self.single_cell_count_threshold, True, False
+            # For mixed we specifically annotate Hsap and Mmus cells as well as the more generic is_called_cell and is_single_cell
+            self.anndata_obj.obs["is_called_cell"] = ((self.anndata_obj.obs['hsap_counts'] >= self.hsap_count_threshold) | (self.anndata_obj.obs['mmus_counts'] >= self.mmus_count_threshold))
+            self.anndata_obj.obs["is_single_cell"] = (
+                ((self.anndata_obj.obs['hsap_counts'] >= self.hsap_count_threshold) & (self.anndata_obj.obs['mmus_counts'] <= self.mmus_count_threshold)) | 
+                ((self.anndata_obj.obs['hsap_counts'] <= self.hsap_count_threshold) & (self.anndata_obj.obs['mmus_counts'] >= self.mmus_count_threshold))
+                )
+            self.anndata_obj.obs["is_hsap_cell"] = (
+                (self.anndata_obj.obs['hsap_counts'] >= self.hsap_count_threshold) & (self.anndata_obj.obs['mmus_counts'] <= self.mmus_count_threshold)
+                )
+            # To prevent cases where the Hsap and Mmus counts both exactly meet the thresholds leading to either a cell
+            # classifed as both Hsap and Mmus or as neither, we will classify mmus_cell as is_single_cell that are not hsap_cell
+            self.anndata_obj.obs["is_mmus_cell"] = (
+                (self.anndata_obj.obs['is_single_cell']) & (self.anndata_obj.obs['is_hsap_cell'] == False)
                 )
             
-            self.anndata_obj.obs["is_single_cell"] = np.where(
-                self.anndata_obj.obs['is_called_cell'] & (self.anndata_obj.obs['purity']>= self.purity_theshold), 
-                True, False
-                )
+            assert self.anndata_obj.obs["is_hsap_cell"].sum() + self.anndata_obj.obs["is_mmus_cell"].sum() == self.anndata_obj.obs["is_single_cell"].sum()
+            
         else:
-            # Filter for only those barcodes that have >= to the num nuclear gene detected threshold
+            # Filter for only those barcodes that have >= to the count threshold
             self.anndata_obj.obs["is_single_cell"] = np.where(
                 self.anndata_obj.obs['total_counts']>= self.single_cell_count_threshold,
                 True, False
                 )
-            
+
         # Write out the raw count matrix
-        self.anndata_obj.write(f"{self.sample_name}.{self.single_cell_count_threshold}.raw_feature_bc_matrix.h5ad", compression="gzip", compression_opts=9)
+        self.anndata_obj.write(f"{self.sample_name}.{sys.argv[1]}.raw_feature_bc_matrix.h5ad", compression="gzip", compression_opts=9)
 
         # Filter down to single cells and write out
         self.anndata_obj_filtered = self.anndata_obj[self.anndata_obj.obs['is_single_cell'] == True]
-        self.anndata_obj_filtered.write(f"{self.sample_name}.{self.single_cell_count_threshold}.filtered_feature_bc_matrix.h5ad", compression="gzip", compression_opts=9)
+        self.anndata_obj_filtered.write(f"{self.sample_name}.{sys.argv[1]}.filtered_feature_bc_matrix.h5ad", compression="gzip", compression_opts=9)
 
         # Write out the barcodes, features, matrix files
         self.write_out_tripartite_filtered_matrix_files()

@@ -654,13 +654,14 @@ process count_matrix {
   tuple val(sample_id), path("barcodes.tsv.gz"), path("features.tsv.gz"), path("matrix.mtx.gz"), optional: true
 
   script:
+  def mixed_args = params.mixed_species ? "--mixed_species True --hsap_mito_chr ${params.hsap_mitochondria_chromosome} --mmus_mito_chr ${params.mmus_mitochondria_chromosome} --hsap_gene_prefix ${params.hsap_gene_prefix} --mmus_gene_prefix ${params.mmus_gene_prefix}" : "--mixed_species False --mito_symbol ${params.mitochondria_chromosome}"
   """
-  count_matrix.py --white_list ${barcode_list} --count_table ${input_file} --gene_list ${features_file} --sample ${sample_id}
+  count_matrix.py --barcode_list ${barcode_list} --count_table ${input_file} --gene_list ${features_file} --sample ${sample_id} $mixed_args
   """
 }
 
 /*
-* Run cell caller - this determines a threshold number of nuclear genes detected to call a cell.
+* Run cell caller - this determines a threshold number of counts to call a cell.
 * The threshold is output to stdout and output as cell_caller_out
 * If the h5ad matrix is empty, an empty .png will be output and checked for
 * in the summary statistic script causing the Cell Caller plot to be hidden.
@@ -675,11 +676,11 @@ process cell_caller {
 
   output:
   tuple val(sample_id), stdout, emit: cell_caller_out
-  tuple val(sample_id), path("${sample_id}_pdf_with_cutoff.png"), emit: cell_caller_plot
+  tuple val(sample_id), path("${sample_id}*_pdf_with_cutoff.png"), emit: cell_caller_plot
 
   script:
   """
-  cell_caller.py --sample_name ${sample_id} --minimum_count_threshold ${params.minimum_count_threshold} --count_matrix ${count_matrix_h5ad}
+  cell_caller.py --sample_name ${sample_id} --minimum_count_threshold ${params.minimum_count_threshold} --count_matrix ${count_matrix_h5ad} --single_species ${!params.mixed_species}
   """
 }
 
@@ -697,7 +698,7 @@ process filter_count_matrix{
   publishDir "${params.outdir}/count_matrix/filtered_feature_bc_matrix/${sample_id}/", mode: 'copy', pattern: "features.tsv.gz"
 
   input:
-  tuple val(sample_id), val(nuc_gene_threshold), path(h5ad_raw_count_matrix)
+  tuple val(sample_id), val(count_threshold), path(h5ad_raw_count_matrix)
 
   output:
   // Output the 3 part barcode, features, matrix 
@@ -708,9 +709,9 @@ process filter_count_matrix{
   tuple val(sample_id), path("${sample_id}*.raw_feature_bc_matrix.*h5ad"), emit: raw_count_matrix
 
   script:
-  def mixed_args = params.mixed_species ? "TRUE ${params.hsap_mitochondria_chromosome} ${params.mmus_mitochondria_chromosome} ${params.hsap_gene_prefix} ${params.mmus_gene_prefix}  ${params.purity}" : "FALSE ${params.mitochondria_chromosome}"
+  def mixed_args = params.mixed_species ? "TRUE" : "FALSE"
   """
-  filter_count_matrix.py ${nuc_gene_threshold} ${h5ad_raw_count_matrix} ${sample_id} $mixed_args
+  filter_count_matrix.py ${count_threshold} ${h5ad_raw_count_matrix} ${sample_id} $mixed_args
   """
 }
 
@@ -728,7 +729,7 @@ process summary_statistics {
   tuple val(sample_id), path("${sample_id}.metrics.csv"), emit: metrics_csv
 
   script:
-  def mixed_args = params.mixed_species ? "TRUE ${params.purity}" : "FALSE"
+  def mixed_args = params.mixed_species ? "TRUE" : "FALSE"
   """
   summary_statistics.py ${sample_id} ${raw_h5ad} ${multiqc_data_json} ${antisense} ${dedup} ${raw_qualimap} ${annotated_qualimap} $mixed_args
   """

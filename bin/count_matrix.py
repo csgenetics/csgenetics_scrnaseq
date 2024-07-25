@@ -9,91 +9,139 @@ from anndata import AnnData
 import sys, argparse, gzip
 import numpy as np
 
-# Parse the command line arguments
-def parse_arguments(args):
-    parser = argparse.ArgumentParser(description = "Arguments for int_metrics script to calculate internal metrics")
-    parser.add_argument("--white_list", help="path to white_list.csv file")
-    parser.add_argument("--count_table", help="path to count table (bcGeneSummary.txt) file ")
-    parser.add_argument("--gene_list", help="path to features.tsv.gz file")
-    parser.add_argument("--sample", help="Sample ID")
+class CountMatrix:
+    def __init__(self):
+        self.parse_args()
+    # Parse the command line arguments
+    def parse_args(self):
+        parser = argparse.ArgumentParser(description = "Arguments for int_metrics script to calculate internal metrics")
+        parser.add_argument("--barcode_list", help="path to allow_list.csv file")
+        parser.add_argument("--count_table", help="path to count table (bcGeneSummary.txt) file ")
+        parser.add_argument("--gene_list", help="path to features.tsv.gz file")
+        parser.add_argument("--sample", help="Sample ID")
+        parser.add_argument("--mixed_species", help="Flag to indicate if the sample is mixed species", required=True) # String 'True' or 'False'
+        parser.add_argument("--mito_symbol", help="Mitochondrial chromosome symbol", required=False) # For single species
+        parser.add_argument("--hsap_mito_chr", help="Human mitochondrial chromosome symbol", required=False) # For mixed species only
+        parser.add_argument("--mmus_mito_chr", help="Mouse mitochondrial chromosome symbol", required=False) # For mixed species only
+        parser.add_argument("--hsap_gene_prefix", help="Human gene prefix", required=False) # For mixed species only
+        parser.add_argument("--mmus_gene_prefix", help="Mouse gene prefix", required=False) # For mixed species only
 
-    return parser.parse_args()
+        args_dict = vars(parser.parse_args())
+        for key in args_dict:
+            setattr(self, key, args_dict[key])
 
-def make_count_matrix(args):
+        if self.mixed_species.lower() == "true":
+            self.single_species = False
+            self.mixed_species = True
+        else:
+            self.single_species = True
+            self.mixed_species = False
 
-    # load CSGX barcode_list of IOs
-    wl = read_csv(args.white_list)
-    wl.columns = ['cell', 'io','ioID']
-    wl = wl.iloc[:,[0,1]]
+    def make_count_matrix(self):
+        # Makes self.anndata_obj
+        self.make_base_count_matrix()
 
-    # load count table obtained using UMI-tools
-    try:
-        counts = read_table(args.count_table,header=None)
-    except errors.EmptyDataError:
-        # The input file is empty and we simply write out an empty .h5ad
-        # to be picked up by the process then exit
-        open(f"{args.sample}.raw_feature_bc_matrix.empty.h5ad", "w").close()
-        sys.exit(0)
+        # Adds gene annotations and others
+        self.annotate_count_matrix()
+    
+        # Write out the matrix
+        self.write_count_matrix()
+    
+    def annotate_count_matrix(self):
+        if self.mixed_species:
+            # Annotate the mitochondrial genes to report the mito and nuclear genes in the summary statistics
+            self.anndata_obj.var['is_mito'] = np.where((self.anndata_obj.var['chromosome'] == self.hsap_mito_chr) | (self.anndata_obj.var['chromosome'] == self.mmus_mito_chr), True, False)
+            self.anndata_obj.var['is_mito_hsap'] = np.where(self.anndata_obj.var['chromosome'] == self.hsap_mito_chr , True, False)
+            self.anndata_obj.var['is_mito_mmus'] = np.where(self.anndata_obj.var['chromosome'] == self.mmus_mito_chr, True, False)
+           
+            # Annotate the Hsap and Mmus genes to be able to report Hsap and Mmus specific stats in summary_statistics
+            self.anndata_obj.var['is_hsap'] = np.where(self.anndata_obj.var_names.str.startswith(self.hsap_gene_prefix), True, False)
+            self.anndata_obj.var['is_mmus'] = np.where(self.anndata_obj.var_names.str.startswith(self.mmus_gene_prefix), True, False)
 
-    counts.columns = ['io', 'gene_id']
+            self.anndata_obj.obs["hsap_counts"] = self.anndata_obj.X[:, self.anndata_obj.var["is_hsap"]].toarray().sum(axis=1)
+            self.anndata_obj.obs["mmus_counts"] = self.anndata_obj.X[:, self.anndata_obj.var["is_mmus"]].toarray().sum(axis=1)
+            self.anndata_obj.obs["total_counts"] = self.anndata_obj.X.toarray().sum(axis=1)
+            
+        else:
+            # Annotate mitochondrial genes to report the mito and nuclear genes in the summary statistics
+            self.anndata_obj.var['is_mito'] = np.where(self.anndata_obj.var['chromosome'] == self.mito_chr, True, False)
+            self.anndata_obj.obs['total_counts'] = self.anndata_obj.X.toarray().sum(axis=1)
 
-    # load feature (gene) names obtained from the genome GTF file
-    genes_all = read_table(args.gene_list).drop_duplicates()
+    def make_base_count_matrix(self):
+        # Load CS Genetics barcode_list of IOs
+        bcl = read_csv(self.barcode_list)
+        bcl.columns = ['cell', 'io','ioID']
+        bcl = bcl.iloc[:,[0,1]]
 
-    # first merge by IOs
-    counts = merge(wl, counts)
+        # Load count table from io_count
+        try:
+            counts = read_table(self.count_table, header=None)
+        except errors.EmptyDataError:
+            # The input file is empty and we simply write out an empty .h5ad
+            # to be picked up by the process then exit
+            open(f"{self.sample}.raw_feature_bc_matrix.empty.h5ad", "w").close()
+            sys.exit(0)
 
-    # sum together counts corresponding to the same cell-gene_name pair
-    counts = counts.groupby(['cell', 'gene_id']).size().reset_index(name='count')
+        counts.columns = ['io', 'gene_id']
 
-    # second merge by gene ID
-    counts = merge(counts, genes_all, how='left')
+        # Load feature (gene) names from the genome GTF file
+        genes_all = read_table(self.gene_list).drop_duplicates()
 
-    zero_genes = genes_all.loc[-genes_all.gene_id.isin(counts.gene_id)]
+        # First merge by IOs
+        counts = merge(bcl, counts)
 
-    # transform a long counts DataFrame into a sparse matrix
-    cell_c = CategoricalDtype(sorted(counts.cell.unique()), ordered=True)
-    name_c = CategoricalDtype(sorted(counts.gene_id.unique()), ordered=True)
-    row = counts.gene_id.astype(name_c).cat.codes
-    col = counts.cell.astype(cell_c).cat.codes
+        # Sum together counts corresponding to the same cell-gene_name pair
+        counts = counts.groupby(['cell', 'gene_id']).size().reset_index(name='count')
 
-    #sparse_matrix = csr_matrix((counts["count"], (col, row)), shape=(cell_c.categories.size, name_c.categories.size))
-    non_zero_matrix = csr_matrix((counts["count"], (col,row)), shape=(cell_c.categories.size,name_c.categories.size)).toarray()
-    # Create a zero matrix for all zero-genes
-    zero_matrix = zeros((non_zero_matrix.shape[0],zero_genes.shape[0]))
-    all_matrix = hstack([non_zero_matrix, zero_matrix])
-    # sparse_matrix for annData needs to be in the format of n_obs x n_vars
-    sparse_matrix = csr_matrix(all_matrix)
+        # Second merge by gene ID
+        counts = merge(counts, genes_all, how='left')
 
-    # create an AnnData object for downstream analysis
-    ft_names= DataFrame(name_c.categories.tolist() + zero_genes.gene_id.tolist(),columns=['gene_id'])
-    ft_names = merge(genes_all,ft_names,how='right')
+        zero_genes = genes_all.loc[-genes_all.gene_id.isin(counts.gene_id)]
 
-    # Have to specify float32 so that it is compatible with BPCells package in R for Seurat v5
-    # and anndata package in Seurat v4.
-    # Convert sparse matrix to float32, and create new AnnData object
-    # If you try to convert adata.X directly on anndata with only 1 row, it will throw an error
-    sparse_matrix_float32 = sparse_matrix.astype(np.float32)
-    adata = AnnData(sparse_matrix_float32,var=ft_names)
-    adata.var_names = ft_names.gene_name.tolist()
-    adata.var_names_make_unique()
-    adata.obs_names = cell_c.categories
+        # Transform a long counts DataFrame into a sparse matrix
+        cell_c = CategoricalDtype(sorted(counts.cell.unique()), ordered=True)
+        name_c = CategoricalDtype(sorted(counts.gene_id.unique()), ordered=True)
+        row = counts.gene_id.astype(name_c).cat.codes
+        col = counts.cell.astype(cell_c).cat.codes
 
-    # It is important to add the sample name to make the barcode names unique
-    # for use in Seurat v5.
-    adata.obs_names = [args.sample + "_" + _ for _ in adata.obs_names]
-    adata.write(f"{args.sample}.raw_feature_bc_matrix.h5ad")
+        non_zero_matrix = csr_matrix((counts["count"], (col,row)), shape=(cell_c.categories.size,name_c.categories.size)).toarray()
+        # Create a zero matrix for all zero-genes
+        zero_matrix = zeros((non_zero_matrix.shape[0],zero_genes.shape[0]))
+        all_matrix = hstack([non_zero_matrix, zero_matrix])
+        # Sparse_matrix for annData needs to be in the format of n_obs x n_vars
+        self.sparse_matrix = csr_matrix(all_matrix)
 
-    # Write sparse matrix format
-    mtx_file = gzip.open('matrix.mtx.gz', 'w')
-    mmwrite(mtx_file, a = sparse_matrix.T, comment='', field='integer', precision=None, symmetry='general')
-    # Write feature table
-    ft_names['feature_type'] = 'Gene Expression'
-    ft_names.to_csv('features.tsv.gz', sep="\t",compression={'method': 'gzip', 'compresslevel': 1, 'mtime': 1},header=None, index=False)
-    # Write barcode table
-    adata.obs.index.to_frame().to_csv('barcodes.tsv.gz',sep='\t',compression={'method': 'gzip', 'compresslevel': 1, 'mtime': 1},header=None, index=False)
+        # Create an AnnData object for downstream analysis
+        self.ft_names= DataFrame(name_c.categories.tolist() + zero_genes.gene_id.tolist(),columns=['gene_id'])
+        self.ft_names = merge(genes_all, self.ft_names,how='right')
+
+        # Have to specify float32 so that it is compatible with BPCells package in R for Seurat v5
+        # and anndata package in Seurat v4.
+        # Convert sparse matrix to float32, and create new AnnData object
+        # If you try to convert adata.X directly on anndata with only 1 row, it will throw an error
+        sparse_matrix_float32 = self.sparse_matrix.astype(np.float32)
+        self.anndata_obj = AnnData(sparse_matrix_float32,var=self.ft_names)
+        self.anndata_obj.var_names = self.ft_names.gene_name.tolist()
+        self.anndata_obj.var_names_make_unique()
+        self.anndata_obj.obs_names = cell_c.categories
+
+        # It is important to add the sample name to make the barcode names unique
+        # for use in Seurat v5.
+        self.anndata_obj.obs_names = [self.sample + "_" + _ for _ in self.anndata_obj.obs_names]
+
+    def write_count_matrix(self):
+        self.anndata_obj.write(f"{self.sample}.raw_feature_bc_matrix.h5ad")
+
+        # Write sparse matrix format
+        mtx_file = gzip.open('matrix.mtx.gz', 'w')
+        mmwrite(mtx_file, a = self.sparse_matrix.T, comment='', field='integer', precision=None, symmetry='general')
+        # Write feature table
+        self.ft_names['feature_type'] = 'Gene Expression'
+        self.ft_names.to_csv('features.tsv.gz', sep="\t",compression={'method': 'gzip', 'compresslevel': 1, 'mtime': 1},header=None, index=False)
+        
+        # Write barcode table
+        self.anndata_obj.obs.index.to_frame().to_csv('barcodes.tsv.gz',sep='\t',compression={'method': 'gzip', 'compresslevel': 1, 'mtime': 1},header=None, index=False)
 
 
 if __name__ == "__main__":
-    args = parse_arguments(sys.argv[1:])
-    make_count_matrix(args)
+    CountMatrix().make_count_matrix()

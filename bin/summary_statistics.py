@@ -25,11 +25,6 @@ class SummaryStatistics:
         self.sample_id = sys.argv[1]
         if sys.argv[8] == "TRUE":
             self.mixed = True
-
-            # The purity threshold used to classify a barcode as a cell
-            # (in addition to the num nuc genes detected threshold)
-            # if we are working with a mixed species sample
-            self.purity = sys.argv[9]
         else:
             self.mixed = False
 
@@ -88,7 +83,7 @@ class SummaryStatistics:
     def get_non_zero_sum(np_1d_array):
         return np.sum(np_1d_array[np.nonzero(np_1d_array)])
 
-    def set_cell_stats_to_zero(self):
+    def set_single_cell_stats_to_zero(self):
         """
         Set all of the cell stats to 0
         For the mixed species case we produce the cell stats
@@ -122,11 +117,11 @@ class SummaryStatistics:
             for base_stat in base_stats:
                 setattr(self, f"{base_stat}", 0)
 
-    def calculate_cell_stats(self):
+    def calculate_single_cell_stats(self):
         # strip the anndata object down to only the is_single_cell cells
-        # so that all metrics are only caluclated for single_cells.
-        # If single species this means those that meet the total counts threshold
-        # If mixed species then the barcodes must also pass the purity threshold.
+        # so that all metrics are only calculated for single_cells.
+        # If single species this means those that meet the counts threshold
+        # If mixed species then the barcodes must be above one of the species thresholds and below the other.
         self.anndata_sc = self.anndata[self.anndata.obs['is_single_cell']]
 
         # Subset to get rid of genes that have 0 counts 
@@ -139,10 +134,10 @@ class SummaryStatistics:
             # For the Hsap and Mmus single cell df we work with
             # only their associated genes. I.e. the metrics do not
             # include genes / counts from the other species.
-            anndata_array_sc_Hsap = self.anndata_sc[self.anndata_sc.obs["species_based_on_purity"] == "Hsap", self.anndata_sc.var["is_hsap"]].to_df()
-            anndata_array_sc_Mmus = self.anndata_sc[self.anndata_sc.obs["species_based_on_purity"] == "Mmus", self.anndata_sc.var["is_mmus"]].to_df()
+            anndata_array_sc_Hsap = self.anndata_sc[self.anndata_sc.obs["is_hsap_cell"], self.anndata_sc.var["is_hsap"]].to_df()
+            anndata_array_sc_Mmus = self.anndata_sc[self.anndata_sc.obs["is_mmus_cell"], self.anndata_sc.var["is_mmus"]].to_df()
             
-            # If mixed then we need to caluculate 3 versions of each of the metrics:
+            # If mixed then we need to calculate 3 versions of each of the metrics:
             #   _total, _Hsap, _Mmus
             self.num_cells_total = anndata_array_sc.shape[0]
             self.num_cells_Hsap = anndata_array_sc_Hsap.shape[0]
@@ -269,9 +264,9 @@ class SummaryStatistics:
         # The first item in the tuple is the name of the metric that will be displayed
         # in the Html, the second is the value, the third is the tool tip.
         # NOTE the helper text must NOT have a comma in it as it is going to be written out in a csv.
-        self.metrics_dict["num_cells"]["num_cells_total"] = ("Number of cells total", self.num_cells_total, "Estimated number of Hsap and Mmus cells combined: Number of barcodes passing the total counts threshold and the purity threshold.")
-        self.metrics_dict["num_cells"]["num_cells_Hsap"] = ("Number of Hsap cells", self.num_cells_Hsap, "Estimated number of Hsap cells: Number of barcodes passing the total counts threshold and the purity threshold as Hsap.")
-        self.metrics_dict["num_cells"]["num_cells_Mmus"] = ("Number of Mmus cells", self.num_cells_Mmus, "Estimated number of Mmus cells: Number of barcodes passing the total counts threshold and the purity threshold as Mmus.")
+        self.metrics_dict["num_cells"]["num_cells_total"] = ("Number of cells total", self.num_cells_total, "Estimated number of Hsap and Mmus cells combined: Number of barcodes classified as either Hsap or Mmus single cells.")
+        self.metrics_dict["num_cells"]["num_cells_Hsap"] = ("Number of Hsap cells", self.num_cells_Hsap, "Estimated number of Hsap cells: Number of barcodes with counts above the Hsap threshold but below the Mmus threshold.")
+        self.metrics_dict["num_cells"]["num_cells_Mmus"] = ("Number of Mmus cells", self.num_cells_Mmus, "Estimated number of Mmus cells: Number of barcodes with counts above the Mmus threshold but below the Hsap threshold.")
         
         self.metrics_dict["raw_reads_per_cell"]["raw_reads_per_cell_total"] = ("Raw reads per cell (Hsap and Mmus)", self.raw_reads_per_cell_total, "Number of reads pre-QC / Number of cells (Hsap and Mmus)")
         self.metrics_dict["raw_reads_per_cell"]["raw_reads_per_cell_Hsap"] = ("Raw reads per Hsap cell", self.raw_reads_per_cell_Hsap, "Number of reads pre-QC / Number of Hsap cells")
@@ -374,34 +369,34 @@ class SummaryStatistics:
         try:
             self.anndata = anndata.read_h5ad(sys.argv[2])
         except OSError: # If the h5ad is an empty file, output empty metrics
-            self.set_cell_and_purity_stats_to_zero()
+            self.set_cell_and_called_cell_and_multiplet_stats_to_zero()
         else:
             if self.anndata.shape[0] == 0:
-                self.set_cell_and_purity_stats_to_zero()
+                self.set_cell_and_called_cell_and_multiplet_stats_to_zero()
             else:
                 if self.mixed:
                     # If mixed, we need to check to see if there
                     # are called cells in the count table that
-                    # we can generate purity metrics from.
+                    # we can generate called cell and multiplet stats from
                     # The is_called_cell attribute is annotated in filter_count_matrix.py
                     if sum(self.anndata.obs["is_called_cell"]) > 0:
-                        # Then we can populate the cell purity
-                        self.calculate_purity_stats()
+                        # Then we can populate the called cell and multiplet stats
+                        self.calculate_called_cell_and_multiplet_stats()
                     else:
                         # If there are no called cells then we set all stats to 0
-                        self.set_purity_metrics_to_zero()
-                    self.populate_purity_stats_in_metrics_dict()
+                        self.set_called_cell_and_multiplet_metrics_to_zero()
+                    self.populate_called_cell_and_multiplet_stats_in_metrics_dict()
 
                 # Finally we need to calculate the cell stats if there
                 # are cells to call the stats from
                 # else set the cell stats to 0
-                # The is_single_cell attribute is annotated in filter_count_matrix.py
+                # The is_single_cell, is_hsap_cell, and is_mmus_cell attributes are annotated in filter_count_matrix.py
                 if sum(self.anndata.obs["is_single_cell"]) > 0:
-                    # Then we can populate the cell purity
-                    self.calculate_cell_stats()
+                    # Then we can populate the single cell stats
+                    self.calculate_single_cell_stats()
                 else:
                     # If there are no called cells then we set all stats to 0
-                    self.set_cell_stats_to_zero()
+                    self.set_single_cell_stats_to_zero()
         
         # Once we have either calculated the stats or set them to 0
         # we need to populate the metrics dicts
@@ -415,47 +410,47 @@ class SummaryStatistics:
         else:
             self.populate_cell_stats_in_metrics_dict_single_species()
 
-    def calculate_purity_stats(self):
+    def calculate_called_cell_and_multiplet_stats(self):
         """
-        Calculate num_raw_cells_no_purity
-        and num_multiplet_cells
+        Calculate the number of called cells and multiplets
         """
-        # The number of cells diregarding purity
-        self.num_raw_cells_no_purity = sum(self.anndata.obs["is_called_cell"])
+        # The number of cellular barcodes with species specific counts passing either the Hsap or Mmus thresholds
+        self.num_called_cells = sum(self.anndata.obs["is_called_cell"])
 
-        # The number of cells that are called cells but do not meet the purity theshold
+        # Called cells with species specific counts passing BOTH the Hsap and Mmus thresholds
         self.num_multiplet_cells = sum(self.anndata.obs["is_called_cell"]) - sum(self.anndata.obs["is_single_cell"])
 
-    def populate_purity_stats_in_metrics_dict(self):
+    def populate_called_cell_and_multiplet_stats_in_metrics_dict(self):
         """
-        The purity stats that are calculated in calculate_purity_stats
+        The called cell and multiplet stats that are calculated in calculate_called_cell_and_multiplet_stats
         need to be added to the metrics_dict.
         Do something similar to what has been done in populate_cell_stats_in_metrics_dict_mixed_species.
         """
         # NOTE we call the subkey "*_total" so that the metric name
         # matches that triplicate format metrics.
         self.metrics_dict["num_raw_cells"]["num_raw_cells_total"] = (
-            "Number of cells disregarding purity", self.num_raw_cells_no_purity,
-            "Number of called cells (i.e. meeting the total count threshold irrespective of the purity threshold)."
+            "Number of called cells", self.num_called_cells,
+            "Number of called cells (i.e. multiplets and single cells)."
             )
         
         self.metrics_dict["num_multiplet_cells"]["num_multiplet_cells_total"] = (
             "Number of multiplet cells",
             self.num_multiplet_cells,
-            "Total number of multiplet cells (called cells not meeting the purity threshold)."
+            "Total number of multiplet cells (barcodes where Hsap counts exceed the Hsap threshold AND Mmus counts exceed the Mmus threshold)."
             )
 
-    def set_purity_metrics_to_zero(self):
-        # The number of cells diregarding purity
-        self.num_raw_cells_no_purity = 0
-        # The number of cells that are called cells but do not meet the purity theshold
+    def set_called_cell_and_multiplet_metrics_to_zero(self):
+        # The number of cellular barcodes with species specific counts passing either the Hsap or Mmus thresholds
+        self.num_called_cells = 0
+
+        # Called cells with species specific counts passing BOTH the Hsap and Mmus thresholds
         self.num_multiplet_cells = 0
 
-    def set_cell_and_purity_stats_to_zero(self):
+    def set_cell_and_called_cell_and_multiplet_stats_to_zero(self):
         if self.mixed:
-            # If mixed we additionally need to set the purity_metrics to 0
-            self.set_purity_metrics_to_zero()
-        self.set_cell_stats_to_zero()
+            # If mixed we need to set the called cell and multiplet stats to 0
+            self.set_called_cell_and_multiplet_metrics_to_zero()
+        self.set_single_cell_stats_to_zero()
 
     def get_sequencing_stats(self):
         """
