@@ -192,7 +192,8 @@ process io_extract_fastp {
 
   publishDir "${params.outdir}/fastp", pattern: '*.{json,html}', mode: 'copy'
 
-  input: tuple val(sample_id), path(r1)
+  input:
+  tuple val(sample_id), path(r1)
 
   output:
   tuple val(sample_id), path("${sample_id}_R1.io_extract.fastp.fastq.gz"), emit: fastp_out
