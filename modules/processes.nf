@@ -181,18 +181,16 @@ process io_extract {
   path(io_extract_script)
 
   output:
-  tuple val(sample_id), path("${sample_id}_R1.io_extract.fastq.gz"), emit: io_extract_out
+  tuple val(sample_id), path("${sample_id}.io_extract.R1.fastq.gz"), emit: io_extract_out
 
   script:
   """
   cat $barcode_list | cut -d ',' -f2 > barcode_list.txt
-  gawk -v r2=${r2} -v bc_length=13 -f $io_extract_script barcode_list.txt <(zcat ${r1})
-  # Check if the output file exists and rename it to the sample_id
-  # If it doesn't exist, create an empty file
-  if [ -f "io_extract.good.R1.fastq.gz" ]; then
-    mv io_extract.good.R1.fastq.gz ${sample_id}_R1.io_extract.fastq.gz
-  else
-    touch ${sample_id}_R1.io_extract.fastq && gzip ${sample_id}_R1.io_extract.fastq
+  gawk -v r2=${r2} -v sample_id=${sample_id} -v bc_length=13 -f $io_extract_script barcode_list.txt <(zcat ${r1})
+
+  # If it doesn't exist, create an empty file to collect
+  if [ ! -f "${sample_id}.io_extract.R1.fastq.gz" ]; then
+    touch ${sample_id}.io_extract.R1.fastq && gzip ${sample_id}.io_extract.R1.fastq
   fi
   """
 }

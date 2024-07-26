@@ -1,5 +1,5 @@
 
-# gawk -v r2="R2.fastq.gz" -v bc_length=13 -f io_extract_all_outputs_interleaved_no_modulo.awk barcode_list.txt <(zcat R1.fastq.gz)
+# gawk -v r2="R2.fastq.gz" -v sample_id=${sample_id} -v bc_length=13 -f io_extract_all_outputs_interleaved_no_modulo.awk barcode_list.txt <(zcat R1.fastq.gz)
 
 {
 	if(ARGIND==1){ # Parse through the barcode list and store in the barcode_A array
@@ -64,10 +64,10 @@
 			# With the modified header of read 1
 			r1_new_header =r1_header_part_1 "_" bc "_ " r1_header_part_2;
 			
-			printf "%s\n%s\n%s\n%s\n",r1_new_header,r1_read,r1_third,r1_qual | "gzip -1 > io_extract.good.R1.fastq.gz";
+			printf "%s\n%s\n%s\n%s\n",r1_new_header,r1_read,r1_third,r1_qual | "gzip -1 > " sample_id ".io_extract.R1.fastq.gz";
 		}
 	}
 }
 END{
-	print "Reads output: "good_count > "io_extract.log"
+	print "Reads output: "good_count > sample_id ".io_extract.log"
 }
