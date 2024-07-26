@@ -124,19 +124,56 @@ workflow {
   features_file(gtf)
   feature_file_out = features_file.out.modified_gtf
 
+  // ch_input is in the form: [sample, [R1_L001, R1_L002], [R2_L001, R2_L002]],  [sample, [R1_L001], [R2_L001]]
+  // The number of items in each of the sub arrays depends on how many lanes the sample was sequenced over.
+  // We only want to pass those samples that have multiple lanes worth of fastqs into merge_lanes.
+  // For those samples that do not have multiple lanes, we will skip merge lanes and merge with the output
+  // of merge_lanes.
+  
+  // Split ch_input base on whether there are >1 R1 fastqs
+  ch_input.branch{
+    multiple_lanes: it[1].size() > 1
+    single_lane: it[1].size() == 1
+  }.set{
+    ch_input_split
+  }
+
+  // After identifying the multiple lanes samples
+  // We will split these futher so that they are in the form:
+  // [sample, R1, [R1_L001, R1_L002]], [sample, R2, [R2_L001, R2_L002]]
+  // This does 2 things. It allows us to futher parallelize the merge_lanes process,
+  // and it means we don't have to rely on R1 or R2 being in the file names.
+  // E.g. some systems use names like *r_1* and *r_2*.
+  merge_lanes_in = ch_input_split.multiple_lanes
+    .flatMap{[[it[0], "R1", it[1]], [it[0], "R2", it[2]]]}  
+
   // This process will merge fastqs split over multiple lanes 
   // and count the number of reads in the merged fastq
-  merge_lanes(ch_input)
+  merge_lanes(merge_lanes_in)
   ch_merge_lanes_out = merge_lanes.out.merge_lanes_out
 
-  // Set the barcode_pattern 
+  // Combine the R1 and R2 reads per sample ensuring R1 comes first
+  // --> [sample, *.merged.R1*, *.merged.R2*]
+  ch_merge_lanes_out_merged = ch_merge_lanes_out.groupTuple(by:0, size:2).map({it[1][0] == "R1" ? [it[0], it[2][0], it[2][1]] : [it[0], it[2][1], it[2][0]]})
+
+  // Flatten the R1 and R2 in the non-merged fastq pairs
+  // [sample, [R1], [R2]] --> [sample, R1, R2]
+  ch_input_split_single_lane_flattened = ch_input_split.single_lane
+    .map{[it[0], it[1][0], it[2][0]]}
+
+  // Merge the merged and non-merged fastqs
+  io_extract_in_ch = ch_merge_lanes_out_merged.mix(ch_input_split_single_lane_flattened)
+
+  // Set the barcode_pattern
+  // TODO run separate taks of merged_fastp for each of the R1 and R2 files
+  // to increase parallelization.
   barcode_pattern="CCCCCCCCCCCCC"
-  merged_fastp(ch_merge_lanes_out, barcode_pattern)
+  merged_fastp(io_extract_in_ch, barcode_pattern)
   ch_merged_fastp_multiqc = merged_fastp.out.merged_fastp_multiqc
 
   // Get the barcode_list and extract the IOs from the fastqs using umitools
   io_extract_script = "${baseDir}/bin/io_extract.awk"
-  io_extract(ch_merge_lanes_out, barcode_list, io_extract_script)
+  io_extract(io_extract_in_ch, barcode_list, io_extract_script)
   ch_io_extract_out = io_extract.out.io_extract_out
 
   // Trim and remove low quality reads with fastp

@@ -99,38 +99,21 @@ process features_file {
 * Merge Lanes
 */
 process merge_lanes {
-  tag "$sample_id"
+  tag "$sample_id $read_num"
 
   input:
-  tuple val(sample_id), path(fastq_1), path(fastq_2)
+  tuple val(sample_id), val(read_num), path(fastqs)
 
   output:
-  tuple val(sample_id), path("${sample_id}_R1.merged.fastq.gz"), path("${sample_id}_R2.merged.fastq.gz"), emit: merge_lanes_out
+  tuple val(sample_id), val(read_num), path("${sample_id}.merged.${read_num}.fastq.gz"), emit: merge_lanes_out
 
-  shell:
-  '''
-  #cat !{fastq_1} > !{sample_id}_R1.merged.fastq.gz
-  #cat !{fastq_2} > !{sample_id}_R2.merged.fastq.gz
+  script:
+  """
+  # cat ${fastqs} > ${sample_id}.merged.${read_num}.fastq.gz
 
-
-  # merging R1 and R2
-  # globs are ordered so lane merging will happen in same order for R1 and R2
-  # If there's only one file for R1 or R2, we just rename it
-  R1_files=$(ls !{fastq_1} | wc -l)
-  if [ "$R1_files" -gt 1 ]; then
-    cat *R1*.f*q.gz > !{sample_id}_R1.merged.fastq.gz
-  elif [ "$R1_files" -eq 1 ]; then
-    mv *R1*.f*q.gz !{sample_id}_R1.merged.fastq.gz
-  fi
-
-  # For R2 files
-  R2_files=$(ls !{fastq_2} | wc -l)
-  if [ "$R2_files" -gt 1 ]; then
-    cat *R2*.f*q.gz > !{sample_id}_R2.merged.fastq.gz
-  elif [ "$R2_files" -eq 1 ]; then
-    mv *R2*.f*q.gz !{sample_id}_R2.merged.fastq.gz
-  fi
-  '''
+  # Globs are ordered so lane merging will happen in same order for R1 and R2
+  cat *.f*q.gz > ${sample_id}.merged.${read_num}.fastq.gz
+  """
 }
 
 process merged_fastp{
@@ -139,7 +122,7 @@ process merged_fastp{
   publishDir "${params.outdir}/fastp", mode: 'copy'
 
   input:
-  tuple val(sample_id), path(r1), path(r2)
+  tuple val(sample_id), path("${sample_id}.R1.merged.fastq.gz"), path("${sample_id}.R2.merged.fastq.gz")
   val(barcode_pattern)
 
   output:
@@ -153,13 +136,13 @@ process merged_fastp{
   barcode_length=$(echo !{barcode_pattern} | tr -cd 'C' | wc -c)
 
   # R1 fastp
-  fastp -i !{r1} \
+  fastp -i !{sample_id}.R1.merged.fastq.gz \
     -A -G \
     -j !{sample_id}_R1.merged_fastp.json \
     -h !{sample_id}_R1.merged_fastp.html
 
   # R2 fastp
-  fastp -i !{r2} \
+  fastp -i !{sample_id}.R2.merged.fastq.gz \
     -A -G \
     -b !{barcode_length} \
     -l 13 \
