@@ -180,7 +180,7 @@ class SummaryStatistics:
             # It is possible that one of the species has no cells
             if self.num_cells_Hsap == 0: # No Human cells
                 self.raw_reads_per_cell_total = self.metrics_dict["Read QC"]["reads_pre_qc"][1] / self.num_cells_total
-                self.raw_reads_per_cell_Hsap = "NA"
+                self.raw_reads_per_cell_Hsap = 0
                 self.raw_reads_per_cell_Mmus = self.metrics_dict["Read QC"]["reads_pre_qc"][1] / self.num_cells_Mmus
 
                 self.mean_total_counts_per_cell_total = np.mean(concat_counts_species_series)
@@ -230,7 +230,7 @@ class SummaryStatistics:
             elif self.num_cells_Mmus == 0: # No Mouse cells
                 self.raw_reads_per_cell_total = self.metrics_dict["Read QC"]["reads_pre_qc"][1] / self.num_cells_total
                 self.raw_reads_per_cell_Hsap = self.metrics_dict["Read QC"]["reads_pre_qc"][1] / self.num_cells_Hsap
-                self.raw_reads_per_cell_Mmus = "NA"
+                self.raw_reads_per_cell_Mmus = 0
 
                 self.mean_total_counts_per_cell_total = np.mean(concat_counts_species_series)
                 self.mean_total_counts_per_cell_Hsap = np.mean(summed_counts_Hsap)
