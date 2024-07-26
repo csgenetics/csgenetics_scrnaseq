@@ -340,7 +340,7 @@ process create_valid_empty_bam{
 process run_qualimap {
   tag "$sample_id"
   
-  publishDir "${params.outdir}/qualimap", mode: 'copy', pattern: "rnaseq_qc_results.txt", saveAs: {it -> "${sample_id}.${prefix}_qualimap.txt"}
+  publishDir "${params.outdir}/qualimap", mode: 'copy', pattern: "**/rnaseq_qc_results.txt", saveAs: {"${sample_id}.${prefix}_qualimap.txt"}
 
   input:
   tuple val (sample_id), path(bam), val(count)
@@ -349,18 +349,19 @@ process run_qualimap {
   val(prefix)
 
   output:
-  tuple val(sample_id), path("rnaseq_qc_results.txt"), emit: qualimap_txt
+  tuple val(sample_id), path("**/rnaseq_qc_results.txt"), emit: qualimap_txt
 
   shell:
   '''
   if [[ !{count} > 0 ]]
     then
-      qualimap rnaseq -outdir . -a proportional -bam !{bam} -p strand-specific-forward -gtf !{gtf} --java-mem-size=!{task.memory.toGiga()}G
+      qualimap rnaseq -outdir !{sample_id}_!{prefix}_qualimap -a proportional -bam !{bam} -p strand-specific-forward -gtf !{gtf} --java-mem-size=!{task.memory.toGiga()}G
     else
       BAMNAME=!{bam}
       GTFNAME=!{gtf}
       export BAMNAME GTFNAME
-      cat !{empty_qualimap_template} | envsubst > rnaseq_qc_results.txt
+      mkdir !{sample_id}_!{prefix}_qualimap
+      cat !{empty_qualimap_template} | envsubst > !{sample_id}_!{prefix}_qualimap/rnaseq_qc_results.txt
   fi
   '''
 }
@@ -496,8 +497,12 @@ process feature_counts {
 /*
 * Run multiqc
 */
+// TODO Pick up the multiqc_data.json directly and rename it in summary_statistics
+// NOTE I am going to see if we can pick this up without a double star glob.
 process multiqc {
-  publishDir "${params.outdir}/multiqc/${sample_id}", mode: 'copy'
+  publishDir "${params.outdir}/multiqc/${sample_id}", mode: 'copy', pattern: "*_data"
+  publishDir "${params.outdir}/multiqc/${sample_id}", mode: 'copy', pattern: "*_multiqc.html"
+  publishDir "${params.outdir}/multiqc/${sample_id}", mode: 'copy', pattern: "**/multiqc_data.json", saveAs: {"${sample_id}.multiqc.data.json"}
 
   input:
   tuple val(sample_id), path(multiqc_in_files)
@@ -505,7 +510,7 @@ process multiqc {
   output:
   path "*_multiqc.html"
   path "*_data"
-  tuple val(sample_id), path("${sample_id}.multiqc.data.json"), emit: multiqc_json
+  tuple val(sample_id), path("**/multiqc_data.json"), emit: multiqc_json
 
   script:
   """
@@ -517,7 +522,6 @@ process multiqc {
     -m fastp \
     -m star \
     -m featureCounts
-  mv ${sample_id}_multiqc_data/multiqc_data.json ./${sample_id}.multiqc.data.json
   """
 }
 
@@ -703,14 +707,14 @@ process summary_statistics {
   publishDir "${params.outdir}/report/${sample_id}", mode: 'copy', pattern: "*.csv"
   
   input:
-  tuple val(sample_id), val(minimum_count_threshold), path(raw_h5ad), path("${sample_id}.annotated_qualimap.txt"), path(antisense), path(dedup), path(multiqc_data_json), path("${sample_id}.raw_qualimap.txt")
+  tuple val(sample_id), val(minimum_count_threshold), path(raw_h5ad), path("${sample_id}.annotated_qualimap.txt"), path(antisense), path(dedup), path("${sample_id}.multiqc.data.json"), path("${sample_id}.raw_qualimap.txt")
   output:
   tuple val(sample_id), path("${sample_id}.metrics.csv"), emit: metrics_csv
 
   script:
   def mixed_args = params.mixed_species ? "TRUE" : "FALSE"
   """
-  summary_statistics.py ${sample_id} ${raw_h5ad} ${multiqc_data_json} ${antisense} ${dedup} ${sample_id}.raw_qualimap.txt ${sample_id}.annotated_qualimap.txt $mixed_args
+  summary_statistics.py ${sample_id} ${raw_h5ad} ${sample_id}.multiqc.data.json ${antisense} ${dedup} ${sample_id}.raw_qualimap.txt ${sample_id}.annotated_qualimap.txt $mixed_args
   """
 }
 
