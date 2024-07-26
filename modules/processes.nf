@@ -222,7 +222,7 @@ process io_extract_fastp {
 /*
 * Trims reads from positions that match the regexs: A{15,} or A{13,}CG 
 * I.e. A homopolymers >= 15 bp or >=13bp + CG are identified and trimmed along with any following bps.
-* Only reads >20bp in length (after trimming) are retained .
+* Only reads > 6bp in length (after trimming) are retained .
 */
 process trim_extra_polya {
   tag "$sample_id"
@@ -232,17 +232,16 @@ process trim_extra_polya {
   path(trim_polyA_script)
 
   output:
-  tuple val(sample_id), path("${sample_id}_R1.polyA_trimmed.fastq.gz"), emit: trim_extra_polya_out
+  tuple val(sample_id), path("${sample_id}.polyAtrimmed.fastq.gz"), emit: trim_extra_polya_out
 
   script:
   """
-  zcat $fastq | awk -f $trim_polyA_script
+  zcat $fastq | awk -f $trim_polyA_script -v sample_id=${sample_id}
+
   # Check if the output file exists and rename it to the sample_id
   # If it doesn't exist, create an empty file
-  if [ -f "good.fastq.gz" ]; then
-    mv good.fastq.gz ${sample_id}_R1.polyA_trimmed.fastq.gz
-  else
-    touch ${sample_id}_R1.polyA_trimmed.fastq && gzip ${sample_id}_R1.polyA_trimmed.fastq
+  if [ ! -f "${sample_id}.polyAtrimmed.fastq.gz" ]; then
+    touch ${sample_id}.polyAtrimmed.fastq && gzip ${sample_id}.polyAtrimmed.fastq
   fi
   """
 }
@@ -341,7 +340,7 @@ process create_valid_empty_bam{
 process run_qualimap {
   tag "$sample_id"
   
-  publishDir "${params.outdir}/qualimap", mode: 'copy'
+  publishDir "${params.outdir}/qualimap", mode: 'copy', pattern: "rnaseq_qc_results.txt", saveAs: {it -> "${sample_id}.${prefix}_qualimap.txt"}
 
   input:
   tuple val (sample_id), path(bam), val(count)
@@ -350,19 +349,18 @@ process run_qualimap {
   val(prefix)
 
   output:
-  tuple val (sample_id), path("${sample_id}.${prefix}_qualimap.txt"), emit: qualimap_txt
+  tuple val(sample_id), path("rnaseq_qc_results.txt"), emit: qualimap_txt
 
   shell:
   '''
   if [[ !{count} > 0 ]]
     then
-      qualimap rnaseq -outdir !{sample_id}_!{prefix}_qualimap -a proportional -bam !{bam} -p strand-specific-forward -gtf !{gtf} --java-mem-size=!{task.memory.toGiga()}G
-      mv !{sample_id}_!{prefix}_qualimap/rnaseq_qc_results.txt !{sample_id}.!{prefix}_qualimap.txt
+      qualimap rnaseq -outdir . -a proportional -bam !{bam} -p strand-specific-forward -gtf !{gtf} --java-mem-size=!{task.memory.toGiga()}G
     else
       BAMNAME=!{bam}
       GTFNAME=!{gtf}
       export BAMNAME GTFNAME
-      cat !{empty_qualimap_template} | envsubst > !{sample_id}.!{prefix}_qualimap.txt
+      cat !{empty_qualimap_template} | envsubst > rnaseq_qc_results.txt
   fi
   '''
 }
@@ -705,14 +703,14 @@ process summary_statistics {
   publishDir "${params.outdir}/report/${sample_id}", mode: 'copy', pattern: "*.csv"
   
   input:
-  tuple val(sample_id), val(minimum_count_threshold), path(raw_h5ad), path(annotated_qualimap), path(antisense), path(dedup), path(multiqc_data_json), path(raw_qualimap)
+  tuple val(sample_id), val(minimum_count_threshold), path(raw_h5ad), path("${sample_id}.annotated_qualimap.txt"), path(antisense), path(dedup), path(multiqc_data_json), path("${sample_id}.raw_qualimap.txt")
   output:
   tuple val(sample_id), path("${sample_id}.metrics.csv"), emit: metrics_csv
 
   script:
   def mixed_args = params.mixed_species ? "TRUE" : "FALSE"
   """
-  summary_statistics.py ${sample_id} ${raw_h5ad} ${multiqc_data_json} ${antisense} ${dedup} ${raw_qualimap} ${annotated_qualimap} $mixed_args
+  summary_statistics.py ${sample_id} ${raw_h5ad} ${multiqc_data_json} ${antisense} ${dedup} ${sample_id}.raw_qualimap.txt ${sample_id}.annotated_qualimap.txt $mixed_args
   """
 }
 
