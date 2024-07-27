@@ -20,7 +20,7 @@ class CountMatrix:
         parser.add_argument("--gene_list", help="path to features.tsv.gz file")
         parser.add_argument("--sample", help="Sample ID")
         parser.add_argument("--mixed_species", help="Flag to indicate if the sample is mixed species", required=True) # String 'True' or 'False'
-        parser.add_argument("--mito_symbol", help="Mitochondrial chromosome symbol", required=False) # For single species
+        parser.add_argument("--mito_chr", help="Mitochondrial chromosome symbol", required=False) # For single species
         parser.add_argument("--hsap_mito_chr", help="Human mitochondrial chromosome symbol", required=False) # For mixed species only
         parser.add_argument("--mmus_mito_chr", help="Mouse mitochondrial chromosome symbol", required=False) # For mixed species only
         parser.add_argument("--hsap_gene_prefix", help="Human gene prefix", required=False) # For mixed species only

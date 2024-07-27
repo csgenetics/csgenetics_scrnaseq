@@ -638,7 +638,7 @@ process count_matrix {
   tuple val(sample_id), path("barcodes.tsv.gz"), path("features.tsv.gz"), path("matrix.mtx.gz"), optional: true
 
   script:
-  def mixed_args = params.mixed_species ? "--mixed_species True --hsap_mito_chr ${params.hsap_mitochondria_chromosome} --mmus_mito_chr ${params.mmus_mitochondria_chromosome} --hsap_gene_prefix ${params.hsap_gene_prefix} --mmus_gene_prefix ${params.mmus_gene_prefix}" : "--mixed_species False --mito_symbol ${params.mitochondria_chromosome}"
+  def mixed_args = params.mixed_species ? "--mixed_species True --hsap_mito_chr ${params.hsap_mitochondria_chromosome} --mmus_mito_chr ${params.mmus_mitochondria_chromosome} --hsap_gene_prefix ${params.hsap_gene_prefix} --mmus_gene_prefix ${params.mmus_gene_prefix}" : "--mixed_species False --mito_chr ${params.mitochondria_chromosome}"
   """
   count_matrix.py --barcode_list ${barcode_list} --count_table ${input_file} --gene_list ${features_file} --sample ${sample_id} $mixed_args
   """

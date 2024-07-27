@@ -148,7 +148,6 @@ workflow {
     .flatMap{[[it[0], "R1", it[1]], [it[0], "R2", it[2]]]}  
 
   // This process will merge fastqs split over multiple lanes 
-  // and count the number of reads in the merged fastq
   merge_lanes(merge_lanes_in)
   ch_merge_lanes_out = merge_lanes.out.merge_lanes_out
 
