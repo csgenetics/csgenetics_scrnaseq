@@ -10,11 +10,15 @@ process download_star_index {
 
   output:
   path("star"), emit: star_index
+  path("download_complete.txt")
 
   script:
   """
   mkdir star
   aws s3 cp --no-sign-request ${params.star_index} ./star --recursive
+  # Create a file to indicate that the download is complete
+  # and force Fusion to wait for the download to complete
+  touch download_complete.txt
   """
 }
 

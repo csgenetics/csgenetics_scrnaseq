@@ -47,7 +47,7 @@ workflow {
   // Check whether params.star_index starts with s3://csgx.public.readonly
   // and if it does, download the file in a process and set the star_index to the downloaded file
   if (params.star_index.startsWith("s3://csgx.public.readonly")){
-    star_index = download_star_index()
+    star_index = download_star_index().out.star_index
   } else {
     star_index = file(params.star_index)
   }
