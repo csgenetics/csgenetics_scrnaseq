@@ -18,7 +18,7 @@ process download_star_index {
   aws s3 cp --no-sign-request ${params.star_index} ./star --recursive
   # Create a file to indicate that the download is complete
   # and force Fusion to wait for the download to complete
-  touch download_complete.txt
+  echo "download complete" > download_complete.txt
   """
 }
 
