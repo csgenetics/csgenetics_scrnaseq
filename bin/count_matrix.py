@@ -137,6 +137,9 @@ class CountMatrix:
         mmwrite(mtx_file, a = self.sparse_matrix.T, comment='', field='integer', precision=None, symmetry='general')
         # Write feature table
         self.ft_names['feature_type'] = 'Gene Expression'
+        # Drop the chromosome column 
+        self.ft_names.drop('chromosome', axis=1, inplace=True)
+
         self.ft_names.to_csv('features.tsv.gz', sep="\t",compression={'method': 'gzip', 'compresslevel': 1, 'mtime': 1},header=None, index=False)
         
         # Write barcode table
