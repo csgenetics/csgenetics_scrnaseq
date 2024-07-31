@@ -356,7 +356,7 @@ process run_qualimap {
   '''
   if [[ !{count} > 0 ]]
     then
-      qualimap rnaseq -outdir !{sample_id}_!{prefix}_qualimap -a proportional -bam !{bam} -p strand-specific-forward -gtf !{gtf} --java-mem-size=!{task.memory.toGiga()}G
+      qualimap rnaseq -outdir !{sample_id}_!{prefix}_qualimap -a uniquely-mapped-reads -bam !{bam} -p strand-specific-forward -gtf !{gtf} --java-mem-size=!{task.memory.toGiga()}G
     else
       BAMNAME=!{bam}
       GTFNAME=!{gtf}
