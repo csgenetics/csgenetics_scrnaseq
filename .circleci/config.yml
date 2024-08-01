@@ -10,6 +10,7 @@ jobs:
     # See: https://circleci.com/docs/2.0/configuration-reference/#docker-machine-macos-windows-executor
     docker:
       - image: cimg/base:stable
+    resource_class: small
     # Add steps to the job
     # See: https://circleci.com/docs/2.0/configuration-reference/#steps
     steps:
@@ -29,7 +30,7 @@ jobs:
             -H "Accept: application/json" \
             -H "Authorization: Bearer $TOWER_AUTH_TOKEN" \
             -H "Content-Type: application/json" \
-            -d '{"name":"'"$NAME"'","source":"tower","launch":{"configProfiles":["test"], "computeEnvId":"'"$TOWER_COMPUTE_ENV_ID"'","pipeline":"https://github.com/csgenetics/private_csgenetics_scrnaseq","workDir":"s3://csg-tower-bucket","revision":"'"$(echo $CIRCLE_BRANCH)"'","pullLatest":true}}'`
+            -d '{"name":"'"$NAME"'","source":"tower","launch":{"configProfiles":["test"], "computeEnvId":"'"$TOWER_COMPUTE_ENV_ID"'","pipeline":"https://github.com/csgenetics/csgenetics_scrnaseq","workDir":"s3://csg-tower-bucket","revision":"'"$(echo $CIRCLE_BRANCH)"'","pullLatest":true}}'`
             id=`echo $myvar | awk -F: {'print $2'} | sed 's/}//g'`
             echo "export ACTION_ID=$id" >> $BASH_ENV
             echo $id
