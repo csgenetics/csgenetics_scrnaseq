@@ -14,6 +14,8 @@
   - [Running the pipeline on MacOS](#running-the-pipeline-on-macos)
   - [Specifying input sequencing files](#specifying-input-sequencing-files)
   - [Testing the pipeline](#testing-the-pipeline)
+    - [Locally](#locally)
+    - [On Google Cloud Platform (GCP) Batch](#on-google-cloud-platform-gcp-batch)
   - [Launching the pipeline directly from the csgenetic/csgenetics\_scrnaseq Github repo](#launching-the-pipeline-directly-from-the-csgeneticcsgenetics_scrnaseq-github-repo)
     - [Updating the pipeline](#updating-the-pipeline)
     - [Specifying a pipeline version](#specifying-a-pipeline-version)
@@ -21,6 +23,7 @@
   - [Available standard profiles](#available-standard-profiles)
     - [test](#test)
     - [test\_singularity](#test_singularity)
+    - [gcp\_test](#gcp_test)
     - [docker](#docker)
     - [singularity](#singularity)
   - [Available curated genomic resources](#available-curated-genomic-resources)
@@ -148,6 +151,8 @@ Sample2,/home/example_user/analysis/raw_reads/example_Sample2_L001_R1_001.fastq.
 
 ## Testing the pipeline
 
+### Locally
+
 To test that your environment is set up correctly, the pipeline can be run using the `test` profile:
 
 ```bash
@@ -158,6 +163,57 @@ The test proile will run using a set of remotely hosted resources. By default, t
 
 For a full list of the configurable parameters that can be can be supplied to the pipeline
 and other options for configuration see [Configurable parameters](#configurable-parameters).
+
+### On Google Cloud Platform (GCP) Batch
+
+To execute the pipeline on Google Cloud Batch, edit the `nextflow.config`, create a repository to hold the run image, then edit and execute the `launch_gcp.sh` script by following the instructions below: 
+
+1. Under `params` in `nextflow.config`, point the `outdir` and `workDir` folders to the appropriate Google Cloud bucket:
+
+    ```
+    params {
+      ...
+      // The output directory where the results will be saved. You have to use absolute paths to storage on Cloud infrastructure.
+      outdir = 'gs://<bucket-name>/results'
+      workDir = 'gs://<bucket-name>/work'
+      ...
+    }
+    ```
+
+    Then define the Google project and region:
+
+    ```
+    params {
+      ...
+      // GCP Batch
+      googleproject = '<google-project-id>'
+      googleregion = '<google-region>' # use same region as bucket
+      ...
+    }
+    ```
+
+2. Create a docker repository (\<repository-name>) in your project using Google's Artifact Registry. A docker image is used to launch your nextflow run through Google Cloud Batch.
+
+3. Edit the variables at the top of `launch_gcp.sh`, using the same `<google-project-id>` and `<google-region>` as used in step 1, and the repository created in step 2: 
+
+    ```bash
+    #!/bin/bash
+
+    ## Define GCP parameters
+    GCP_PROJECT="<google-project-id>"
+    GCP_REGION="<google-region>" # use same region as bucket
+    GCP_REPO="<repository-name>"
+    GCP_REGISTRY="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT}/${GCP_REPO}"
+
+    ## Define image names
+    RUN_NAME="<run-name>" # Must be lowercase, no underscores
+    IMAGE_NAME="${GCP_REPO}-nextflow-run:${RUN_NAME}"
+    GCP_IMAGE="${GCP_REGISTRY}/${IMAGE_NAME}"
+    ```
+
+4. Launch the script by executing `./launch_gcp.sh`. This will build and push the docker image containing your nextflow run configuration to the Artifact registry, then deploy the run to Google Cloud Batch on a light-weight head node with the `<run-name>` you defined in step 3.
+
+    You can monitor the status of your run and inspect the logs through the Google Cloud Batch web interface. The `results` and `work` should appear in the storage bucket defined in step 1.
 
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
@@ -271,6 +327,10 @@ E.g.
 ```bash
 nextflow run main.nf -profile test_singularity
 ```
+
+### gcp_test
+
+See [Testing the pipeline > On Google Cloud Platform (GCP) Batch](#on-google-cloud-platform-gcp-batch) for detailed instructions on how to run the test on Google Cloud Platform.
 
 ### docker
 
