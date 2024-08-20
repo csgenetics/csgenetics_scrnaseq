@@ -400,7 +400,7 @@ Generic process for running RSeQC read distribution - planning for this to repla
 process run_rseqc {
   tag "$sample_id"
   
-  publishDir "${params.outdir}/rseqc", mode: 'copy', pattern: "**/rseqc_results.txt", saveAs: {"${sample_id}.${prefix}_rseqc.txt"}
+  publishDir "${params.outdir}/rseqc/read_distribution", mode: 'copy', pattern: "**/rseqc_results.txt", saveAs: {"${sample_id}.${prefix}_rseqc.txt"}
 
   input:
   tuple val (sample_id), path(bam), val(count)
@@ -581,7 +581,8 @@ process multiqc {
     -m fastqc \
     -m fastp \
     -m star \
-    -m featureCounts
+    -m featureCounts \
+    -m rseqc
   """
 }
 
