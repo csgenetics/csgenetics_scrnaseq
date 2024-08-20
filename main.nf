@@ -12,6 +12,7 @@ include {
   trim_extra_polya; post_polyA_fastp; star;
   create_valid_empty_bam as create_valid_empty_bam_star;
   run_qualimap as raw_qualimap; run_qualimap as annotated_qualimap;
+  run_rseqc as raw_rseqc; run_rseqc as annotated_rseqc;
   feature_counts; multiqc;
   sort_index_bam; dedup; io_count; count_matrix;
   filter_count_matrix; cell_caller; summary_statistics; single_summary_report;
@@ -227,6 +228,9 @@ workflow {
   // qualimap or populate an empty qualimap template
   raw_qualimap(star_out_ch.good_bam.map({[it[0], it[1], 1]}).mix(create_valid_empty_bam_star.out.out_bam.map({[it[0], it[1], 0]})), gtf, empty_qualimap_template, "raw")
 
+  // RSeQC read distribution on STAR output
+  raw_rseqc(star_out_ch.good_bam.map({[it[0], it[1], 1]}).mix(create_valid_empty_bam_star.out.out_bam.map({[it[0], it[1], 0]})), params.gene_model, "raw")
+  // ch_raw_rseqc_multiqc = raw_rseqc.out.rseqc_log
   // Perform featurecount quantification
   // The 1 and 0 being added in the map represent bams that contain (1)
   // or do not (0) contain alignments.
@@ -245,10 +249,13 @@ workflow {
   ch_merged_fastp_multiqc
     .mix(ch_post_polyA_fastp_multiqc)
     .mix(ch_io_extract_fastp_multiqc)
+    // .mix(ch_raw_rseqc_multiqc)
+    // .groupTuple(by:0, size: 4)
     .groupTuple(by:0, size: 3)
     .map({it.flatten()}).map({[it[0], it.tail()]})
     .set { ch_multiqc_in }
 
+  // ch_multiqc_in.view()
   // Run multiqc  
   multiqc(ch_multiqc_in)
   

@@ -368,6 +368,65 @@ process run_qualimap {
 }
 
 /*
+Generic process for running RSeQC read distribution - planning for this to replace qualimap
+*/
+// process run_rseqc {
+//   tag "$sample_id"
+  
+//   publishDir "${params.outdir}/rseqc/read_distribution", mode: 'copy', pattern: "**/rseqc_results.log", saveAs: {"${sample_id}.${prefix}_read_distribution.log"}
+
+//   input:
+//   tuple val (sample_id), path(bam), val(count)
+//   path(gtf)
+//   val(prefix)
+
+//   output:
+//   tuple val(sample_id), path("**/rseqc_results.log"), emit: rseqc_log
+
+//   shell:
+//   '''
+//   if [[ !{count} > 0 ]]
+//     then
+//       read_distribution.py  -i !{bam} -r !{gtf} > rseqc_results.log
+//     else
+//       BAMNAME=!{bam}
+//       GTFNAME=!{gtf}
+//       export BAMNAME GTFNAME
+//       touch rseqc_results.log
+//   fi
+//   '''
+// }
+
+process run_rseqc {
+  tag "$sample_id"
+  
+  publishDir "${params.outdir}/rseqc", mode: 'copy', pattern: "**/rseqc_results.txt", saveAs: {"${sample_id}.${prefix}_rseqc.txt"}
+
+  input:
+  tuple val (sample_id), path(bam), val(count)
+  path(gtf)
+  val(prefix)
+
+  output:
+  tuple val(sample_id), path("**/rseqc_results.txt"), emit: rseqc_log
+
+  shell:
+  '''
+  if [[ !{count} > 0 ]]
+    then
+      mkdir -p !{sample_id}_!{prefix}_rseqc
+      read_distribution.py  -i !{bam} -r !{gtf} > !{sample_id}_!{prefix}_rseqc/rseqc_results.txt
+    else      
+      mkdir -p !{sample_id}_!{prefix}_rseqc/!{sample_id}_!{prefix}_rseqc
+      BAMNAME=!{bam}
+      GTFNAME=!{gtf}
+      export BAMNAME GTFNAME
+      touch !{sample_id}_!{prefix}_rseqc/rseqc_results.txt
+  fi
+  '''
+}
+
+/*
 * Annotate the bam alignment with gene feature annotations
 * and use these to filter the reads so that only reads with
 * unambiguous annotations are carried through.
