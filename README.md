@@ -45,7 +45,8 @@
     - [`io_count`](#io_count)
     - [`multiqc`](#multiqc)
     - [`plots`](#plots)
-    - [`qualimap`](#qualimap)
+    - [`RSeQC`](#rseqc)
+      - [`read_distribution`](#read_distribution)
     - [`STAR`](#star)
   - [Log files](#log-files)
   - [Resource allocation](#resource-allocation)
@@ -99,7 +100,6 @@ and other options for configuration see [Configurable parameters](#configurable-
 While the pipeline can be launched on MacOS, some of the processes are RAM intensive.
 
 In particular, the STAR mapping process is currently configured to run in a container that is allocated 40GB or 60GB of RAM.
-The qualimap process is configured to use 16GB of RAM.
 
 The actual resources utilized will depend on the character of the samples being analysed.
 
@@ -483,7 +483,7 @@ Contains the files associated with deduplication and grouping of reads.
 
 ### `multiqc`
 
-Contains files related to the MultiQC output.
+Contains a multi-sample MultiQC report and associated data, plus a subdirectory single_sample_multiqc containing single-sample reports and associated data. The MultiQC report includes general statistics of fastq files, RSeQC, and fastp outputs.
 
 ### `plots`
 
@@ -496,9 +496,9 @@ If a red line is not present in the plot then, the default (black line) threshol
 
 If no plots are available, this indicates there was not enough counts to produce these plots.
 
-### `qualimap`
-
-Contains the qualimap output logs used for assessing mapping metrics.
+### `RSeQC`
+#### `read_distribution`
+Contains read distribution plots output by RSeQC read_distribution.py. Plots are produced showing the distribution of reads across genomic features for raw reads output from STAR, and annotated reads output from featureCounts.
 
 ### `STAR`
 

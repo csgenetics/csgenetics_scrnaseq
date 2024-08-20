@@ -2,7 +2,7 @@
 
 """
 Stats are pulled from the commandline-supplied input files:
-    summary_statistics.py $sample_id $h5ad $multiqc_data_json $antisense $dedup $raw_qualimap $filtered_qualimap $annotated_qualimap
+    summary_statistics.py $sample_id $h5ad $multiqc_data_json $antisense $dedup $raw_rseqc $annotated_rseqc
 
     A csv is written out ({sample_id}.metrics.csv) containing:
         the variable name
@@ -44,28 +44,18 @@ class SummaryStatistics:
         self.metrics_dict = defaultdict(dict)
         with open(sys.argv[3], "r") as json_handle:
             self.multiqc_json_dict = json.load(json_handle)
-        self.qc_key_to_index_dict = self.make_qc_key_to_index_dict()
+        self.multiqc_data_sources_dict = self.make_multiqc_dicts()
         
-    def make_qc_key_to_index_dict(self):
+    def make_multiqc_dicts(self):
         """
-            Need to get the order of the various report sources
-            in multiQC json structure in the report_data_sources section
-            to ensure that we are indexing the
-            correct report item in the report_general_stats_data.
-            We will hold the indices as values to the report name
-            keys.
+            MultiQC json contains nested dictionaries with different types of data. 
+            The metrics we're interested in are contained in the section report_general_stats_data
+            which is an unnamed list of dictionaries containing MultiQC general stats table data.
         """
-        self.qc_key_to_index_dict = {}
-        for i, key in enumerate(self.multiqc_json_dict["report_data_sources"].keys()):
-            if key == "featureCounts":
-                self.qc_key_to_index_dict["featureCounts"] = i
-            elif key == "STAR":
-                self.qc_key_to_index_dict["STAR"] = i
-            elif key == "fastp":
-                self.qc_key_to_index_dict["fastp"] = i
-            else:
-                raise RuntimeError(f"multiQC key: {key} unrecognised.")
-        return self.qc_key_to_index_dict
+        # Convert the list of dictionaries to a dictionary by accessing the first item
+        # In the multiqc.data.json file there will only ever be 1 item in the list, 
+        # which will be a nested dict of general stats data accessible by sample name, containing metric-name:value pairs
+        self.multiqc_general_stats_dict = self.multiqc_json_dict["report_general_stats_data"][0]
 
     def generate_metrics(self):
         self.get_sequencing_stats()
@@ -558,7 +548,7 @@ class SummaryStatistics:
         """
         self.get_trimming_qc_stats()
         # Uncomment to reenable the mapping stats
-        # self.get_mapping_stats()
+        self.get_mapping_stats()
         self.get_duplication_stats()
 
     def get_antisense(self):
@@ -594,50 +584,53 @@ class SummaryStatistics:
             self.metrics_dict["Deduplication"]["sequencing_saturation"] = ("Sequencing saturation", 0.0, "(1 - (Reads after deduplication / reads before deduplication)) * 100")
     
     def get_mapping_stats(self):
-        # Populate self.metrics_dict with the raw qualimap stats
-        self.get_qualimap_stats(sys.argv[6], "Post read QC alignment")
-        # Populate self.metrics_dict with the annotated qualimap stats
-        self.get_qualimap_stats(sys.argv[7], "Annotated reads alignment")
+        # Get rseqc stats from multiqc
+        self.get_rseqc_stats(sys.argv[6], "Post read QC alignment")
+        self.get_rseqc_stats(sys.argv[7], "Annotated reads alignment")
 
-    def get_qualimap_stats(self, path, category):
-        # Read in the qualimap output for the unfiltered mapping
-        with open(path, "r") as raw_qualimap_handle:
-            lines = [_.strip() for _ in raw_qualimap_handle]
-            # Reads aligned to genome
+    def get_rseqc_stats(self, path, category):
+        # Read in rseqc log
+        with open(path, "r") as raw_rseqc_handle:
+            lines = [_.strip() for _ in raw_rseqc_handle]
             for i, line in enumerate(lines):
-                if ">>>>>>> Reads alignment" in line:
-                    # When we find the Reads alignment section
-                    # we want the following 8 lines (allowing for a blank line)
-                    # directly after the header
-                    # We capture the following metrics
-                    #   reads aligned
-                    #   total alignments
-                    #   secondary alignments
-                    #   non-unique alignments
-                    #   aligned to genes
-                    #   ambiguous alignments
-                    #   no feature assigned
-                    #   not aligned
-                    for i in range(i+2, i+10):
-                        header = re.search("([\w\s\-]*(?=\=))", lines[i]).groups()[0].rstrip().replace(" ", "_")
-                        val = int(re.search("((?<=\=\s)[\d,]*\s*$)", lines[i]).groups()[0].rstrip().replace(",",""))
-                        self.metrics_dict[category][f"{header}"] = (header.replace("_", " ").capitalize(), val, header.replace("_", " ").capitalize())
-                
-                if ">>>>>>> Reads genomic origin" in line:
-                    # When we find the Reads genomic origin region
-                    # we want the following 4 lines allowing for 
-                    # a line directly after the header
-                    # We capture the following metrics
-                    #   exonic
-                    #   intronic
-                    #   intergenic
-                    #   overlapping exon
-                    for i in range(i+2, i+6):
-                        header = re.search("([\w\s\-]*(?=\=))", lines[i]).groups()[0].rstrip().replace(" ", "_")
-                        val_absolute = int(re.search("((?<=\s)[\d,]*\s+(?=\())", lines[i]).groups()[0].rstrip().replace(",",""))
-                        val_percent = float(re.search(r"(?<=\()([\d]+\.{0,1}[\d]*)(?=%\))", lines[i]).groups()[0].rstrip())
-                        self.metrics_dict[category][f"{header}"] = (header.replace("_", " ").capitalize(), val_absolute, header.replace("_", " ").capitalize())
-                        self.metrics_dict[category][f"{header}_perc"] = (header.replace("_", " ").capitalize() + " percentage", val_percent, header.replace("_", " ").capitalize() + " percentage")
+                if "Total Tags" in line:
+                    header = "Total Tags"
+                    val = int(re.search(r'Total Tags\s+(\d+)', line).groups()[0])
+                    self.metrics_dict[category][f"{header}"] = (header.replace("_", " ").capitalize(), val, header.replace("_", " ").capitalize())
+                if "Group" in line:
+                    # Intergenic reads aren't directly reported, so we calculate them by subtracting all other read dist values from total tags
+                    intergenic_val = self.metrics_dict[category]["Total Tags"][1]
+                    for i in range(i+1, i+11):
+                        pattern = re.compile(r'(\S+)\s+(\d+)\s+(\d+)')
+                        header = pattern.search(lines[i]).groups()[0]
+                        # TSS tags counted multiple times in TSS metrics, so just report TSS/TES_10kb and ignore others
+                        if "TSS" in header or "TES" in header: # Why isn't TES getting reported here?
+                            if "10kb" in header:
+                                val_absolute = int(pattern.search(lines[i]).groups()[2])
+                                if val_absolute != 0:
+                                    val_percent = round((val_absolute / self.metrics_dict[category]["Total Tags"][1]) * 100,2)
+                                else:
+                                    val_percent = 0
+                                self.metrics_dict[category][f"{header}"] = (header.replace("_", " ").capitalize(), val_absolute, f'RSeQC {header.replace("_", " ").capitalize()}')
+                                self.metrics_dict[category][f"{header}_perc"] = (f'{header.replace("_", " ").capitalize()} percentage', val_percent, f'RSeQC {header.replace("_", " ").capitalize()} percentage')
+                                intergenic_val -= self.metrics_dict[category][f"{header}"][1]
+                            else:
+                                pass
+                        else:
+                            val_absolute = int(pattern.search(lines[i]).groups()[2])
+                            if val_absolute != 0:
+                                val_percent = round((val_absolute / self.metrics_dict[category]["Total Tags"][1]) * 100,2)
+                            else:
+                                val_percent = 0
+                            self.metrics_dict[category][f"{header}"] = (header.replace("_", " ").capitalize(), val_absolute, f'RSeQC {header.replace("_", " ").capitalize()}')
+                            self.metrics_dict[category][f"{header}_perc"] = (f'{header.replace("_", " ").capitalize()} percentage', val_percent, f'RSeQC {header.replace("_", " ").capitalize()} percentage')
+                            intergenic_val -= self.metrics_dict[category][f"{header}"][1]
+                    if intergenic_val != 0:
+                        intergenic_val_percent = round((intergenic_val / self.metrics_dict[category]["Total Tags"][1]) * 100,2)
+                    else:
+                        intergenic_val_percent = 0
+                    self.metrics_dict[category]["Intergenic"] = ('Intergenic', intergenic_val, "Intergenic")
+                    self.metrics_dict[category]["Intergenic_perc"] = ('Intergenic percentage', intergenic_val_percent, "Intergenic percentage")
 
     @staticmethod
     def as_perc(float_to_convert):
@@ -646,18 +639,19 @@ class SummaryStatistics:
 
     def get_trimming_qc_stats(self):
         # Reads pre-QC
-        reads_pre_qc = int(self.multiqc_json_dict["report_general_stats_data"][self.qc_key_to_index_dict["fastp"]][f"{self.sample_id}.R1"]["before_filtering_total_reads"])
+        # Trimming qc stats are generated by fastp, MultiQC puts them in the report_general_stats_data of the multiQC json
+        reads_pre_qc = int(self.multiqc_general_stats_dict[f"{self.sample_id}.R1"]["before_filtering_total_reads"])
         self.metrics_dict["Read QC"]["reads_pre_qc"] = ("Number of reads pre-QC", reads_pre_qc, "Number of reads in the input R1 fastq files (after merging if applicable).")
         # Reads containing cellular barcode matching barcode_list
-        self.metrics_dict["Read QC"]["valid_barcode_reads"] = ("Number of valid barcode-containing reads", int(self.multiqc_json_dict["report_general_stats_data"][self.qc_key_to_index_dict["fastp"]][f"{self.sample_id}.io_extract.R1"]["before_filtering_total_reads"]), "Number of reads containing a barcode exactly matching the barcode_list.")
+        self.metrics_dict["Read QC"]["valid_barcode_reads"] = ("Number of valid barcode-containing reads", int(self.multiqc_general_stats_dict[f"{self.sample_id}.io_extract.R1"]["before_filtering_total_reads"]), "Number of reads containing a barcode exactly matching the barcode_list.")
         # Percentage of reads containing cellular barcode matching barcode_list as percentage of pre-QC reads
         if reads_pre_qc != 0:
             self.metrics_dict["Read QC"]["valid_barcode_reads_perc"] = ("Percentage valid barcode-containing reads", self.as_perc(float(self.metrics_dict["Read QC"]["valid_barcode_reads"][1] / self.metrics_dict["Read QC"]["reads_pre_qc"][1])), "(Number of valid barcode-containing reads / Number of reads pre-QC) * 100.")
         else:
             self.metrics_dict["Read QC"]["valid_barcode_reads_perc"] = ("Percentage valid barcode-containing reads", 0, "(Number of valid barcode-containing reads / Number of reads pre-QC) * 100.")
         # Percentage of barcode bases >= Q30
-        self.metrics_dict["Read QC"]["barcode_bases_q30_perc"] = ("Barcode bp >= Q30 percentage", self.as_perc(float(self.multiqc_json_dict["report_general_stats_data"][self.qc_key_to_index_dict["fastp"]][f"{self.sample_id}.R2"]["after_filtering_q30_rate"])), "The percentage of the barcode bases with a Phred score >= 30.")
-        reads_post_qc = int(self.multiqc_json_dict["report_general_stats_data"][self.qc_key_to_index_dict["fastp"]][f"{self.sample_id}.polyAtrimmed"]["after_filtering_total_reads"])
+        self.metrics_dict["Read QC"]["barcode_bases_q30_perc"] = ("Barcode bp >= Q30 percentage", self.as_perc(float(self.multiqc_general_stats_dict[f"{self.sample_id}.R2"]["after_filtering_q30_rate"])), "The percentage of the barcode bases with a Phred score >= 30.")
+        reads_post_qc = int(self.multiqc_general_stats_dict[f"{self.sample_id}.polyAtrimmed"]["after_filtering_total_reads"])
         # Reads after polyX tail and polyA internal trimming
         self.metrics_dict["Read QC"]["reads_post_trimming"] = ("Number of reads post-QC trimming", reads_post_qc, "Number of reads after polyX tail and polyA internal trimming.")
         # Reads after polyX tail and polyA internal trimming as percentage of valid barcode reads
@@ -667,9 +661,9 @@ class SummaryStatistics:
             self.metrics_dict["Read QC"]["reads_post_trimming_perc"] = ("Percentage reads post-QC trimming", 0, "(Number of reads after polyX tail and polyA internal trimming / Number of valid barcode-containing reads) * 100.")
 
         # Mean read length after polyX tail and polyA internal trimming
-        self.metrics_dict["Read QC"]["mean_post_trim_read_length"] = ("Mean read length post-QC trimming", float(self.multiqc_json_dict["report_general_stats_data"][self.qc_key_to_index_dict["fastp"]][f"{self.sample_id}.polyAtrimmed"]["after_filtering_read1_mean_length"]), "Mean R1 read length post-QC trimming.")
+        self.metrics_dict["Read QC"]["mean_post_trim_read_length"] = ("Mean read length post-QC trimming", float(self.multiqc_general_stats_dict[f"{self.sample_id}.polyAtrimmed"]["after_filtering_read1_mean_length"]), "Mean R1 read length post-QC trimming.")
         # Percentage of bases post trimming >= Q30
-        self.metrics_dict["Read QC"]["rna_bases_q30_perc"] = ("R1 bp >= Q30 percentage; post-QC trimming", self.as_perc(float(self.multiqc_json_dict["report_general_stats_data"][self.qc_key_to_index_dict["fastp"]][f"{self.sample_id}.polyAtrimmed"]["after_filtering_q30_rate"])), "The percentage of the R1 bases (post-QC trimming) with a Phred score >= 30.")
+        self.metrics_dict["Read QC"]["rna_bases_q30_perc"] = ("R1 bp >= Q30 percentage; post-QC trimming", self.as_perc(float(self.multiqc_general_stats_dict[f"{self.sample_id}.polyAtrimmed"]["after_filtering_q30_rate"])), "The percentage of the R1 bases (post-QC trimming) with a Phred score >= 30.")
 
 
 if __name__ == "__main__":

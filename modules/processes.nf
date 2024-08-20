@@ -336,33 +336,46 @@ process create_valid_empty_bam{
 }
 
 /*
-* Generic process for running qualimap.
+Process to convert the input GTF to a gene model bed file for rseqc read distribution
 */
-process run_qualimap {
+process gtf2bed {
+  input:
+  path(gtf)
+
+  output:
+  path("gene_model.bed"), emit: bed
+
+  shell:
+  '''
+  gtf2bed !{gtf} > gene_model.bed
+  '''
+}
+
+/*
+Generic process for running RSeQC read distribution
+*/
+
+process run_rseqc {
   tag "$sample_id"
   
-  publishDir "${params.outdir}/qualimap", mode: 'copy', pattern: "**/rnaseq_qc_results.txt", saveAs: {"${sample_id}.${prefix}_qualimap.txt"}
+  publishDir "${params.outdir}/RSeQC/read_distribution", mode: 'copy', pattern: "*_rseqc_results.txt", saveAs: {"${sample_id}.${prefix}_RSeQC.txt"}
 
   input:
   tuple val (sample_id), path(bam), val(count)
-  path(gtf)
-  path(empty_qualimap_template)
+  path(bed)
+  path(empty_rseqc_template)
   val(prefix)
 
   output:
-  tuple val(sample_id), path("**/rnaseq_qc_results.txt"), emit: qualimap_txt
+  tuple val(sample_id), path("*_rseqc_results.txt"), emit: rseqc_log
 
   shell:
   '''
   if [[ !{count} > 0 ]]
     then
-      qualimap rnaseq -outdir !{sample_id}_!{prefix}_qualimap -a proportional -bam !{bam} -p strand-specific-forward -gtf !{gtf} --java-mem-size=!{task.memory.toGiga()}G
-    else
-      BAMNAME=!{bam}
-      GTFNAME=!{gtf}
-      export BAMNAME GTFNAME
-      mkdir !{sample_id}_!{prefix}_qualimap
-      cat !{empty_qualimap_template} | envsubst > !{sample_id}_!{prefix}_qualimap/rnaseq_qc_results.txt
+      read_distribution.py  -i !{bam} -r !{bed} > !{sample_id}_!{prefix}_rseqc_results.txt
+    else      
+      cat !{empty_rseqc_template} | envsubst > !{sample_id}_!{prefix}_rseqc_results.txt
   fi
   '''
 }
@@ -496,14 +509,14 @@ process feature_counts {
 }
 
 /*
-* Run multiqc
+* Run multiqc to single-sample report and data
 */
 // TODO Pick up the multiqc_data.json directly and rename it in summary_statistics
 // NOTE I am going to see if we can pick this up without a double star glob.
-process multiqc {
-  publishDir "${params.outdir}/multiqc/${sample_id}", mode: 'copy', pattern: "*_data"
-  publishDir "${params.outdir}/multiqc/${sample_id}", mode: 'copy', pattern: "*_multiqc.html"
-  publishDir "${params.outdir}/multiqc/${sample_id}", mode: 'copy', pattern: "**/multiqc_data.json", saveAs: {"${sample_id}.multiqc.data.json"}
+process single_sample_multiqc {
+  publishDir "${params.outdir}/multiqc/single_sample_multiqc/${sample_id}", mode: 'copy', pattern: "*_data"
+  publishDir "${params.outdir}/multiqc/single_sample_multiqc/${sample_id}", mode: 'copy', pattern: "*_multiqc.html"
+  publishDir "${params.outdir}/multiqc/single_sample_multiqc/${sample_id}", mode: 'copy', pattern: "**/multiqc_data.json", saveAs: {"${sample_id}.multiqc.data.json"}
 
   input:
   tuple val(sample_id), path(multiqc_in_files)
@@ -519,10 +532,35 @@ process multiqc {
     -f \
     --title "${sample_id} multiqc" \
     --filename "${sample_id}_multiqc.html" \
-    -m fastqc \
     -m fastp \
-    -m star \
-    -m featureCounts
+    -m rseqc
+  """
+}
+
+/*
+* Run multiqc to generate multisample report and data
+*/
+process multi_sample_multiqc {
+  publishDir "${params.outdir}/multiqc/", mode: 'copy', pattern: "multisample_multiqc_data"
+  publishDir "${params.outdir}/multiqc/", mode: 'copy', pattern: "multisample_multiqc.html"
+  publishDir "${params.outdir}/multiqc/", mode: 'copy', pattern: "multisample_multiqc_data/multiqc_data.json", saveAs: {"multisample.multiqc.data.json"}
+
+  input:
+  path(multiqc_in_files)
+
+  output:
+  path "multisample_multiqc.html"
+  path "multisample_multiqc_data"
+  path("multisample_multiqc_data/multiqc_data.json")
+
+  script:
+  """
+  multiqc . \
+    -f \
+    --title "multisample multiqc" \
+    --filename "multisample_multiqc.html" \
+    -m fastp \
+    -m rseqc
   """
 }
 
@@ -708,14 +746,14 @@ process summary_statistics {
   publishDir "${params.outdir}/report/${sample_id}", mode: 'copy', pattern: "*.csv"
   
   input:
-  tuple val(sample_id), val(minimum_count_threshold), path(raw_h5ad), path("${sample_id}.annotated_qualimap.txt"), path(antisense), path(dedup), path("${sample_id}.multiqc.data.json"), path("${sample_id}.raw_qualimap.txt")
+  tuple val(sample_id), val(minimum_count_threshold), path(raw_h5ad), path(antisense), path(dedup), path("${sample_id}.multiqc.data.json"), path("${sample_id}_raw_rseqc_results.txt"), path("${sample_id}_annotated_rseqc_results.txt")
   output:
   tuple val(sample_id), path("${sample_id}.metrics.csv"), emit: metrics_csv
 
   script:
   def mixed_args = params.mixed_species ? "TRUE" : "FALSE"
   """
-  summary_statistics.py ${sample_id} ${raw_h5ad} ${sample_id}.multiqc.data.json ${antisense} ${dedup} ${sample_id}.raw_qualimap.txt ${sample_id}.annotated_qualimap.txt $mixed_args
+  summary_statistics.py ${sample_id} ${raw_h5ad} ${sample_id}.multiqc.data.json ${antisense} ${dedup} ${sample_id}_raw_rseqc_results.txt ${sample_id}_annotated_rseqc_results.txt $mixed_args
   """
 }
 
