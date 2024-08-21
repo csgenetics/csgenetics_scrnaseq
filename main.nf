@@ -229,6 +229,7 @@ workflow {
   raw_qualimap(star_out_ch.good_bam.map({[it[0], it[1], 1]}).mix(create_valid_empty_bam_star.out.out_bam.map({[it[0], it[1], 0]})), gtf, empty_qualimap_template, "raw")
 
   // RSeQC read distribution on STAR output
+  // Set gene_model based on genome (note -genome option isn't required...)
   raw_rseqc(star_out_ch.good_bam.map({[it[0], it[1], 1]}).mix(create_valid_empty_bam_star.out.out_bam.map({[it[0], it[1], 0]})), params.gene_model, "raw")
   ch_raw_rseqc_multiqc = raw_rseqc.out.rseqc_log
   // Perform featurecount quantification
