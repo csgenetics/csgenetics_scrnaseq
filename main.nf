@@ -243,6 +243,8 @@ workflow {
   feature_counts(star_out_ch.good_bam.map({[it[0], it[1], 1]}).mix(create_valid_empty_bam_star.out.out_bam.map({[it[0], it[1], 0]})), gtf, "${baseDir}/bin/assign_multi_mappers.gawk")
 
   // Produce qualimap output of the annotated bam for metrics
+  annotated_rseqc(feature_counts.out.out_bam, gtf2bed.out.bed, "annotated")
+  ch_annotated_rseqc_multiqc = annotated_rseqc.out.rseqc_log
   annotated_qualimap(feature_counts.out.out_bam, gtf, empty_qualimap_template, "annotated")
 
   // Generate input channel containing all the files needed for multiqc per samples. 
@@ -254,7 +256,8 @@ workflow {
     .mix(ch_post_polyA_fastp_multiqc)
     .mix(ch_io_extract_fastp_multiqc)
     .mix(ch_raw_rseqc_multiqc)
-    .groupTuple(by:0, size: 4)
+    .mix(ch_annotated_rseqc_multiqc)
+    .groupTuple(by:0, size: 5)
     .map({it.flatten()}).map({[it[0], it.tail()]})
     .set { ch_multiqc_in }
 

@@ -391,7 +391,7 @@ Generic process for running RSeQC read distribution - planning for this to repla
 process run_rseqc {
   tag "$sample_id"
   
-  publishDir "${params.outdir}/rseqc/read_distribution", mode: 'copy', pattern: "**/rseqc_results.txt", saveAs: {"${sample_id}.${prefix}_rseqc.txt"}
+  publishDir "${params.outdir}/rseqc/read_distribution", mode: 'copy', pattern: "*_rseqc_results.txt", saveAs: {"${sample_id}.${prefix}_rseqc.txt"}
 
   input:
   tuple val (sample_id), path(bam), val(count)
@@ -399,20 +399,18 @@ process run_rseqc {
   val(prefix)
 
   output:
-  tuple val(sample_id), path("**/rseqc_results.txt"), emit: rseqc_log
+  tuple val(sample_id), path("*_rseqc_results.txt"), emit: rseqc_log
 
   shell:
   '''
   if [[ !{count} > 0 ]]
     then
-      mkdir -p !{sample_id}_!{prefix}_rseqc
-      read_distribution.py  -i !{bam} -r !{bed} > !{sample_id}_!{prefix}_rseqc/rseqc_results.txt
+      read_distribution.py  -i !{bam} -r !{bed} > !{sample_id}_!{prefix}_rseqc_results.txt
     else      
-      mkdir -p !{sample_id}_!{prefix}_rseqc/!{sample_id}_!{prefix}_rseqc
       BAMNAME=!{bam}
       BEDNAME=!{bed}
       export BAMNAME BEDNAME
-      touch !{sample_id}_!{prefix}_rseqc/rseqc_results.txt
+      touch !{sample_id}_!{prefix}_rseqc_results.txt
   fi
   '''
 }
