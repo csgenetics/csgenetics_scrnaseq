@@ -368,34 +368,25 @@ process run_qualimap {
 }
 
 /*
+Process to convert the input GTF to a gene model bed file for rseqc read distribution
+*/
+process gtf2bed {
+  input:
+  path(gtf)
+  path(gtf2bed_script)
+
+  output:
+  path("*.bed"), emit: bed
+
+  shell:
+  '''
+  gtf2bed !{gtf} > gene_model.bed
+  '''
+}
+
+/*
 Generic process for running RSeQC read distribution - planning for this to replace qualimap
 */
-// process run_rseqc {
-//   tag "$sample_id"
-  
-//   publishDir "${params.outdir}/rseqc/read_distribution", mode: 'copy', pattern: "**/rseqc_results.log", saveAs: {"${sample_id}.${prefix}_read_distribution.log"}
-
-//   input:
-//   tuple val (sample_id), path(bam), val(count)
-//   path(gtf)
-//   val(prefix)
-
-//   output:
-//   tuple val(sample_id), path("**/rseqc_results.log"), emit: rseqc_log
-
-//   shell:
-//   '''
-//   if [[ !{count} > 0 ]]
-//     then
-//       read_distribution.py  -i !{bam} -r !{gtf} > rseqc_results.log
-//     else
-//       BAMNAME=!{bam}
-//       GTFNAME=!{gtf}
-//       export BAMNAME GTFNAME
-//       touch rseqc_results.log
-//   fi
-//   '''
-// }
 
 process run_rseqc {
   tag "$sample_id"
@@ -404,7 +395,7 @@ process run_rseqc {
 
   input:
   tuple val (sample_id), path(bam), val(count)
-  path(gtf)
+  path(bed)
   val(prefix)
 
   output:
@@ -415,12 +406,12 @@ process run_rseqc {
   if [[ !{count} > 0 ]]
     then
       mkdir -p !{sample_id}_!{prefix}_rseqc
-      read_distribution.py  -i !{bam} -r !{gtf} > !{sample_id}_!{prefix}_rseqc/rseqc_results.txt
+      read_distribution.py  -i !{bam} -r !{bed} > !{sample_id}_!{prefix}_rseqc/rseqc_results.txt
     else      
       mkdir -p !{sample_id}_!{prefix}_rseqc/!{sample_id}_!{prefix}_rseqc
       BAMNAME=!{bam}
-      GTFNAME=!{gtf}
-      export BAMNAME GTFNAME
+      BEDNAME=!{bed}
+      export BAMNAME BEDNAME
       touch !{sample_id}_!{prefix}_rseqc/rseqc_results.txt
   fi
   '''

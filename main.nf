@@ -12,7 +12,7 @@ include {
   trim_extra_polya; post_polyA_fastp; star;
   create_valid_empty_bam as create_valid_empty_bam_star;
   run_qualimap as raw_qualimap; run_qualimap as annotated_qualimap;
-  run_rseqc as raw_rseqc; run_rseqc as annotated_rseqc;
+  gtf2bed; run_rseqc as raw_rseqc; run_rseqc as annotated_rseqc;
   feature_counts; multiqc;
   sort_index_bam; dedup; io_count; count_matrix;
   filter_count_matrix; cell_caller; summary_statistics; single_summary_report;
@@ -228,9 +228,12 @@ workflow {
   // qualimap or populate an empty qualimap template
   raw_qualimap(star_out_ch.good_bam.map({[it[0], it[1], 1]}).mix(create_valid_empty_bam_star.out.out_bam.map({[it[0], it[1], 0]})), gtf, empty_qualimap_template, "raw")
 
+  // Process to convert input GTF to gene model bed for rseqc
+  gtf2bed_script = file("${baseDir}/bin/gtf2bed")
+  gtf2bed(gtf, gtf2bed_script)
   // RSeQC read distribution on STAR output
   // Set gene_model based on genome (note -genome option isn't required...)
-  raw_rseqc(star_out_ch.good_bam.map({[it[0], it[1], 1]}).mix(create_valid_empty_bam_star.out.out_bam.map({[it[0], it[1], 0]})), params.gene_model, "raw")
+  raw_rseqc(star_out_ch.good_bam.map({[it[0], it[1], 1]}).mix(create_valid_empty_bam_star.out.out_bam.map({[it[0], it[1], 0]})), gtf2bed.out.bed, "raw")
   ch_raw_rseqc_multiqc = raw_rseqc.out.rseqc_log
   // Perform featurecount quantification
   // The 1 and 0 being added in the map represent bams that contain (1)
