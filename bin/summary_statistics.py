@@ -23,7 +23,7 @@ import pandas as pd
 class SummaryStatistics:
     def __init__(self):
         self.sample_id = sys.argv[1]
-        if sys.argv[8] == "TRUE":
+        if sys.argv[10] == "TRUE":
             self.mixed = True
         else:
             self.mixed = False
@@ -560,7 +560,7 @@ class SummaryStatistics:
         """
         self.get_trimming_qc_stats()
         # Uncomment to reenable the mapping stats
-        # self.get_mapping_stats()
+        self.get_mapping_stats()
         self.get_duplication_stats()
 
     def get_antisense(self):
@@ -596,10 +596,50 @@ class SummaryStatistics:
             self.metrics_dict["Deduplication"]["sequencing_saturation"] = ("Sequencing saturation", 0.0, "(1 - (Reads after deduplication / reads before deduplication)) * 100")
     
     def get_mapping_stats(self):
-        # Populate self.metrics_dict with the raw qualimap stats
-        self.get_qualimap_stats(sys.argv[6], "Post read QC alignment")
-        # Populate self.metrics_dict with the annotated qualimap stats
-        self.get_qualimap_stats(sys.argv[7], "Annotated reads alignment")
+        # We're not using qualimap to report read distribution anymore, it doesn't handle multimappers correctly
+        #  #Populate self.metrics_dict with the raw qualimap stats
+        # self.get_qualimap_stats(sys.argv[6], "Post read QC alignment")
+        # #Populate self.metrics_dict with the annotated qualimap stats
+        # self.get_qualimap_stats(sys.argv[7], "Annotated reads alignment")
+        # Get rseqc stats from multiqc
+        self.get_rseqc_stats(sys.argv[8], "Post read QC alignment")
+        self.get_rseqc_stats(sys.argv[9], "Annotated reads alignment")
+
+    def get_rseqc_stats(self, path, category):
+        # Read in rseqc log
+        with open(path, "r") as raw_rseqc_handle:
+            lines = [_.strip() for _ in raw_rseqc_handle]
+            for i, line in enumerate(lines):
+                if "Total Tags" in line:
+                    header = "Total Tags"
+                    val = int(re.search(r'Total Tags\s+(\d+)', line).groups()[0])
+                    self.metrics_dict[category][f"{header}"] = (header.replace("_", " ").capitalize(), val, header.replace("_", " ").capitalize())
+                if "Group" in line:
+                    # Intergenic reads aren't directly reported, so we calculate them by subtracting all other read dist values from total tags
+                    intergenic_val = self.metrics_dict[category]["Total Tags"][1]
+                    for i in range(i+1, i+11):
+                        pattern = re.compile(r'(\S+)\s+(\d+)\s+(\d+)')
+                        header = pattern.search(lines[i]).groups()[0]
+                        # TSS tags counted multiple times in TSS metrics, so just report TSS/TES_10kb and ignore others
+                        if "TSS" in header or "TES" in header: # Why isn't TES getting reported here?
+                            if "10kb" in header:
+                                val_absolute = int(pattern.search(lines[i]).groups()[2])
+                                val_percent = round((val_absolute / self.metrics_dict[category]["Total Tags"][1]) * 100,2)
+                                self.metrics_dict[category][f"{header}"] = (header.replace("_", " ").capitalize(), val_absolute, header.replace("_", " ").capitalize())
+                                self.metrics_dict[category][f"{header}_perc"] = (header.replace("_", " ").capitalize() + " percentage", val_percent, header.replace("_", " ").capitalize() + " percentage")
+                                intergenic_val -= self.metrics_dict[category][f"{header}"][1]
+                            else:
+                                pass
+                        else:
+                            val_absolute = int(pattern.search(lines[i]).groups()[2])
+                            val_percent = round((val_absolute / self.metrics_dict[category]["Total Tags"][1]) * 100,2)
+                            self.metrics_dict[category][f"{header}"] = (header.replace("_", " ").capitalize(), val_absolute, header.replace("_", " ").capitalize())
+                            self.metrics_dict[category][f"{header}_perc"] = (header.replace("_", " ").capitalize() + " percentage", val_percent, header.replace("_", " ").capitalize() + " percentage")
+                            intergenic_val -= self.metrics_dict[category][f"{header}"][1]
+                    intergenic_val_percent = round((intergenic_val / self.metrics_dict[category]["Total Tags"][1]) * 100,2)
+                    self.metrics_dict[category]["Intergenic"] = ('Intergenic', intergenic_val, "Intergenic")
+                    self.metrics_dict[category]["Intergenic_perc"] = ('Intergenic percentage', intergenic_val_percent, "Intergenic percentage")
+
 
     def get_qualimap_stats(self, path, category):
         # Read in the qualimap output for the unfiltered mapping

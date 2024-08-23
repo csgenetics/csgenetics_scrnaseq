@@ -757,14 +757,14 @@ process summary_statistics {
   publishDir "${params.outdir}/report/${sample_id}", mode: 'copy', pattern: "*.csv"
   
   input:
-  tuple val(sample_id), val(minimum_count_threshold), path(raw_h5ad), path("${sample_id}.annotated_qualimap.txt"), path(antisense), path(dedup), path("${sample_id}.multiqc.data.json"), path("${sample_id}.raw_qualimap.txt")
+  tuple val(sample_id), val(minimum_count_threshold), path(raw_h5ad), path("${sample_id}.annotated_qualimap.txt"), path(antisense), path(dedup), path("${sample_id}.multiqc.data.json"), path("${sample_id}.raw_qualimap.txt"), path("${sample_id}_raw_rseqc_results.txt"), path("${sample_id}_annotated_rseqc_results.txt")
   output:
   tuple val(sample_id), path("${sample_id}.metrics.csv"), emit: metrics_csv
 
   script:
   def mixed_args = params.mixed_species ? "TRUE" : "FALSE"
   """
-  summary_statistics.py ${sample_id} ${raw_h5ad} ${sample_id}.multiqc.data.json ${antisense} ${dedup} ${sample_id}.raw_qualimap.txt ${sample_id}.annotated_qualimap.txt $mixed_args
+  summary_statistics.py ${sample_id} ${raw_h5ad} ${sample_id}.multiqc.data.json ${antisense} ${dedup} ${sample_id}.raw_qualimap.txt ${sample_id}.annotated_qualimap.txt ${sample_id}_raw_rseqc_results.txt ${sample_id}_annotated_rseqc_results.txt $mixed_args
   """
 }
 

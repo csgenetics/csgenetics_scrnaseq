@@ -304,6 +304,8 @@ workflow {
   .join(dedup.out.io_dedup_log)
   .join(multiqc.out.multiqc_json)
   .join(raw_qualimap.out.qualimap_txt)
+  .join(raw_rseqc.out.rseqc_log)
+  .join(annotated_rseqc.out.rseqc_log)
   .set({ch_summary_statistics_in})
 
   // Generate summary statistics
