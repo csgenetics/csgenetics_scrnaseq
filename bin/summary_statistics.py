@@ -2,7 +2,7 @@
 
 """
 Stats are pulled from the commandline-supplied input files:
-    summary_statistics.py $sample_id $h5ad $multiqc_data_json $antisense $dedup $raw_qualimap $filtered_qualimap $annotated_qualimap
+    summary_statistics.py $sample_id $h5ad $multiqc_data_json $antisense $dedup $raw_rseqc $annotated_rseqc
 
     A csv is written out ({sample_id}.metrics.csv) containing:
         the variable name
@@ -23,7 +23,7 @@ import pandas as pd
 class SummaryStatistics:
     def __init__(self):
         self.sample_id = sys.argv[1]
-        if sys.argv[10] == "TRUE":
+        if sys.argv[8] == "TRUE":
             self.mixed = True
         else:
             self.mixed = False
@@ -596,14 +596,9 @@ class SummaryStatistics:
             self.metrics_dict["Deduplication"]["sequencing_saturation"] = ("Sequencing saturation", 0.0, "(1 - (Reads after deduplication / reads before deduplication)) * 100")
     
     def get_mapping_stats(self):
-        # We're not using qualimap to report read distribution anymore, it doesn't handle multimappers correctly
-        #  #Populate self.metrics_dict with the raw qualimap stats
-        # self.get_qualimap_stats(sys.argv[6], "Post read QC alignment")
-        # #Populate self.metrics_dict with the annotated qualimap stats
-        # self.get_qualimap_stats(sys.argv[7], "Annotated reads alignment")
         # Get rseqc stats from multiqc
-        self.get_rseqc_stats(sys.argv[8], "Post read QC alignment")
-        self.get_rseqc_stats(sys.argv[9], "Annotated reads alignment")
+        self.get_rseqc_stats(sys.argv[6], "Post read QC alignment")
+        self.get_rseqc_stats(sys.argv[7], "Annotated reads alignment")
 
     def get_rseqc_stats(self, path, category):
         # Read in rseqc log
@@ -639,47 +634,6 @@ class SummaryStatistics:
                     intergenic_val_percent = round((intergenic_val / self.metrics_dict[category]["Total Tags"][1]) * 100,2)
                     self.metrics_dict[category]["Intergenic"] = ('Intergenic', intergenic_val, "Intergenic")
                     self.metrics_dict[category]["Intergenic_perc"] = ('Intergenic percentage', intergenic_val_percent, "Intergenic percentage")
-
-
-    def get_qualimap_stats(self, path, category):
-        # Read in the qualimap output for the unfiltered mapping
-        with open(path, "r") as raw_qualimap_handle:
-            lines = [_.strip() for _ in raw_qualimap_handle]
-            # Reads aligned to genome
-            for i, line in enumerate(lines):
-                if ">>>>>>> Reads alignment" in line:
-                    # When we find the Reads alignment section
-                    # we want the following 8 lines (allowing for a blank line)
-                    # directly after the header
-                    # We capture the following metrics
-                    #   reads aligned
-                    #   total alignments
-                    #   secondary alignments
-                    #   non-unique alignments
-                    #   aligned to genes
-                    #   ambiguous alignments
-                    #   no feature assigned
-                    #   not aligned
-                    for i in range(i+2, i+10):
-                        header = re.search("([\w\s\-]*(?=\=))", lines[i]).groups()[0].rstrip().replace(" ", "_")
-                        val = int(re.search("((?<=\=\s)[\d,]*\s*$)", lines[i]).groups()[0].rstrip().replace(",",""))
-                        self.metrics_dict[category][f"{header}"] = (header.replace("_", " ").capitalize(), val, header.replace("_", " ").capitalize())
-                
-                if ">>>>>>> Reads genomic origin" in line:
-                    # When we find the Reads genomic origin region
-                    # we want the following 4 lines allowing for 
-                    # a line directly after the header
-                    # We capture the following metrics
-                    #   exonic
-                    #   intronic
-                    #   intergenic
-                    #   overlapping exon
-                    for i in range(i+2, i+6):
-                        header = re.search("([\w\s\-]*(?=\=))", lines[i]).groups()[0].rstrip().replace(" ", "_")
-                        val_absolute = int(re.search("((?<=\s)[\d,]*\s+(?=\())", lines[i]).groups()[0].rstrip().replace(",",""))
-                        val_percent = float(re.search(r"(?<=\()([\d]+\.{0,1}[\d]*)(?=%\))", lines[i]).groups()[0].rstrip())
-                        self.metrics_dict[category][f"{header}"] = (header.replace("_", " ").capitalize(), val_absolute, header.replace("_", " ").capitalize())
-                        self.metrics_dict[category][f"{header}_perc"] = (header.replace("_", " ").capitalize() + " percentage", val_percent, header.replace("_", " ").capitalize() + " percentage")
 
     @staticmethod
     def as_perc(float_to_convert):

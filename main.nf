@@ -11,7 +11,6 @@ include {
   features_file; merge_lanes; merged_fastp; io_extract; io_extract_fastp;
   trim_extra_polya; post_polyA_fastp; star;
   create_valid_empty_bam as create_valid_empty_bam_star;
-  run_qualimap as raw_qualimap; run_qualimap as annotated_qualimap;
   gtf2bed; run_rseqc as raw_rseqc; run_rseqc as annotated_rseqc;
   feature_counts; multiqc;
   sort_index_bam; dedup; io_count; count_matrix;
@@ -118,8 +117,6 @@ workflow {
   // Create path objects to HTML report templates
   single_sample_report_template = file("${baseDir}/templates/single_sample_report_template.html.jinja2")
   multi_sample_report_template = file("${baseDir}/templates/multi_sample_report_template.html.jinja2")
-  // Create empty qualimap output template path object
-  empty_qualimap_template = file("${baseDir}/templates/empty_qualmap.txt")
 
   // Create feature file for count_matrix from GTF
   features_file(gtf)
@@ -222,12 +219,6 @@ workflow {
   // after mapping i.e. after star.
   create_valid_empty_bam_star(polyA_out_ch.empty_fastq.map({[it[0], "_Aligned.sortedByCoord.out"]}).mix(star_out_ch.bad_bam.map({[it[0], "_Aligned.sortedByCoord.out"]})))
 
-  // Qualimap on STAR output
-  // Annotate the channel objects with dummy counts of either 1 or 0
-  // depending on whether the bams are empty are not to either run
-  // qualimap or populate an empty qualimap template
-  raw_qualimap(star_out_ch.good_bam.map({[it[0], it[1], 1]}).mix(create_valid_empty_bam_star.out.out_bam.map({[it[0], it[1], 0]})), gtf, empty_qualimap_template, "raw")
-
   // Process to convert input GTF to gene model bed for rseqc
   gtf2bed_script = file("${baseDir}/bin/gtf2bed")
   gtf2bed(gtf, gtf2bed_script)
@@ -242,14 +233,13 @@ workflow {
   // else the empty bam is simply copied for collection from the process.
   feature_counts(star_out_ch.good_bam.map({[it[0], it[1], 1]}).mix(create_valid_empty_bam_star.out.out_bam.map({[it[0], it[1], 0]})), gtf, "${baseDir}/bin/assign_multi_mappers.gawk")
 
-  // Produce qualimap output of the annotated bam for metrics
+  // Produce RSeQC output of the annotated bam for metrics
   annotated_rseqc(feature_counts.out.out_bam, gtf2bed.out.bed, "annotated")
   ch_annotated_rseqc_multiqc = annotated_rseqc.out.rseqc_log
-  annotated_qualimap(feature_counts.out.out_bam, gtf, empty_qualimap_template, "annotated")
+
 
   // Generate input channel containing all the files needed for multiqc per samples. 
   // The final channel structure is [sample, [file1, file2, file3, ...]]
-  // NB fastqc currently does not integrate multip qualimap
   // outputs successfuly so they are manually carried through
   // to the summary_statistics
   ch_merged_fastp_multiqc
@@ -295,15 +285,13 @@ workflow {
   filter_count_matrix(ch_filter_count_matrix_in)
 
   // structure of ch_summary_statistics_in is
-  // [sample, min_nuc_gene_cutoff, raw_h5ad, annotated_qualimap,
-  // antisense, dedup.log, multiqc_data, raw_qualimap]
+  // [sample, min_nuc_gene_cutoff, raw_h5ad,
+  // antisense, dedup.log, multiqc_data, raw_seqc, annotated_rseqc]
   ch_cell_caller_out
   .join(filter_count_matrix.out.raw_count_matrix)
-  .join(annotated_qualimap.out.qualimap_txt)
   .join(sort_index_bam.out.antisense_out)
   .join(dedup.out.io_dedup_log)
   .join(multiqc.out.multiqc_json)
-  .join(raw_qualimap.out.qualimap_txt)
   .join(raw_rseqc.out.rseqc_log)
   .join(annotated_rseqc.out.rseqc_log)
   .set({ch_summary_statistics_in})
