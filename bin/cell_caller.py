@@ -104,8 +104,10 @@ class CellCaller:
          else:
             self.hsap_pdf_df = self.get_prob_dens_data(self.log10_hsap_counts_hsap_majority)
             self.mmus_pdf_df = self.get_prob_dens_data(self.log10_mmus_counts_mmus_majority)
-            self.hsap_log_cutoff = self.get_cutoff(self.hsap_pdf_df)
-            self.mmus_log_cutoff = self.get_cutoff(self.mmus_pdf_df)
+            #self.hsap_log_cutoff = self.get_cutoff(self.hsap_pdf_df)
+            #self.mmus_log_cutoff = self.get_cutoff(self.mmus_pdf_df)
+            self.hsap_log_cutoff = 3.351725014652899
+            self.mmus_log_cutoff = 3.2493156433793557
             self.make_pd_plots()
 
          hsap_thres = round(10 ** self.hsap_log_cutoff)
