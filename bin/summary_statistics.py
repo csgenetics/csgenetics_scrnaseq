@@ -625,16 +625,16 @@ class SummaryStatistics:
                             if "10kb" in header:
                                 val_absolute = int(pattern.search(lines[i]).groups()[2])
                                 val_percent = round((val_absolute / self.metrics_dict[category]["Total Tags"][1]) * 100,2)
-                                self.metrics_dict[category][f"{header}"] = (header.replace("_", " ").capitalize(), val_absolute, header.replace("_", " ").capitalize())
-                                self.metrics_dict[category][f"{header}_perc"] = (header.replace("_", " ").capitalize() + " percentage", val_percent, header.replace("_", " ").capitalize() + " percentage")
+                                self.metrics_dict[category][f"{header}"] = (header.replace("_", " ").capitalize(), val_absolute, f'RSeQC {header.replace("_", " ").capitalize()}')
+                                self.metrics_dict[category][f"{header}_perc"] = (f'{header.replace("_", " ").capitalize()} percentage', val_percent, f'RSeQC {header.replace("_", " ").capitalize()} percentage')
                                 intergenic_val -= self.metrics_dict[category][f"{header}"][1]
                             else:
                                 pass
                         else:
                             val_absolute = int(pattern.search(lines[i]).groups()[2])
                             val_percent = round((val_absolute / self.metrics_dict[category]["Total Tags"][1]) * 100,2)
-                            self.metrics_dict[category][f"{header}"] = (header.replace("_", " ").capitalize(), val_absolute, header.replace("_", " ").capitalize())
-                            self.metrics_dict[category][f"{header}_perc"] = (header.replace("_", " ").capitalize() + " percentage", val_percent, header.replace("_", " ").capitalize() + " percentage")
+                            self.metrics_dict[category][f"{header}"] = (header.replace("_", " ").capitalize(), val_absolute, f'RSeQC {header.replace("_", " ").capitalize()}')
+                            self.metrics_dict[category][f"{header}_perc"] = (f'{header.replace("_", " ").capitalize()} percentage', val_percent, f'RSeQC {header.replace("_", " ").capitalize()} percentage')
                             intergenic_val -= self.metrics_dict[category][f"{header}"][1]
                     intergenic_val_percent = round((intergenic_val / self.metrics_dict[category]["Total Tags"][1]) * 100,2)
                     self.metrics_dict[category]["Intergenic"] = ('Intergenic', intergenic_val, "Intergenic")
