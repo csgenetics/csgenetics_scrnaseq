@@ -161,7 +161,7 @@ process io_extract {
   input:
   tuple val(sample_id), path(r1), path(r2)
   path(barcode_list)
-  path(io_extract_script)
+  path(create_whitelist_script)
 
   output:
   tuple val(sample_id), path("${sample_id}.io_extract.R1.fastq.gz"), emit: io_extract_out
@@ -171,7 +171,7 @@ process io_extract {
   # Format barcode file
   cut -d ',' -f 2 ${barcode_list} > barcode_list.tsv
   # Manually create umi-tools compatible whitelist with all barcodes + alts with 1 edit distance
-  awk -f ${io_extract_script} barcode_list.tsv > modified_barcode_list.tsv
+  awk -f ${create_whitelist_script} barcode_list.tsv > modified_barcode_list.tsv
 
   # UMI-tools expects the io to be the stdin, so we set this to r2, and read2-in to r1
   umi_tools extract --stdin=${r2} --read2-in=${r1} --whitelist=modified_barcode_list.tsv -L ${sample_id}_io_extract.log --bc-pattern="CCCCCCCCCCCCC" --error-correct-cell --read2-out="${sample_id}_R1.io_extract.fastq.gz"
@@ -191,18 +191,6 @@ process io_extract {
     touch ${sample_id}_R1.io_extract.fastq && gzip ${sample_id}_R1.io_extract.fastq
   fi
   """
-
-  // """
-  // cat $barcode_list | cut -d ',' -f2 > barcode_list.txt
-  // gawk -v r2=${r2} -v bc_length=13 -f $io_extract_script barcode_list.txt <(zcat ${r1})
-  // # Check if the output file exists and rename it to the sample_id
-  // # If it doesn't exist, create an empty file
-  // if [ -f "io_extract.good.R1.fastq.gz" ]; then
-  //   mv io_extract.good.R1.fastq.gz ${sample_id}_R1.io_extract.fastq.gz
-  // else
-  //   touch ${sample_id}_R1.io_extract.fastq && gzip ${sample_id}_R1.io_extract.fastq
-  // fi
-  // """
 }
 
 /*
