@@ -48,13 +48,16 @@ class SummaryStatistics:
         
     def make_multiqc_dicts(self):
         """
-            MultiQC json contains nested dictionaries with different types of data. 
-            The metrics we're interested in are contained in the section report_general_stats_data
-            which is an unnamed list of dictionaries containing MultiQC general stats table data.
+            MultiQC json contains nested dictionaries with different types of data,
+            e.g. 'report_data_sources', 'report_general_stats_data', ...
+            The metrics we're interested in are contained in the data type 'report_general_stats_data'.
+            self.multiqc_json_dict["report_general_stats_data"] is list of len 1 where item 0 is a nested
+            dictionary where the keys are the metrics that we're interested e.g.:
+            'Sample1.R1', 'Sample1.R2', 'Sample1.polyAtrimmed', and 'Sample1.io_extract.R1'.
+            To be able to access these metrics with ease, we create the self.multiqc_general_stats_dict
+            as the self.multiqc_json_dict["report_general_stats_data"][0]. To access the desired stats
+            dict, we can then use something like int(self.multiqc_general_stats_dict[f"{self.sample_id}.R1"]["before_filtering_total_reads"]).
         """
-        # Convert the list of dictionaries to a dictionary by accessing the first item
-        # In the multiqc.data.json file there will only ever be 1 item in the list, 
-        # which will be a nested dict of general stats data accessible by sample name, containing metric-name:value pairs
         self.multiqc_general_stats_dict = self.multiqc_json_dict["report_general_stats_data"][0]
 
     def generate_metrics(self):
