@@ -44,7 +44,7 @@ process download_input_csv {
   """
 }
 
-/* Download the csgx hosted templates and barcode list
+/* Download the csgx hosted barcode csv
 * from the s3://csgx.public.readonly bucket.
 */
 process download_barcode_list {
@@ -152,29 +152,63 @@ process merged_fastp{
 }
 
 /*
+* This process takes the input barcode list and creates a barcode list of allowed barcodes
+* within 1 hamming distance i.e. 1bp change of the input barcode list
+*/
+process barcode_correction_list {
+  input:
+  path(barcode_list)
+  path(make_corrected_barcode_list_script)
+
+  output:
+  path("modified_barcode_list.tsv"), emit: corrected_barcode_list 
+
+  script:
+    """
+  # Create umi-tools compatible barcode_list with all barcodes + alts with 1 hamming distance
+  awk -f ${make_corrected_barcode_list_script} ${barcode_list} > modified_barcode_list.tsv
+  """
+}
+
+/*
 * Extract the 13bp barcode from the R2 read and append it to the header of the R1 read.
-* Remove any reads where the barcode does not exactly match a barcode in the barcode list.
+* Keep reads where the barcode exactly matches a barcode in the barcode list
+* Correct the barcode for reads where the barcode doesn't exactly match the barcode list, but does match the corrected barcode list, append the corrected barcode to the read header
+* Discard any reads that don't match the barcode list or corrected barcode list
 */
 process io_extract {
   tag "$sample_id"
 
   input:
   tuple val(sample_id), path(r1), path(r2)
-  path(barcode_list)
-  path(io_extract_script)
+  path(corrected_barcode_list)
+  val(barcode_pattern)
 
   output:
   tuple val(sample_id), path("${sample_id}.io_extract.R1.fastq.gz"), emit: io_extract_out
+  tuple val(sample_id), path("${sample_id}.io_extract.log"), emit: io_extract_log
 
   script:
   """
-  cat $barcode_list | cut -d ',' -f2 > barcode_list.txt
-  gawk -v r2=${r2} -v sample_id=${sample_id} -v bc_length=13 -f $io_extract_script barcode_list.txt <(zcat ${r1})
+  # UMI-tools expects the io to be the stdin, so we set this to r2, and read2-in to r1
+  # filtered-out and filtered-out2 will contain r2s r1s, respectively, that don't pass the filter
+  umi_tools extract --stdin=${r2} --read2-in=${r1} --whitelist=${corrected_barcode_list} -L ${sample_id}.log --bc-pattern="${barcode_pattern}" --error-correct-cell --stdout="${sample_id}.io_extract.R2.fastq.gz" --read2-out="${sample_id}.io_extract.R1.fastq.gz" --filtered-out="io_extract_${sample_id}_filteredOut_R2.fastq.gz" --filtered-out2="io_extract_${sample_id}_filteredOut_R1.fastq.gz"
+  
+  # Get number of reads passing filter from log and write to file
+  if [ -f "${sample_id}.log" ]; then
+    grep "Reads output:" ${sample_id}.log | cut -d' ' -f4- > ${sample_id}.io_extract.log
+  else
+    echo "Reads output: 0" > ${sample_id}.io_extract.log
+  fi
 
-  # If it doesn't exist, create an empty file to collect
-  if [ ! -f "${sample_id}.io_extract.R1.fastq.gz" ]; then
+  # Check if the output file exists
+  # If it doesn't exist, create an empty file
+  if [ -f "${sample_id}.io_extract.R1.fastq.gz" ]; then
+    echo "${sample_id}.io_extract.R1.fastq.gz file exists"
+  else
     touch ${sample_id}.io_extract.R1.fastq && gzip ${sample_id}.io_extract.R1.fastq
   fi
+  output_count=\$(cat ${sample_id}.io_extract.log | cut -d ' ' -f3)
   """
 }
 

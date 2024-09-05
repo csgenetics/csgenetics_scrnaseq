@@ -8,7 +8,7 @@
 nextflow.enable.dsl=2
 include {
   download_star_index; download_gtf; download_input_csv; download_barcode_list; download_public_fastq;
-  features_file; merge_lanes; merged_fastp; io_extract; io_extract_fastp;
+  features_file; merge_lanes; merged_fastp; barcode_correction_list; io_extract; io_extract_fastp;
   trim_extra_polya; post_polyA_fastp; star;
   create_valid_empty_bam as create_valid_empty_bam_star;
   gtf2bed; run_rseqc as raw_rseqc; run_rseqc as annotated_rseqc;
@@ -162,16 +162,22 @@ workflow {
   // Merge the merged and non-merged fastqs
   io_extract_in_ch = ch_merge_lanes_out_merged.mix(ch_input_split_single_lane_flattened)
 
-  // Set the barcode_pattern
   // TODO run separate taks of merged_fastp for each of the R1 and R2 files
   // to increase parallelization.
-  barcode_pattern="CCCCCCCCCCCCC"
-  merged_fastp(io_extract_in_ch, barcode_pattern)
+  merged_fastp(io_extract_in_ch, params.barcode_pattern)
   ch_merged_fastp_multiqc = merged_fastp.out.merged_fastp_multiqc
 
-  // Get the barcode_list and extract the IOs from the fastqs using umitools
-  io_extract_script = "${baseDir}/bin/io_extract.awk"
-  io_extract(io_extract_in_ch, barcode_list, io_extract_script)
+  // Create a 1 hamming-distance barcode correction list from the input barcode list file
+  // We choose to pass in the .awk scripts as files
+  // rather than call them directly in the process
+  // using the relative baseDir path so that
+  // if we make changes to the scripts, the hash of the task
+  // will be modified and Nextflow will know to invalidate the cache.
+  barcode_correction_list(barcode_list, file("${baseDir}/bin/make_1_hamming_dist_barcode_list.awk"))
+
+  // Extract reads and correct barcodes from the fastqs
+  // using umitools and the 1 hamming-distance barcode correction list
+  io_extract(io_extract_in_ch, barcode_correction_list.out.corrected_barcode_list, params.barcode_pattern)
   ch_io_extract_out = io_extract.out.io_extract_out
 
   // Trim and remove low quality reads with fastp
