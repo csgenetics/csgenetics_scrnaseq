@@ -220,16 +220,21 @@ workflow {
   // after mapping i.e. after star.
   create_valid_empty_bam_star(polyA_out_ch.empty_fastq.map({[it[0], "_Aligned.sortedByCoord.out"]}).mix(star_out_ch.bad_bam.map({[it[0], "_Aligned.sortedByCoord.out"]})))
 
-  // Process to convert input GTF to gene model bed for rseqc
+  // Process to convert input GTF to gene model bed for RSeQC
   gtf2bed(gtf)
+
   // RSeQC read distribution on STAR output
-  // Set gene_model based on genome (note -genome option isn't required...)
+  // The 1 and 0 being added in the map represent bams that contain (1)
+  // or do not contain (0) alignments.
+  // If alignments are present RSeQC is run,
+  // else the empty RSeQC is populated in the process.
   raw_rseqc(star_out_ch.good_bam.map({[it[0], it[1], 1]}).mix(create_valid_empty_bam_star.out.out_bam.map({[it[0], it[1], 0]})), gtf2bed.out.bed, empty_rseqc_template, "raw")
   ch_raw_rseqc_multiqc = raw_rseqc.out.rseqc_log
+
   // Perform featurecount quantification
   // The 1 and 0 being added in the map represent bams that contain (1)
-  // or do not (0) contain alignments.
-  // If alignments are present featureCounts is run,
+  // or do not contain (0) alignments.
+  // If alignments are present, featureCounts is run,
   // else the empty bam is simply copied for collection from the process.
   feature_counts(star_out_ch.good_bam.map({[it[0], it[1], 1]}).mix(create_valid_empty_bam_star.out.out_bam.map({[it[0], it[1], 0]})), gtf, "${baseDir}/bin/assign_multi_mappers.gawk")
 

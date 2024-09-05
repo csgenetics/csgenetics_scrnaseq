@@ -361,7 +361,7 @@ process run_rseqc {
   publishDir "${params.outdir}/RSeQC/read_distribution", mode: 'copy', pattern: "*_rseqc_results.txt", saveAs: {"${sample_id}.${prefix}_RSeQC.txt"}
 
   input:
-  tuple val (sample_id), path(bam), val(count)
+  tuple val(sample_id), path(bam), val(count)
   path(bed)
   path(empty_rseqc_template)
   val(prefix)
