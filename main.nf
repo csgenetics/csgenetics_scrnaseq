@@ -75,13 +75,13 @@ workflow {
     if (checkPathExists(params.star_index)) {
       star_index = download_star_index()
     } else {
-      throw new RuntimeException("The specified STAR index ${params.star_index} does not exist.")
+      throw new RuntimeException("The specified S3 STAR index ${params.star_index} does not exist.")
     }
   } else {
     if (checkPathExists(params.star_index)) {
       star_index = file(params.star_index)
     } else {
-      throw new RuntimeException("The specified STAR index ${params.star_index} does not exist.")
+      throw new RuntimeException("The specified local STAR index ${params.star_index} does not exist.")
     }
     
   }
@@ -92,13 +92,13 @@ workflow {
     if (checkPathExists(params.gtf)) {
       gtf = download_gtf()
     } else {
-      throw new RuntimeException("The specified GTF file ${params.gtf} does not exist.")
+      throw new RuntimeException("The specified S3 GTF file ${params.gtf} does not exist.")
     }
   } else {
     if (checkPathExists(params.gtf)) {
       gtf = file(params.gtf)
     } else {
-      throw new RuntimeException("The specified GTF file ${params.gtf} does not exist.")
+      throw new RuntimeException("The specified local GTF file ${params.gtf} does not exist.")
     }
   }
 
@@ -108,13 +108,13 @@ workflow {
     if (checkPathExists(params.input_csv)) {
       input_csv = download_input_csv()
     } else {
-      throw new RuntimeException("The specified input_csv file ${params.input_csv} does not exist.")
+      throw new RuntimeException("The specified S3 input_csv file ${params.input_csv} does not exist.")
     }
   } else {
     if (checkPathExists(params.input_csv)) {
       input_csv = Channel.fromPath(params.input_csv)
     } else {
-      throw new RuntimeException("The specified input_csv file ${params.input_csv} does not exist.")
+      throw new RuntimeException("The specified local input_csv file ${params.input_csv} does not exist.")
     }
   }
   
@@ -151,7 +151,7 @@ workflow {
         if (checkPathExists(fastq_1) && checkPathExists(fastq_2)) {
             return row
         } else {
-            throw new RuntimeException("One or both of the fastq files specified in ${params.input_csv} do not exist: ${fastq_1}, ${fastq_2}")
+            throw new RuntimeException("One or both of the s3 fastq files specified in ${params.input_csv} do not exist: ${fastq_1}, ${fastq_2}")
         }
     }
     .set { to_download_ch }
