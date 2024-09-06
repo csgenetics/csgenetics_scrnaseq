@@ -29,6 +29,31 @@ def order_integer_first(it){
       }
 }
 
+// Function to check if a local file exists
+def fileExists(path) {
+  return new File(path).exists()
+}
+
+// Function to check if an S3 file exists
+def s3FileExists(path) {
+    // Process to check if an S3 path exists
+    def command = "aws s3 ls ${path}"
+    def process = command.execute()
+    process.waitFor()
+    def exitValue = process.exitValue()
+    // If the file doesn't exist 1 is returned, if it does 0 is returned
+    return exitValue == 0
+}
+
+// Function to check if a file exists, either locally or on S3
+def checkPathExists(path) {
+    if (path.startsWith("s3://")) {
+        return s3FileExists(path)
+    } else {
+        return fileExists(path)
+    }
+}
+
 workflow {
 
   // Some users have issues accessing the S3 resources we have hosted publicly in our
@@ -47,25 +72,50 @@ workflow {
   // Check whether params.star_index starts with s3://csgx.public.readonly
   // and if it does, download the file in a process and set the star_index to the downloaded file
   if (params.star_index.startsWith("s3://csgx.public.readonly")){
-    star_index = download_star_index()
+    if (checkPathExists(params.star_index)) {
+      star_index = download_star_index()
+    } else {
+      throw new RuntimeException("The specified STAR index ${params.star_index} does not exist.")
+    }
   } else {
-    star_index = file(params.star_index)
+    if (checkPathExists(params.star_index)) {
+      star_index = file(params.star_index)
+    } else {
+      throw new RuntimeException("The specified STAR index ${params.star_index} does not exist.")
+    }
+    
   }
   
   // Check whether params.gtf starts with s3://csgx.public.readonly
   // and if it does, download the file in a process and set the gtf to the downloaded file
   if (params.gtf.startsWith("s3://csgx.public.readonly")){
-    gtf = download_gtf()
+    if (checkPathExists(params.gtf)) {
+      gtf = download_gtf()
+    } else {
+      throw new RuntimeException("The specified GTF file ${params.gtf} does not exist.")
+    }
   } else {
-    gtf = file(params.gtf)
+    if (checkPathExists(params.gtf)) {
+      gtf = file(params.gtf)
+    } else {
+      throw new RuntimeException("The specified GTF file ${params.gtf} does not exist.")
+    }
   }
 
   // Check whether params.input_csv starts with s3://csgx.public.readonly
   // and if it does, download the file in a process and set the input_csv to the downloaded file
   if (params.input_csv.startsWith("s3://csgx.public.readonly")){
-    input_csv = download_input_csv()
+    if (checkPathExists(params.input_csv)) {
+      input_csv = download_input_csv()
+    } else {
+      throw new RuntimeException("The specified input_csv file ${params.input_csv} does not exist.")
+    }
   } else {
-    input_csv = Channel.fromPath(params.input_csv)
+    if (checkPathExists(params.input_csv)) {
+      input_csv = Channel.fromPath(params.input_csv)
+    } else {
+      throw new RuntimeException("The specified input_csv file ${params.input_csv} does not exist.")
+    }
   }
   
   // Finally, we need to check the fastq files to see if they
@@ -95,11 +145,20 @@ workflow {
 
   split_ch.download
     .map { it[0..2] } // remove the 'download' string from the tuple
+    .map { row ->
+        def fastq_1 = row[1]
+        def fastq_2 = row[2]
+        if (checkPathExists(fastq_1) && checkPathExists(fastq_2)) {
+            return row
+        } else {
+            throw new RuntimeException("One or both of the fastq files specified in ${params.input_csv} do not exist: ${fastq_1}, ${fastq_2}")
+        }
+    }
     .set { to_download_ch }
 
   split_ch.no_download
     .map { it[0..2] } // remove the 'no_download' string from the tuple
-    .map { [it[0], file(it[1]), file(it[2])] } // convert the paths to File objects
+    .map { [it[0], file(it[1], checkIfExists: true), file(it[2], checkIfExists: true)] } // convert the paths to File objects
     .set { no_download_ch }
 
   // Download the fastq files from the s3://csgx.public.readonly bucket
@@ -112,13 +171,19 @@ workflow {
 
   // The following paths will always need to be downloaded from the s3://csgx.public.readonly bucket:
   // params.barcode_list_path
-  barcode_list = download_barcode_list()
+  if (checkPathExists(params.barcode_list_path)) {
+      barcode_list = download_barcode_list()
+    } else {
+      throw new RuntimeException("The specified barcode_list file ${params.barcode_list_path} does not exist.")
+    }
 
   // Create path objects to HTML report templates
-  single_sample_report_template = file("${baseDir}/templates/single_sample_report_template.html.jinja2")
-  multi_sample_report_template = file("${baseDir}/templates/multi_sample_report_template.html.jinja2")
+  // Use checkIfExists to confirm the file exists at start of pipeline. If it doesn't fail with error.
+  // If checkIfExists not enabled the pipeline won't fail till the process that accesses the missing file.
+  single_sample_report_template = file("${baseDir}/templates/single_sample_report_template.html.jinja2", checkIfExists: true)
+  multi_sample_report_template = file("${baseDir}/templates/multi_sample_report_template.html.jinja2", checkIfExists: true)
   // Create empty rseqc output template path object
-  empty_rseqc_template = file("${baseDir}/templates/rseqc_empty_template.txt")
+  empty_rseqc_template = file("${baseDir}/templates/rseqc_empty_template.txt", checkIfExists: true)
   // Create feature file for count_matrix from GTF
   features_file(gtf)
   feature_file_out = features_file.out.modified_gtf
@@ -170,7 +235,7 @@ workflow {
   ch_merged_fastp_multiqc = merged_fastp.out.merged_fastp_multiqc
 
   // Get the barcode_list and extract the IOs from the fastqs using umitools
-  io_extract_script = "${baseDir}/bin/io_extract.awk"
+  io_extract_script = file("${baseDir}/bin/io_extract.awk", checkIfExists: true)
   io_extract(io_extract_in_ch, barcode_list, io_extract_script)
   ch_io_extract_out = io_extract.out.io_extract_out
 
@@ -180,7 +245,7 @@ workflow {
   ch_io_extract_fastp_multiqc = io_extract_fastp.out.fastp_multiqc
 
   // Trim extra polyA
-  trim_polyA_script = file("${baseDir}/bin/trim_poly_A.awk")
+  trim_polyA_script = file("${baseDir}/bin/trim_poly_A.awk", checkIfExists: true)
   trim_extra_polya(ch_io_extract_fastp_out, trim_polyA_script)
   ch_trim_extra_polya_out = trim_extra_polya.out.trim_extra_polya_out
 
