@@ -74,6 +74,7 @@ workflow {
   if (params.star_index.startsWith("s3://csgx.public.readonly")){
     println "Detected S3 path: ${params.star_index}"
     if (checkPathExists(params.star_index)) {
+      println "Valid S3 path found: ${params.star_index}"
       star_index = download_star_index()
     } else {
       throw new RuntimeException("The specified S3 STAR index ${params.star_index} does not exist.")
