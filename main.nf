@@ -72,18 +72,19 @@ workflow {
   // Check whether params.star_index starts with s3://csgx.public.readonly
   // and if it does, download the file in a process and set the star_index to the downloaded file
   if (params.star_index.startsWith("s3://csgx.public.readonly")){
+    println "Detected S3 path: ${params.star_index}"
     if (checkPathExists(params.star_index)) {
       star_index = download_star_index()
     } else {
       throw new RuntimeException("The specified S3 STAR index ${params.star_index} does not exist.")
     }
   } else {
+    println "Detected local path: ${params.star_index}"
     if (checkPathExists(params.star_index)) {
       star_index = file(params.star_index)
     } else {
       throw new RuntimeException("The specified local STAR index ${params.star_index} does not exist.")
-    }
-    
+    } 
   }
   
   // Check whether params.gtf starts with s3://csgx.public.readonly
