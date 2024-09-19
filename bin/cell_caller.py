@@ -169,27 +169,32 @@ class CellCaller:
          log_cutoff = min(potential_cutoffs[np.where(potential_cutoffs>=np.log10(self.minimum_count_threshold))])
       return log_cutoff
 
+   def format_multiqc_data(self, df_input):
+      # Split df into 2 based on threshold. Noisy barcodes into 1 df, called cells into another
+         df_noise = df_input[df_input['data_space'] < self.minimum_count_threshold]
+         df_cells = df_input[df_input['data_space'] >= self.minimum_count_threshold]
+         # Format to dict where each key:value is x:y
+         noise_dict = df_noise.set_index('data_space')['evaluated'].to_dict()
+         cells_dict = df_cells.set_index('data_space')['evaluated'].to_dict()
+         self.cell_caller_mqc_data = {"noise":noise_dict,
+                                 "cell":cells_dict}
+         return(self.cell_caller_mqc_data)
+
    def write_pd_data(self):
       """
-      Write the cell caller data and cutoff to a JSON file for multiqc
+      Format and write the cell caller data and cutoff to a JSON file for multiqc
       """
       if self.single_species:
-         df_dict = self.pdf_df.to_dict(orient='records')
-         cell_caller_mqc_data = {
-            "pd_data": df_dict,
-            "log10_threshold": self.log_cutoff
-         }
+         self.format_multiqc_data(df_input = self.pdf_df)
          
          with open(f'{self.sample_name}_cellcaller_data.json', 'w') as f:
-            json.dump(cell_caller_mqc_data, f, indent=4)
+            json.dump(self.cell_caller_mqc_data, f, indent=4)
       else:
-         hsap_df_dict = self.hsap_pdf_df.to_dict(orient='records')
-         mmus_df_dict = self.mmus_pdf_df.to_dict(orient='records')
+         hsap_data = self.format_multiqc_data(df_input = self.hsap_pdf_df)
+         mmus_data = self.format_multiqc_data(df_input = self.mmus_pdf_df)
          cell_caller_mqc_data = {
-            "hsap_pd_data": hsap_df_dict,
-            "mmus_pd_data": mmus_df_dict,
-            "hsap_log10_threshold": self.hsap_log_cutoff,
-            "mmus_log10_threshold": self.mmus_log_cutoff
+            "hsap_pd_data": hsap_data,
+            "mmus_pd_data": mmus_data
          }
          
          with open(f'{self.sample_name}_cellcaller_data.json', 'w') as f:
