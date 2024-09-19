@@ -733,6 +733,7 @@ process cell_caller {
   output:
   tuple val(sample_id), stdout, emit: cell_caller_out
   tuple val(sample_id), path("${sample_id}*_pdf_with_cutoff.png"), emit: cell_caller_plot
+  tuple val(sample_id), path("${sample_id}_cellcaller_data.json"), emit: cell_caller_multiqc
 
   script:
   """

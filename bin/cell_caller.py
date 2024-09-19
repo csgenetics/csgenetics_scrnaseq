@@ -1,9 +1,9 @@
 #!/usr/bin/env python
-
 import anndata as ad
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import json
 from scipy.signal import argrelextrema
 from scipy.stats import gaussian_kde
 import sys, argparse
@@ -85,6 +85,7 @@ class CellCaller:
          else:
             self.pdf_df = self.get_prob_dens_data(self.log10_counts)
             self.log_cutoff = self.get_cutoff(self.pdf_df)
+            self.write_pd_data()
             self.make_pd_plots()
 
          # Transform back, and round to the nearest integer
@@ -106,6 +107,7 @@ class CellCaller:
             self.mmus_pdf_df = self.get_prob_dens_data(self.log10_mmus_counts_mmus_majority)
             self.hsap_log_cutoff = self.get_cutoff(self.hsap_pdf_df)
             self.mmus_log_cutoff = self.get_cutoff(self.mmus_pdf_df)
+            self.write_pd_data()
             self.make_pd_plots()
 
          hsap_thres = round(10 ** self.hsap_log_cutoff)
@@ -166,6 +168,32 @@ class CellCaller:
       # If there are any that are above 2, find the smallest one.
          log_cutoff = min(potential_cutoffs[np.where(potential_cutoffs>=np.log10(self.minimum_count_threshold))])
       return log_cutoff
+
+   def write_pd_data(self):
+      """
+      Write the cell caller data and cutoff to a JSON file for multiqc
+      """
+      if self.single_species:
+         df_dict = self.pdf_df.to_dict(orient='records')
+         cell_caller_mqc_data = {
+            "pd_data": df_dict,
+            "log10_threshold": self.log_cutoff
+         }
+         
+         with open(f'{self.sample_name}_cellcaller_data.json', 'w') as f:
+            json.dump(cell_caller_mqc_data, f, indent=4)
+      else:
+         hsap_df_dict = self.hsap_pdf_df.to_dict(orient='records')
+         mmus_df_dict = self.mmus_pdf_df.to_dict(orient='records')
+         cell_caller_mqc_data = {
+            "hsap_pd_data": hsap_df_dict,
+            "mmus_pd_data": mmus_df_dict,
+            "hsap_log10_threshold": self.hsap_log_cutoff,
+            "mmus_log10_threshold": self.mmus_log_cutoff
+         }
+         
+         with open(f'{self.sample_name}_cellcaller_data.json', 'w') as f:
+            json.dump(cell_caller_mqc_data, f, indent=4)
 
    def make_pd_plots(self):
       """
