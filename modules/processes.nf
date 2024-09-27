@@ -32,8 +32,9 @@ process download_gtf {
 }
 
 /* Download the input_csv file from the s3://csgx.public.readonly bucket */
+/* Can also be used to download the user specified cell caller threshold csv, if specified */
 process download_input_csv {
-  tag "Download input csv"
+  tag "Download input csvs"
 
   output:
   path("*.csv")
@@ -728,7 +729,7 @@ process cell_caller {
   publishDir "${params.outdir}/plots", pattern: "${sample_id}_pdf_with_cutoff.png", mode: 'copy'
 
   input:
-  tuple val(sample_id), path(count_matrix_h5ad)
+  tuple val(sample_id), path(count_matrix_h5ad), val(manual_threshold_str)
 
   output:
   tuple val(sample_id), stdout, emit: cell_caller_out
@@ -736,7 +737,7 @@ process cell_caller {
 
   script:
   """
-  cell_caller.py --sample_name ${sample_id} --minimum_count_threshold ${params.minimum_count_threshold} --count_matrix ${count_matrix_h5ad} --single_species ${!params.mixed_species}
+  cell_caller.py --sample_name ${sample_id} --minimum_count_threshold ${params.minimum_count_threshold} --count_matrix ${count_matrix_h5ad} --single_species ${!params.mixed_species} --manual_threshold_str $manual_threshold_str
   """
 }
 

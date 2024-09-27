@@ -284,8 +284,41 @@ workflow {
   count_matrix(ch_io_count_out, barcode_list, feature_file_out)
   ch_h5ad = count_matrix.out.h5ad
 
+  // Extract any user specified thresholds for cell calling from the input_csv and format them for input to the cell caller process
+  input_csv
+    .splitCsv(header: true, sep: ',', strip: true)
+    .map { row ->
+        def rowList = row.values().toList()
+        if (params.mixed_species) {
+          // User specified hsap and mmus thresholds are expected in column 3 and 4 respectively
+          // If these columns are not present in the csv, then no manual thresholds are passed to the cell caller method
+          if (rowList.size() < 5) {
+            // cell_caller.py separates the 2 thresholds with an underscore, so in the case of no user-input thresholds, we submit a single underscore
+            return [rowList[0], "_"]
+          } else{
+            def hsap_threshold = rowList[3]
+            def mmus_threshold = rowList[4]
+            def combined_thresholds = "${hsap_threshold}_${mmus_threshold}"
+            return [rowList[0], combined_thresholds]
+          }
+        } else {
+          if (rowList.size() < 4) {
+            // In the single species case, any user specified cell caller thresholds is expected in column 3
+            // If this column is not present in the csv, then a nan value for the manual threshold is passed to the cell caller method
+            return [rowList[0], "nan"]
+          } else{
+            def threshold = "${rowList[3]}"
+            return [rowList[0], threshold]
+          }
+        }
+    }
+    .set { user_specified_cell_caller_thresholds_ch }
+
+
+  ch_cell_caller = ch_h5ad.join(user_specified_cell_caller_thresholds_ch)
+
   // Run cell caller
-  cell_caller(ch_h5ad)
+  cell_caller(ch_cell_caller)
   ch_cell_caller_out = cell_caller.out.cell_caller_out //[val(sample), int(cell_caller_nuc_gene_threshold)]
 
   // Sort the groupTuple so that the int is always
