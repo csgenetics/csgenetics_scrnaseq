@@ -174,8 +174,13 @@ class CellCaller:
          df_noise = df_input[df_input['data_space'] < self.minimum_count_threshold]
          df_cells = df_input[df_input['data_space'] >= self.minimum_count_threshold]
          # Format to dict where each key:value is x:y
-         noise_dict = df_noise.set_index('data_space')['evaluated'].to_dict()
+         noise_data = df_noise.set_index('data_space')['evaluated']
+         noise_dict = noise_data.to_dict()
+         # Get final entry in noise_dict to use as first entry in cells_dict, to make multiqc lines contiguous
+         bridge_dict = {}
+         bridge_dict[noise_data.iloc[[0, -1]].index[1]] = noise_data.iloc[[0, -1]].values[1]
          cells_dict = df_cells.set_index('data_space')['evaluated'].to_dict()
+         cells_dict = {**bridge_dict, **cells_dict}
          self.cell_caller_mqc_data = {"noise":noise_dict,
                                  "cell":cells_dict}
          return(self.cell_caller_mqc_data)
