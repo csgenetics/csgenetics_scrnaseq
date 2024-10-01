@@ -725,7 +725,7 @@ process count_matrix {
 process cell_caller {
   tag "$sample_id"
 
-  publishDir "${params.outdir}/plots", pattern: "${sample_id}_pdf_with_cutoff.png", mode: 'copy'
+  publishDir "${params.outdir}/plots", pattern: "${sample_id}*_pdf_with_cutoff.png", mode: 'copy'
 
   input:
   tuple val(sample_id), path(count_matrix_h5ad)
@@ -733,7 +733,7 @@ process cell_caller {
   output:
   tuple val(sample_id), stdout, emit: cell_caller_out
   tuple val(sample_id), path("${sample_id}*_pdf_with_cutoff.png"), emit: cell_caller_plot
-  tuple val(sample_id), path("${sample_id}_cellcaller_data.json"), emit: cell_caller_multiqc
+  tuple val(sample_id), path("${sample_id}*_cellcaller_data.json"), emit: cell_caller_multiqc
 
   script:
   """

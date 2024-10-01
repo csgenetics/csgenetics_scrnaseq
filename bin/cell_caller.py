@@ -169,10 +169,10 @@ class CellCaller:
          log_cutoff = min(potential_cutoffs[np.where(potential_cutoffs>=np.log10(self.minimum_count_threshold))])
       return log_cutoff
 
-   def format_multiqc_data(self, df_input):
+   def format_multiqc_data(self, df_input, log_cutoff):
       # Split df into 2 based on threshold. Noisy barcodes into 1 df, called cells into another
-         df_noise = df_input[df_input['data_space'] < self.minimum_count_threshold]
-         df_cells = df_input[df_input['data_space'] >= self.minimum_count_threshold]
+         df_noise = df_input[df_input['data_space'] < log_cutoff]
+         df_cells = df_input[df_input['data_space'] >= log_cutoff]
          # Format to dict where each key:value is x:y
          noise_data = df_noise.set_index('data_space')['evaluated']
          noise_dict = noise_data.to_dict()
@@ -190,19 +190,19 @@ class CellCaller:
       Format and write the cell caller data and cutoff to a JSON file for multiqc
       """
       if self.single_species:
-         self.format_multiqc_data(df_input = self.pdf_df)
+         self.format_multiqc_data(df_input = self.pdf_df, log_cutoff = self.log_cutoff)
          
          with open(f'{self.sample_name}_cellcaller_data.json', 'w') as f:
             json.dump(self.cell_caller_mqc_data, f, indent=4)
       else:
-         hsap_data = self.format_multiqc_data(df_input = self.hsap_pdf_df)
-         mmus_data = self.format_multiqc_data(df_input = self.mmus_pdf_df)
+         hsap_data = self.format_multiqc_data(df_input = self.hsap_pdf_df, log_cutoff = self.hsap_log_cutoff)
+         mmus_data = self.format_multiqc_data(df_input = self.mmus_pdf_df, log_cutoff = self.mmus_log_cutoff)
          cell_caller_mqc_data = {
             "hsap_pd_data": hsap_data,
             "mmus_pd_data": mmus_data
          }
          
-         with open(f'{self.sample_name}_cellcaller_data.json', 'w') as f:
+         with open(f'{self.sample_name}_mixed_cellcaller_data.json', 'w') as f:
             json.dump(cell_caller_mqc_data, f, indent=4)
 
    def make_pd_plots(self):
