@@ -809,7 +809,7 @@ process single_summary_report {
 
   script:
   """
-  num_cell=awk -F',' '$1 == "num_cells_total" {print $2}' $metrics_csv
+  num_cell=awk -F',' '\$1 == "num_cells_total" {print \$2}' $metrics_csv
   if [ "\$num_cell" -eq 0 ]; then
     touch ${sample_id}_report.html
   else
