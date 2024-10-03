@@ -567,7 +567,8 @@ process single_sample_multiqc {
     --title "${sample_id} multiqc" \
     --filename "${sample_id}_multiqc.html" \
     -m fastp \
-    -m rseqc
+    -m rseqc \
+    -m simplecell
   """
 }
 
@@ -594,7 +595,8 @@ process multi_sample_multiqc {
     --title "multisample multiqc" \
     --filename "multisample_multiqc.html" \
     -m fastp \
-    -m rseqc
+    -m rseqc \
+    -m simplecell
   """
 }
 
