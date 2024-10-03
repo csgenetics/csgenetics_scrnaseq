@@ -543,6 +543,7 @@ class SummaryStatistics:
         if self.mixed:
             # If mixed we need to set the called cell and multiplet stats to 0
             self.set_called_cell_and_multiplet_metrics_to_zero()
+            self.populate_called_cell_and_multiplet_stats_in_metrics_dict()
         self.set_single_cell_stats_to_zero()
 
     def get_sequencing_stats(self):
