@@ -809,7 +809,12 @@ process single_summary_report {
 
   script:
   """
-  create_single_sample_report.py $sample_id $plot_png $metrics_csv $html_template ${params.mixed_species}
+  num_cell=awk -F',' '$1 == "num_cells_total" {print $2}' $metrics_csv
+  if [ "\$num_cell" -eq 0 ]; then
+    touch ${sample_id}_report.html
+  else
+    create_single_sample_report.py $sample_id $plot_png $metrics_csv $html_template ${params.mixed_species}
+  fi
   """
 }
 
