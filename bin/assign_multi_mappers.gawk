@@ -85,8 +85,6 @@ BEGIN {
         # value = VH00671:444:AACCJYTHV:1:1101:5696:28489_AAGCACCTATCCG_	256	5	67803287	0	34M	*	0	0	TTATTCACTATCACAAGAATAACACGGGAAAGAC	CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC	NH:i:X  HI:i:X	AS:i:33	nM:i:0	XS:Z:Unassigned_Ambiguity
         # We output the alignment without the featureCount derived tags because these alignments
         # will be run through feature counts again.
-        print "we made it here";
-        print $1 $13;
         unassigned_ambiguity_array[$1 $13] = $1"\t"$2"\t"$3"\t"$4"\t"$5"\t"$6"\t"$7"\t"$8"\t"$9"\t"$10"\t"$11"\t"$12"\t"$13"\t"$14"\t"$15;
     }
     
