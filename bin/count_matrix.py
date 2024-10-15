@@ -2,12 +2,11 @@
 
 from pandas import read_csv, read_table, merge, DataFrame, errors
 from pandas.api.types import CategoricalDtype
-from scipy.sparse import csr_matrix
+from scipy.sparse import csr_matrix, hstack
 from scipy.io import mmwrite
-from numpy import zeros,hstack,float32
+from numpy import zeros, float32, where
 from anndata import AnnData
 import sys, argparse, gzip
-import numpy as np
 
 class CountMatrix:
     def __init__(self):
@@ -50,13 +49,13 @@ class CountMatrix:
     def annotate_count_matrix(self):
         if self.mixed_species:
             # Annotate the mitochondrial genes to report the mito and nuclear genes in the summary statistics
-            self.anndata_obj.var['is_mito'] = np.where((self.anndata_obj.var['chromosome'] == self.hsap_mito_chr) | (self.anndata_obj.var['chromosome'] == self.mmus_mito_chr), True, False)
-            self.anndata_obj.var['is_mito_hsap'] = np.where(self.anndata_obj.var['chromosome'] == self.hsap_mito_chr , True, False)
-            self.anndata_obj.var['is_mito_mmus'] = np.where(self.anndata_obj.var['chromosome'] == self.mmus_mito_chr, True, False)
+            self.anndata_obj.var['is_mito'] = where((self.anndata_obj.var['chromosome'] == self.hsap_mito_chr) | (self.anndata_obj.var['chromosome'] == self.mmus_mito_chr), True, False)
+            self.anndata_obj.var['is_mito_hsap'] = where(self.anndata_obj.var['chromosome'] == self.hsap_mito_chr , True, False)
+            self.anndata_obj.var['is_mito_mmus'] = where(self.anndata_obj.var['chromosome'] == self.mmus_mito_chr, True, False)
            
             # Annotate the Hsap and Mmus genes to be able to report Hsap and Mmus specific stats in summary_statistics
-            self.anndata_obj.var['is_hsap'] = np.where(self.anndata_obj.var_names.str.startswith(self.hsap_gene_prefix), True, False)
-            self.anndata_obj.var['is_mmus'] = np.where(self.anndata_obj.var_names.str.startswith(self.mmus_gene_prefix), True, False)
+            self.anndata_obj.var['is_hsap'] = where(self.anndata_obj.var_names.str.startswith(self.hsap_gene_prefix), True, False)
+            self.anndata_obj.var['is_mmus'] = where(self.anndata_obj.var_names.str.startswith(self.mmus_gene_prefix), True, False)
 
             self.anndata_obj.obs["hsap_counts"] = self.anndata_obj.X[:, self.anndata_obj.var["is_hsap"]].toarray().sum(axis=1)
             self.anndata_obj.obs["mmus_counts"] = self.anndata_obj.X[:, self.anndata_obj.var["is_mmus"]].toarray().sum(axis=1)
@@ -64,7 +63,7 @@ class CountMatrix:
             
         else:
             # Annotate mitochondrial genes to report the mito and nuclear genes in the summary statistics
-            self.anndata_obj.var['is_mito'] = np.where(self.anndata_obj.var['chromosome'] == self.mito_chr, True, False)
+            self.anndata_obj.var['is_mito'] = where(self.anndata_obj.var['chromosome'] == self.mito_chr, True, False)
             self.anndata_obj.obs['total_counts'] = self.anndata_obj.X.toarray().sum(axis=1)
 
     def make_base_count_matrix(self):
@@ -104,12 +103,12 @@ class CountMatrix:
         row = counts.gene_id.astype(name_c).cat.codes
         col = counts.cell.astype(cell_c).cat.codes
 
-        non_zero_matrix = csr_matrix((counts["count"], (col,row)), shape=(cell_c.categories.size,name_c.categories.size)).toarray()
+        non_zero_matrix = csr_matrix((counts["count"], (col,row)), shape=(cell_c.categories.size,name_c.categories.size))
         # Create a zero matrix for all zero-genes
-        zero_matrix = zeros((non_zero_matrix.shape[0],zero_genes.shape[0]))
-        all_matrix = hstack([non_zero_matrix, zero_matrix])
+        zero_matrix = csr_matrix((non_zero_matrix.shape[0], zero_genes.shape[0]))
+
         # Sparse_matrix for annData needs to be in the format of n_obs x n_vars
-        self.sparse_matrix = csr_matrix(all_matrix)
+        self.sparse_matrix = hstack([non_zero_matrix, zero_matrix])
 
         # Create an AnnData object for downstream analysis
         self.ft_names= DataFrame(name_c.categories.tolist() + zero_genes.gene_id.tolist(),columns=['gene_id'])
@@ -119,7 +118,7 @@ class CountMatrix:
         # and anndata package in Seurat v4.
         # Convert sparse matrix to float32, and create new AnnData object
         # If you try to convert adata.X directly on anndata with only 1 row, it will throw an error
-        sparse_matrix_float32 = self.sparse_matrix.astype(np.float32)
+        sparse_matrix_float32 = self.sparse_matrix.astype(float32)
         self.anndata_obj = AnnData(sparse_matrix_float32,var=self.ft_names)
         self.anndata_obj.var_names = self.ft_names.gene_name.tolist()
         self.anndata_obj.var_names_make_unique()
