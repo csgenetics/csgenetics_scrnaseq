@@ -150,7 +150,7 @@ corresponding GTF, and the name of the mitochondria chromosome used in their ref
 
 The output directory is set to `./results`.
 
-The docker profile is selected, configuring the pipeline to use pre-specified Docker containers for each of the processes.
+The `docker` profile is selected, configuring the pipeline to use pre-specified Docker containers for each of the processes.
 
 The `work` directory will by created by default at `./work`.
 
@@ -511,7 +511,7 @@ Contains the count matrices. The matrices are output in two different formats:
 - .h5ad (compatible with scanpy in Python)
 - the tripartite barcodes.tsv.gz, features.tsv.gz and matrix.mtx.gz (compatible with Seurat in R)
 
-The matrices are output as 'raw' (containing all barcodes) and 'filtered' (containing a subset of the barcodes that were classified as cells through meeting the minimum nuclear genes detected threshold).
+The matrices are output as 'raw' (containing all barcodes) and 'filtered' (containing a subset of the barcodes that were classified as cells through meeting the minimum count threshold).
 
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
