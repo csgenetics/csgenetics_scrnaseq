@@ -388,7 +388,7 @@ For supplying custom genomic resources, see the [`star_index`](#star_index), [`g
 
 ## Configuring custom genomic resources
 
-To run the pipeline against a user-specified STAR index and corresponding GTF, `--genome` should be set to `custom` and the `--star_index` and `--gtf` arguments should point to the user-provided resources. The `--mitochondria_chromosome` argument should be set to the name of the mitochondrial chromosome in the genome fasta used to build the STAR index (see the [Examples](#examples), [`star_index`](#star_index), [`gtf`](#gtf), and [`mitochondria_chromosome`](#mitochondria_chromosome) sections below).
+To run the pipeline against a user-specified STAR index and corresponding GTF, `--genome` should be set to `custom` and the `--star_index` and `--gtf` arguments should point to the user-provided resources. The `--mitochondria_chromosome` argument should be set to the name of the mitochondrial chromosome in the genome fasta used to build the STAR index (see [Pipeline launch example 3](#example-3), [`star_index`](#star_index), [`gtf`](#gtf), and [`mitochondria_chromosome`](#mitochondria_chromosome) sections below).
 
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
