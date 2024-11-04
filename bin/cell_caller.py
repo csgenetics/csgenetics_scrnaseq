@@ -12,20 +12,22 @@ import sys, argparse
 This is the cell caller function.
 It operates on the distribution of total counts for cellular barcodes.
 
-This function reads in an anndata object (h5ad), get the total counts per cell, and 
-log10 + 1 transforms the counts to find multiple troughs in the distribution of number
-of counts per cell. The transformation is necessary to get the second peak.
-When values are untransformed as there's too much spread.
+This function reads in an anndata object (h5ad), gets the total counts per cellular barcode,  
+log10 + 1 transforms the counts and evaluates the density distribution of those transformed counts.
+The transformation is necessary to condense the data enough to get a noise peak and a single-cell peak.
+When values are untransformed, there's too much spread to identify the populations.
 
-The distribution is usually bi or trimodal with the last peak representing cells.
+The cannonical profile that the cell caller assumes is a bimodal distribution - with the rightmost peak representing the cells.
 
-This function aims to find the local minima of the probabilty density
-(i.e. the lowest point) between the last two peaks, and use that as the
-counts threshold to call cells.
+This function aims to find the local minima of the probabilty density (i.e. the lowest point) between the 
+two peaks, and use that as the counts threshold to call cells. That is to say that any cellular barcode
+with counts below this threshold would be called as noise, and any barcode with counts above this threshold
+would be called as a cell.
 
-If there are no local minima above the minimum_count_threshold,
-then the function will default to the minimum_count_threshold. This is generally set to 100 or 2
-on the log10 scale.
+If there are no local minima above the minimum_count_threshold, then the function will 
+next look for inflection points above the minimum_count_threshold where the gradient is 
+close to 0. If there are none of these either, then the function will default to the minimum_count_threshold. 
+This is generally set to 100 i.e. 2 on the log10 scale.
 
 If working with mixed species it identifies two sub-populations of barcodes: those with Mmus_counts > Hsap_counts 
 (i.e. candidate mouse cells) and those with Hsap_counts > Mmus_counts (i.e. candidate human cells).
@@ -36,10 +38,10 @@ and the local minmia of the probability density function is found.  The value of
 The same process is repeated for the pool of candidate mouse cells, this time looking at the log-transformed distribution of mouse counts
 to identify our Mmus_threshold.
 
-In both cases, if there are no local minima above the minimum_count_threshold, then the function will default to the minimum_count_threshold. 
-This is generally set to 100 or 2 on the log10 scale.
+In both cases, if there are no local minima above the minimum_count_threshold, then the function will next look for a 
+suitable inflection point to use instead, and if it fails to find one it will finally default to the minimum_count_threshold. 
 
-The combination of the two thresholds is used to classify barcodes according to the following rules in the annotate_cells_on_count_matrix.py script:
+The combination of the two thresholds is used to classify barcodes according to the following rules:
 
 Hsap_counts >= Hsap_threshold & Mmus_counts <= Mmus_threshold is a single-cell (human).
 Mmus_counts >= Mmus_threshold & Hsap_counts <= Hsap_threshold is a single-cell (mouse).
@@ -155,16 +157,45 @@ class CellCaller:
       """
       Calculate and return cutoff
       """
-      # find the "dips" in the probability density - local minima
-      local_minima = argrelextrema(pdf_df['evaluated'].values, np.less)
-      # find the number of species-specific counts at which the minima occur
-      potential_cutoffs = pdf_df['data_space'].values[local_minima]
+      # **********************
+      # MINIMA IDENTIFICATION
+      # **********************
+      # Find the local minima of the probability density curve
+      local_minima = argrelextrema(pdf_df['evaluated'].values, np.less, order=1)
+      # Find the number of species-specific counts at which the minima occur
+      minima_locations = pdf_df['data_space'].values[local_minima]
+      # Filter to retain only the minima above the minimum_count_threshold
+      potential_minima_cutoffs = minima_locations[minima_locations >= np.log10(self.minimum_count_threshold)]
 
-      if len(np.where(potential_cutoffs > np.log10(self.minimum_count_threshold))[0]) == 0:
-         log_cutoff = np.log10(self.minimum_count_threshold)
+      # ********************************
+      # INFLECTION POINT IDENTIFICATION
+      # ********************************
+      # Calculate the first and second derivatives of the probability density curve to use in identifying suitable inflection points
+      first_derivatives = np.diff(pdf_df['evaluated'].values)/np.diff(pdf_df['data_space'].values)
+      second_derivatives = np.diff(first_derivatives)/np.diff(pdf_df['data_space'].values[:-1])
+      derivatives_df = pd.DataFrame({"data_space":pdf_df['data_space'].values[:-2], "first_derivative":first_derivatives[:-1], "second_derivative":second_derivatives})
+      # Add a binary flag to the derivatives df to indicate whether the sign of the second derivative changes from positive to negative between consecutive points (i.e. an inflection point)
+      derivatives_df["sign_change"] = np.where(derivatives_df["second_derivative"].shift(1) * derivatives_df["second_derivative"] < 0, 1, 0)
+      
+      # Find the inflection points which are above the minimum_count_threshold, which also have a gradient close to 0 
+      inflection_points_df = derivatives_df[(derivatives_df["sign_change"] == 1) & (derivatives_df["data_space"] >= np.log10(self.minimum_count_threshold)) & (derivatives_df["first_derivative"].abs() < 0.2)]
+      # Find the number of species-specific counts at which the inflection point(s) occur
+      potential_inflection_point_cutoffs = inflection_points_df["data_space"].values
+
+      # **********************
+      # THRESHOLD SELECTION
+      # **********************
+
+      if len(potential_minima_cutoffs) == 0:
+         # If there are no suitable minima but there is a back-up inflection point, select the inflection point
+         # Otherwise, default to the minimum_count_threshold
+         if len(potential_inflection_point_cutoffs) == 0:
+            log_cutoff = np.log10(self.minimum_count_threshold)
+         else:
+            log_cutoff = min(potential_inflection_point_cutoffs)
       else:
-      # If there are any that are above 2, find the smallest one.
-         log_cutoff = min(potential_cutoffs[np.where(potential_cutoffs>=np.log10(self.minimum_count_threshold))])
+         # If there are any minima that are above 2, find the smallest one.
+         log_cutoff = min(potential_minima_cutoffs)
       return log_cutoff
 
    def make_pd_plots(self):
