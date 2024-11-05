@@ -1,0 +1,4 @@
+sample,fastq_1,fastq_2,hsap_manual_cellcaller_threshold,mmus_manual_cellcaller_threshold
+Sample1,/home/example_user/analysis/raw_reads/example_Sample1_L001_R1_001.fastq.gz,/home/example_user/analysis/raw_reads/example_Sample1_L001_R2_001.fastq.gz,3.3,3.4
+Sample2,/home/example_user/analysis/raw_reads/example_Sample2_L001_R1_001.fastq.gz,/home/example_user/analysis/raw_reads/example_Sample2_L001_R2_001.fastq.gz,3.2,
+Sample3,/home/example_user/analysis/raw_reads/example_Sample3_L001_R1_001.fastq.gz,/home/example_user/analysis/raw_reads/example_Sample3_L001_R2_001.fastq.gz,,

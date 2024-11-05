@@ -50,6 +50,10 @@
     - [`RSeQC`](#rseqc)
       - [`read_distribution`](#read_distribution)
     - [`STAR`](#star)
+  - [Cell calling](#cell-calling)
+    - [Theory of Cell Caller](#theory-of-cell-caller)
+    - [Cell Caller plot examples](#cell-caller-plot-examples)
+    - [Setting manual Cell Caller threholds](#setting-manual-cell-caller-thresholds)
   - [Log files](#log-files)
   - [Resource allocation](#resource-allocation)
   - [Error handling](#error-handling)
@@ -203,6 +207,8 @@ Sample1,/home/example_user/analysis/raw_reads/example_Sample1_L001_R1_001.fastq.
 Sample1,/home/example_user/analysis/raw_reads/example_Sample1_L002_R1_001.fastq.gz,/home/example_user/analysis/raw_reads/example_Sample1_L002_R2_001.fastq.gz
 Sample2,/home/example_user/analysis/raw_reads/example_Sample2_L001_R1_001.fastq.gz,/home/example_user/analysis/raw_reads/example_Sample2_L001_R2_001.fastq.gz
 ```
+
+If necessary, manual Cell Caller thresholds can be set in the input csv. See [Cell calling](#cell-calling) and [Setting manual Cell Caller threholds](#setting-manual-Cell Caller-thresholds).
 
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
@@ -550,9 +556,9 @@ Contains a multi-sample MultiQC report and associated data, plus a subdirectory 
 Plots of the Cell Caller profiles used to generate the minimum detected nuclear genes threshold
 for cell calling.
 
-The density plot describes the number of nuclear genes detected (log10 Nuclear genes) across cells. The black line describes the default cutoff value for nuclear genes when calling cells. In contrast, the red line describes the threshold determined by the cell caller.
+The density plot describes the number of nuclear genes detected (log10 Nuclear genes) across cells. The black line describes the default cutoff value for nuclear genes when calling cells. In contrast, the red line describes the threshold determined by the Cell Caller.
 
-If a red line is not present in the plot then, the default (black line) threshold has been used. If the red line is present, then the cell caller threshold has been used.
+If a red line is not present in the plot then, the default (black line) threshold has been used. If the red line is present, then the Cell Caller threshold has been used.
 
 If no plots are available, this indicates there was not enough counts to produce these plots.
 
@@ -568,8 +574,63 @@ Contains the bam files output from STAR and associated mapping log files.
 
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
-## Log files
+## Cell calling
 
+### Theory of Cell Caller
+The Cell Caller method aims to distinguish barcodes associated with cells from barcodes associated with noise.  
+It does this by assessing the distribution of total counts per barcode across all barcode sequences detected in a sample, and detecting a minumum count threshold above which all barcodes are deemed to be associated with cells.<br><br>
+CS Genetics libraries typically produce a multimodal distribution where the right-most peak contains barcodes associated with cells. The peak(s) to the left-hand side of the plot, containing barcodes with fewer reads, are associated with noise.
+<a id="typical-cell-caller-plot"></a>
+<br><br>In the plot shown here peak D contains cells, and peaks A and B represent noisy barcodes. The minimum threshold for calling a cell is set at 511 counts (2.7 on the log10 scale, C). The default threshold of 100 counts (2 on the log10 scale) is always shown on the plot, but is not applied if a Cell Caller threshold was found. The data is transformed on a log10 scale to reduce the spread of the data, which allows us to better visualise and distinguish different populations of barcodes. <br><br>
+<img src="docs/images/typical_cell_caller.png" alt="Typical Cell Caller plot" width="600" height="400">
+<a id="inflection-point"></a>
+<br>Cell Caller determines the count threshold by finding the first local minima of the probability density (i.e. the lowest point) that sits above 100 (2 on the log10 scale). 
+<br><br>If no local minima can be found above the default minumum count threshold of 100, Cell Caller looks to identify the first inflection point above 100, where the gradient is close to 0. A candidate inflection point which may be used as a threshold is defined as an inflection point (i.e. where the second derivative = 0), where the gradient is also close to 0 (<0.2). If no inflection point can be found, the threshold defaults to 100.
+<br><br>In some cases the automatic Cell Caller threshold may be set inappropriately. In these cases it is advised to determine and apply a [manual threshold](#setting-manual-cell-caller-thresholds).
+<div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
+
+### Cell Caller plot examples
+A [typical Cell Caller plot](#typical-cell-caller-plot) will have an approximately multimodal distribution with one or more noise-associated peaks on the left and a cell-associated peak on the right.
+
+In some cases the noise- and cell-associated peaks may not be well separated, and the cell peak less well defined. In this case it's unlikely that a local minima could be found, and instead the threshold will be set at the first inflection point above 100. 
+<br><br>In the example below there is no mathematical minima between the noise and cell peaks, so the Cell Caller threshold is set at the first inflection point above 100, which in this case is 1329 (3.1 on the log10 scale). Visually we can see that this threshold is set to an appropriate value, as it successfully separates the population of cells on the right from the noise on the left. <br><br>
+<img src="docs/images/inflection_point.png" alt="Cell Caller plot with inflection point threshold" width="600" height="400">
+<br><br>
+In rare cases we see novel noise profiles with an additional higher-count noise peak. As these samples have count distributions that are atypical and therefore different to what the current cell calling algorithm expects, the automated threshold can sometimes be set inappropriately (e.g. below the higher-count noise peak). In the example below the Cell Caller threshold has been set inappropriately, lying to the left of the higher-count noise peak. Visually it is clear that the cell-associated peak lies between 3-4 on the log10 scale, with a local minima around 3.1, therefore in this case we would recommend to [set the Cell Caller threshold manually](#setting-manual-cell-caller-thresholds) at roughly 3.1. <br><br>
+<a id="triple-peak-plot"></a>
+<img src="docs/images/triple_peak.png" alt="Cell Caller plot with triple peak" width="600" height="400">
+<div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
+
+## Setting manual Cell Caller thresholds
+
+If the automatic Cell Caller thresholds are inappropriate for your sample you can apply manual thresholds on a per-sample basis, by modifying the input csv and re-running the pipeline with the [resume](https://www.nextflow.io/docs/latest/cache-and-resume.html) option, e.g. <br>
+```bash
+nextflow run main.nf -profile <profile> --input_csv <manual_threshold_input.csv> --genome <genome> -resume
+```
+An appropriate manual threshold can often be determined on visual inspection of the Cell Caller plot, and should be supplied to the input csv in the units log10(counts+1). 
+<br><br>
+In a single-species experiment, set the *__4th column__* to the desired threshold. If any sample does not require a manual threshold, leaving this column empty will result in Cell Caller calculating the threshold for that sample.<br><br>
+For example, the threshold for Sample1 and Sample2 will be set as 2.4 and 2.8, respectively. The threshold for Sample3 will be calculated by Cell Caller during the pipeline run.
+
+```bash
+sample,fastq_1,fastq_2,manual_cell_caller_threshold
+Sample1,/home/example_user/analysis/raw_reads/example_Sample1_L001_R1_001.fastq.gz,/home/example_user/analysis/raw_reads/example_Sample1_L001_R2_001.fastq.gz,2.4
+Sample2,/home/example_user/analysis/raw_reads/example_Sample2_L001_R1_001.fastq.gz,/home/example_user/analysis/raw_reads/example_Sample2_L001_R2_001.fastq.gz,2.8
+Sample3,/home/example_user/analysis/raw_reads/example_Sample3_L001_R1_001.fastq.gz,/home/example_user/analysis/raw_reads/example_Sample3_L001_R2_001.fastq.gz,
+```
+
+In a mixed-species experiment, set the *__4th column__* to the desired human (species 1) threshold, and the *__5th column__* to the desired mouse (species 2) threshold. It is required that the columns follow this order, and that both columns are present.
+<br><br>If any sample does not require manual thresholds to be set on one or both species, simply leave it blank.
+For example, Sample1 will have a manual human threshold of 3.3 and a manual mouse threshold of 3.4. Sample2 will have a manual human threshold of 3.2 and an automatic Cell Caller defined mouse threshold. Sample3 will have automatic Cell Caller derived human and mouse thresholds.  
+
+```bash
+sample,fastq_1,fastq_2,hsap_manual_cell_caller_threshold,mmus_manual_cell_caller_threshold
+Sample1,/home/example_user/analysis/raw_reads/example_Sample1_L001_R1_001.fastq.gz,/home/example_user/analysis/raw_reads/example_Sample1_L001_R2_001.fastq.gz,3.3,3.4
+Sample2,/home/example_user/analysis/raw_reads/example_Sample2_L001_R1_001.fastq.gz,/home/example_user/analysis/raw_reads/example_Sample2_L001_R2_001.fastq.gz,3.2,
+Sample3,/home/example_user/analysis/raw_reads/example_Sample3_L001_R1_001.fastq.gz,/home/example_user/analysis/raw_reads/example_Sample3_L001_R2_001.fastq.gz,,
+```
+
+## Log files
 As standard, Nextflow produces a `.nextflow.log` file in the directory from which the pipeline was run.
 
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
