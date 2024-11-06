@@ -62,6 +62,7 @@ class CellCaller:
       parser.add_argument("--single_species", help="Whether this is a single species run.", required=True)
       parser.add_argument("--minimum_count_threshold", default=100, type=float, help="minimal number of counts to call cell")
       parser.add_argument("--count_matrix", help="Path to the h5ad count matrix.", required=True)
+      parser.add_argument("--manual_threshold_str", help="A string of manual thresholds as specified by the user in the optional threshold input csv.", required=True)
       
       args_dict = vars(parser.parse_args())
       for key in args_dict:
@@ -73,6 +74,25 @@ class CellCaller:
       else:
          self.single_species = False
          self.mixed_species = True
+
+      # Extract any user specified cell caller thresholds
+
+      if self.mixed_species:
+         # Split the input thresholds string on _, the first value is the human threshold, the second is the mouse threshold
+         self.manual_thresholds = self.manual_threshold_str.split("_")
+         if self.manual_thresholds[0] == "nan":
+            self.mixed_species_specified_threshold_hsap = None
+         else:
+            self.mixed_species_specified_threshold_hsap = float(self.manual_thresholds[0])
+         if self.manual_thresholds[1] == "nan":
+            self.mixed_species_specified_threshold_mmus = None
+         else:
+            self.mixed_species_specified_threshold_mmus = float(self.manual_thresholds[1])
+      else:
+         if self.manual_threshold_str == "nan":
+            self.single_species_specified_threshold = None
+         else:
+            self.single_species_specified_threshold = float(self.manual_threshold_str)
 
    def derive_count_threshold(self):
       """
@@ -86,11 +106,14 @@ class CellCaller:
             self.clean_exit_on_error()
          else:
             self.pdf_df = self.get_prob_dens_data(self.log10_counts)
-            self.log_cutoff = self.get_cutoff(self.pdf_df)
-            self.make_pd_plots()
+            if self.single_species_specified_threshold:
+               self.log_cutoff = self.single_species_specified_threshold
+            else:
+               self.log_cutoff = self.get_cutoff(self.pdf_df)
 
-         # Transform back, and round to the nearest integer
-         print(f"{round(10 ** self.log_cutoff)}", end="")
+            self.make_pd_plots()
+            # Transform back, and round to the nearest integer
+            print(f"{round(10 ** self.log_cutoff)}", end="")
       else:
          # Identify the sub-populations of barcodes which are: 1) majority human counts and 2) majority mouse counts
          self.hsap_majority = self.adata.obs[self.adata.obs["hsap_counts"] > self.adata.obs["mmus_counts"]]
@@ -106,15 +129,20 @@ class CellCaller:
          else:
             self.hsap_pdf_df = self.get_prob_dens_data(self.log10_hsap_counts_hsap_majority)
             self.mmus_pdf_df = self.get_prob_dens_data(self.log10_mmus_counts_mmus_majority)
-            self.hsap_log_cutoff = self.get_cutoff(self.hsap_pdf_df)
-            self.mmus_log_cutoff = self.get_cutoff(self.mmus_pdf_df)
+            if self.mixed_species_specified_threshold_hsap:
+               self.hsap_log_cutoff = self.mixed_species_specified_threshold_hsap
+            else: 
+               self.hsap_log_cutoff = self.get_cutoff(self.hsap_pdf_df)
+            if self.mixed_species_specified_threshold_mmus:
+               self.mmus_log_cutoff = self.mixed_species_specified_threshold_mmus
+            else:
+               self.mmus_log_cutoff = self.get_cutoff(self.mmus_pdf_df)
+
             self.make_pd_plots()
-
-         hsap_thres = round(10 ** self.hsap_log_cutoff)
-         mmus_thres = round(10 ** self.mmus_log_cutoff)
-
-         # Transform back, and round to the nearest integer
-         print(f"{hsap_thres}_{mmus_thres}", end="")
+            hsap_thres = round(10 ** self.hsap_log_cutoff)
+            mmus_thres = round(10 ** self.mmus_log_cutoff)
+            # Transform back, and round to the nearest integer
+            print(f"{hsap_thres}_{mmus_thres}", end="")
 
    def clean_exit_on_error(self):
       """
