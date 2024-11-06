@@ -284,8 +284,56 @@ workflow {
   count_matrix(ch_io_count_out, barcode_list, feature_file_out)
   ch_h5ad = count_matrix.out.h5ad
 
+  // Extract any user specified thresholds for cell calling from the input_csv and format them for input to the cell caller process
+  input_csv
+    .splitCsv(header: true, sep: ',', strip: true)
+    .map { row ->
+        def rowList = row.values().toList()
+
+        if (params.mixed_species) {
+          // In the mixed species case, any user specified hsap and mmus thresholds are expected in columns 4 and 5 of the input csv respectively
+          // When specifying thresholds for mixed species, both columns must be present (even if they are left empty for some samples)
+          if (rowList.size() < 5) {
+            // If one or both columns are missing, no user thresholds are used so the input for cell calling is "nan_nan"
+            return [rowList[0], "nan_nan"]
+          } else {
+            // If both columns are present, we will set the user thresholds to "nan" if they are empty for a particular sample, otherwise we carry through the input value 
+            def hsap_threshold
+            def mmus_threshold
+            if (rowList[3].isEmpty()) {
+              hsap_threshold = "nan"
+            } else {
+              hsap_threshold = rowList[3]
+            }
+            if (rowList[4].isEmpty()) {
+              mmus_threshold = "nan"
+            } else {
+              mmus_threshold = rowList[4]
+            }
+            return [rowList[0], "${hsap_threshold}_${mmus_threshold}"]
+          }
+          
+        } else {
+          // In the single species case, the user specified threshold is expected in column 4
+          if (rowList.size() < 4) {
+            // If the column is missing, we will set the user threshold to "nan"
+            return [rowList[0], "nan"]
+          } else {
+            // If the column exists but is empty for a particular sample, we will set the threshold to "nan", otherwise we take the value from the input csv
+            if (rowList[3].isEmpty()) {
+              return [rowList[0], "nan"]
+            } else {
+              return [rowList[0], "${rowList[3]}"]
+            }
+          }
+        }
+    }
+    .set { user_specified_cell_caller_thresholds_ch }
+
+  ch_cell_caller = ch_h5ad.join(user_specified_cell_caller_thresholds_ch)
+
   // Run cell caller
-  cell_caller(ch_h5ad)
+  cell_caller(ch_cell_caller)
   ch_cell_caller_out = cell_caller.out.cell_caller_out //[val(sample), int(cell_caller_nuc_gene_threshold)]
 
   // Sort the groupTuple so that the int is always
