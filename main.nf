@@ -12,7 +12,11 @@ include {
   trim_extra_polya; post_polyA_fastp; star;
   create_valid_empty_bam as create_valid_empty_bam_star;
   gtf2bed; run_rseqc as raw_rseqc; run_rseqc as annotated_rseqc;
-  feature_counts; single_sample_multiqc;; multi_sample_multiqc;
+  initial_feature_count; filter_for_UMRs_mismatch; umr_transcript_assignment; umr_exon_assignment;
+  filter_for_multimappers_mismatch; multimapper_transcript_assignment; multimapper_exon_assignment;
+  merge_transcript_exon_umr_bams; merge_transcript_exon_multimapper_bams; 
+  merge_annotated_UMRs_with_annotated_multimappers; count_high_conf_annotated_umr_multimap;
+  single_sample_multiqc;; multi_sample_multiqc;
   sort_index_bam; dedup; io_count; count_matrix;
   filter_count_matrix; cell_caller; summary_statistics; single_summary_report;
   multi_sample_report
@@ -243,17 +247,54 @@ workflow {
   raw_rseqc(star_out_ch.good_bam.map({[it[0], it[1], 1]}).mix(create_valid_empty_bam_star.out.out_bam.map({[it[0], it[1], 0]})), gtf2bed.out.bed, empty_rseqc_template, "raw")
   ch_raw_rseqc_multiqc = raw_rseqc.out.rseqc_log
 
+  // Split feature counting into multiple processes to take advantage of parallel processing
   // Perform featurecount quantification
-  // The 1 and 0 being added in the map represent bams that contain (1)
+  // The 1 and 0 being added as the final element of the map represent bams that contain (1)
   // or do not contain (0) alignments.
   // If alignments are present, featureCounts is run,
   // else the empty bam is simply copied for collection from the process.
-  feature_counts(star_out_ch.good_bam.map({[it[0], it[1], 1]}).mix(create_valid_empty_bam_star.out.out_bam.map({[it[0], it[1], 0]})), gtf, "${baseDir}/bin/assign_multi_mappers.gawk")
+  initial_feature_count(star_out_ch.good_bam.map({[it[0], it[1], 1]}).mix(create_valid_empty_bam_star.out.out_bam.map({[it[0], it[1], 0]})), gtf)
+
+  // Make channel feature_count_bams that contain samples with alignments (1) 
+  // Using the sample names in star_out_ch.good_bam to filter
+  // Essentially performs an inner join to limit input to only samples present in star_out_ch.good_bam
+  initial_feature_count_good_bam_out_ch = star_out_ch.good_bam.map({[it[0]]}).join(initial_feature_count.out.feature_count_bam)
+
+  // If alignments are present run UMR and multimapper processing
+  // UMRs
+  // Generate a bam with only UMRs, and up to 3 mismatches
+  filter_for_UMRs_mismatch(initial_feature_count_good_bam_out_ch)
+  // Get the first set of gene associations based on transcript feature annotations
+  umr_transcript_assignment(filter_for_UMRs_mismatch.out.umr_mismatch_bam)
+  // Get the second set of gene associations based on exon feature annotations (i.e. exon-tie breaking)
+  umr_exon_assignment(filter_for_UMRs_mismatch.out.umr_mismatch_bam, gtf)
+
+  // Multimappers
+  // Generate a bam with only multimapping alignments, and up to 3 mismatches
+  filter_for_multimappers_mismatch(initial_feature_count_good_bam_out_ch)
+  // Generate assigned and unassigned bams from the multimapper bam
+  multimapper_transcript_assignment(filter_for_multimappers_mismatch.out.multimap_mismatch_bam, file("${baseDir}/bin/assign_multi_mappers.gawk"))
+  // Run exon tie breaking on the unassigned bam to get further gene associated reads
+  multimapper_exon_assignment(multimapper_transcript_assignment.out.unassigned_bam, gtf, file("${baseDir}/bin/assign_multi_mappers.gawk"))
+
+  // Merge the transcript- and exon-based gene assignments for the umrs
+  merge_transcript_exon_umr_bams(umr_transcript_assignment.out.umr_transcript_assigned_bam.join(umr_exon_assignment.out.umr_exon_assigned_bam))
+  // Merge the transcript- and exon-based gene assignments for the multimappers
+  merge_transcript_exon_multimapper_bams(multimapper_transcript_assignment.out.assigned_bam.join(multimapper_exon_assignment.out.assigned_bam))
+
+  // Merge the multimapper and UMR bams
+  merge_annotated_UMRs_with_annotated_multimappers(merge_transcript_exon_umr_bams.out.high_conf_annotated_umr_bam.join(merge_transcript_exon_multimapper_bams.out.high_conf_annotated_multimapped_bam))
+  
+  // Re-merge channels for samples which had 0 or >0 alignments after STAR alignment
+  umr_multimapper_annotated_bam_out_ch = merge_annotated_UMRs_with_annotated_multimappers.out.high_conf_annotated_bam.mix(create_valid_empty_bam_star.out.out_bam)
+
+  // Count number of aligned reads
+  count_high_conf_annotated_umr_multimap(umr_multimapper_annotated_bam_out_ch)
 
   // Produce RSeQC output of the annotated bam for metrics
-  annotated_rseqc(feature_counts.out.out_bam, gtf2bed.out.bed, empty_rseqc_template, "annotated")
+  annotated_rseqc_in_ch = umr_multimapper_annotated_bam_out_ch.join(count_high_conf_annotated_umr_multimap.out.aligned_count)
+  annotated_rseqc(annotated_rseqc_in_ch, gtf2bed.out.bed, empty_rseqc_template, "annotated")
   ch_annotated_rseqc_multiqc = annotated_rseqc.out.rseqc_log
-
 
   // Generate input channel containing all the files needed for multiqc per samples. 
   // The final channel structure is [sample, [file1, file2, file3, ...]]
@@ -277,10 +318,11 @@ workflow {
   multi_sample_multiqc(ch_ms_multiqc_in)
   
   // Sort and index bam file
-  sort_index_bam(feature_counts.out.out_bam)
+  sort_index_bam(umr_multimapper_annotated_bam_out_ch)
 
   // Perform deduplication
-  dedup(sort_index_bam.out.sort_index_bam_out)
+  dedup_in_ch = sort_index_bam.out.sort_index_bam_out.join(count_high_conf_annotated_umr_multimap.out.aligned_count)
+  dedup(dedup_in_ch)
 
   // Generate file for count matrix
   io_count(dedup.out.io_dedup_sam)
