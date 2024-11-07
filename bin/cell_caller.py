@@ -201,7 +201,7 @@ class CellCaller:
       # Calculate the first and second derivatives of the probability density curve to use in identifying suitable inflection points
       first_derivatives = np.diff(pdf_df['evaluated'].values)/np.diff(pdf_df['data_space'].values)
       second_derivatives = np.diff(first_derivatives)/np.diff(pdf_df['data_space'].values[:-1])
-      derivatives_df = pd.DataFrame({"data_space":pdf_df['data_space'].values[:-2], "first_derivative":first_derivatives[:-1], "second_derivative":second_derivatives})
+      derivatives_df = pd.DataFrame({"data_space":pdf_df['data_space'].values[1:-1], "first_derivative":first_derivatives[:-1], "second_derivative":second_derivatives})
       # Add a binary flag to the derivatives df to indicate whether the sign of the second derivative changes from positive to negative between consecutive points (i.e. an inflection point)
       derivatives_df["sign_change"] = np.where(derivatives_df["second_derivative"].shift(1) * derivatives_df["second_derivative"] < 0, 1, 0)
       
