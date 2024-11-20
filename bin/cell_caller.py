@@ -7,6 +7,9 @@ import matplotlib.pyplot as plt
 from scipy.signal import argrelextrema
 from scipy.stats import gaussian_kde
 import sys, argparse
+import plotly.express as px
+import plotly.graph_objects as go
+import kaleido as kal   ### kaleido is required for writing plotly.express figures to image file e.g. PNG
 
 """
 This is the cell caller function.
@@ -55,6 +58,8 @@ class CellCaller:
       self.parse_arguments()
       self.read_in_anndata_and_handle_error()
       self.derive_count_threshold()
+      if self.mixed_species:
+         self.prepare_and_make_l_plots()
 
    def parse_arguments(self):
       parser = argparse.ArgumentParser(description = "Arguments for cell caller script to calculate count threshold for calling cells")
@@ -139,10 +144,10 @@ class CellCaller:
                self.mmus_log_cutoff = self.get_cutoff(self.mmus_pdf_df)
 
             self.make_pd_plots()
-            hsap_thres = round(10 ** self.hsap_log_cutoff)
-            mmus_thres = round(10 ** self.mmus_log_cutoff)
+            self.hsap_thres = round(10 ** self.hsap_log_cutoff)
+            self.mmus_thres = round(10 ** self.mmus_log_cutoff)
             # Transform back, and round to the nearest integer
-            print(f"{hsap_thres}_{mmus_thres}", end="")
+            print(f"{self.hsap_thres}_{self.mmus_thres}", end="")
 
    def clean_exit_on_error(self):
       """
@@ -274,6 +279,130 @@ class CellCaller:
 
          # Close the figure window to free up memory
          plt.close()
+         
+   def prepare_and_make_l_plots(self):
+      l_plots_df = self.prepare_l_plot_df()
+      self.make_L_plots(l_plots_df)
+      
+   def prepare_l_plot_df(self):
+      """
+      Prepare a df to use for creating the L-plots.
+      We just need to add the barcode type based off below rules:
+      
+      Hsap_counts >= Hsap_threshold & Mmus_counts <= Mmus_threshold is a single-cell (human).
+      Mmus_counts >= Mmus_threshold & Hsap_counts <= Hsap_threshold is a single-cell (mouse).
+      Mmus_counts < Mmus_threshold & Hsap_counts < Hsap_threshold is a noisy barcode.
+      Mmus_counts > Mmus_threshold & Hsap_counts > Hsap_threshold is a multiplet.
+      """
+      
+      l_plots_df = self.adata.obs
+      l_plots_df["barcode_type"] = l_plots_df.apply(lambda x:self.barcode_type(x["hsap_counts"], x["mmus_counts"]), axis=1)
+      
+      return l_plots_df
 
+   def barcode_type(self, hsap_counts, mmus_counts):
+      if hsap_counts > self.hsap_thres and mmus_counts > self.mmus_thres:
+         barcode = "multiplet" 
+      elif hsap_counts >= self.hsap_thres or mmus_counts >= self.mmus_thres:
+         barcode = "single-cell"
+      elif hsap_counts < self.hsap_thres and mmus_counts <self.mmus_thres:
+         barcode = "noise"
+      return barcode
+      
+      
+   def make_L_plots(self, l_plots_df):
+      """
+      Using the curated df from prepare_L_plot_df
+      Create plotly scatterplot of count-based L-plot (obviously only for mixed species) and write out to PNG
+      """
+      #set axis upper limit to just higher than the max count of either species so plot stays square if there is big discrepency between species counts
+      #set axis lower limit to a set % of max below zero so L-plot is good distance from axes
+      axis_upper_limit = max([l_plots_df["hsap_counts"].max(), l_plots_df["mmus_counts"].max()])*1.01
+      axis_lower_limit = 0-(axis_upper_limit/50)
+
+      #make scatter plot of Hsap & Mmus counts, catergorised by barcode type in CSGX colours
+      fig = px.scatter(l_plots_df, x="mmus_counts", y="hsap_counts", color="barcode_type", 
+                       labels={"hsap_counts":"Number of counts from human genes", "mmus_counts":"Number of counts from mouse genes", "barcode_type":""},
+                       title="Counts based L-plot",
+                       opacity=0.7,
+                       width=1200, height=1005,
+                       color_discrete_map={"noise": "#9AA3A8", "single-cell":"#36BA00", "multiplet":"#0081D4"}
+                       )
+      
+      #add_trace adds the threshold legends to the graph - the actual scatter line drawn is intentionally hidden, this will be done by vline/hline instead
+      fig.add_trace(go.Scatter(
+         y=[self.hsap_thres, self.hsap_thres],
+         x=[0, 1],
+         mode='lines',
+         name=f"Hsap threshold = {self.hsap_thres}",
+         line=dict(dash='dot', color = "grey"))
+         )
+      
+      fig.add_trace(go.Scatter(
+         x=[self.mmus_thres, self.mmus_thres],
+         y=[0, 1],
+         mode='lines',
+         name=f"Mmus threshold = {self.mmus_thres}",
+         line=dict(dash='dash', color = "grey"))
+         )
+      
+      fig.add_vline(
+         x=self.mmus_thres, line_dash="dash", line_color="grey",
+         annotation_position = "top right",
+         annotation_text = f"Mmus threshold = {self.mmus_thres}",
+         )
+      
+      #hline & vline add the threshold lines across the whole graph
+      fig.add_hline(
+         y=self.hsap_thres, line_dash="dot", line_color="grey",
+         annotation_position = "bottom right",
+         annotation_text = f"Hsap threshold = {self.hsap_thres}"
+         )
+      
+      #update layout to set correct fonts, axes ranges and white background
+      fig.update_layout(
+                font_family = 'Lexend, sans-serif',
+                title_font_size=25,
+                legend_font_size=15,
+                yaxis = dict(
+                  tickfont = dict(size=15),
+                  titlefont = dict(size=20),
+                  range=[axis_lower_limit, axis_upper_limit]),
+                xaxis = dict(
+                   tickfont = dict(size=15),
+                   titlefont = dict(size=20),
+                   range=[axis_lower_limit, axis_upper_limit]),
+                plot_bgcolor="white",
+                margin = dict(l=45,r=45,t=50,b=45)
+         )
+      #update point size of scatter trace
+      fig.update_traces(marker=dict(size=6)
+         )  
+      
+      #add the ticks and gridlines back to each axis since the plot has a white background and set invervals to 10,000 counts
+      fig.update_xaxes(
+         mirror=True,
+         ticks='outside',
+         showline=True,
+         linecolor='black',
+         gridcolor='lightgrey',
+         dtick=10000
+         )
+      
+      fig.update_yaxes(
+         mirror=True,
+         ticks='outside',
+         showline=True,
+         linecolor='black',
+         gridcolor='lightgrey',
+         dtick=10000
+         )
+      
+      #write out figure to PNG, a scale value larger than 1.0 will increase the image resolution with respect to the figure’s layout pixel dimensions. Whereas as scale factor of less than 1.0 will decrease the image resolution.
+      #But for some reason a scale value of >= 5 causes the points to shift up in the plot so leaving at 4
+      fig.write_image(f"{self.sample_name}_L_plot.png", scale=4)
+      
+      fig.show()
+      
 if __name__ == "__main__":
    CellCaller()
