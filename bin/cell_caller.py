@@ -9,6 +9,7 @@ from scipy.stats import gaussian_kde
 import sys, argparse
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import kaleido as kal   ### kaleido is required for writing plotly.express figures to image file e.g. PNG
 
 """
@@ -57,7 +58,7 @@ class CellCaller:
    def __init__(self):
       self.parse_arguments()
       self.read_in_anndata_and_handle_error()
-      self.derive_count_threshold()
+      self.derive_count_threshold_and_plot_count_pd()
       if self.mixed_species:
          self.prepare_and_make_l_plots()
 
@@ -99,7 +100,7 @@ class CellCaller:
          else:
             self.single_species_specified_threshold = float(self.manual_threshold_str)
 
-   def derive_count_threshold(self):
+   def derive_count_threshold_and_plot_count_pd(self):
       """
       Derive the count threshold above which
       a barcode will be considered a cell
@@ -115,8 +116,9 @@ class CellCaller:
                self.log_cutoff = self.single_species_specified_threshold
             else:
                self.log_cutoff = self.get_cutoff(self.pdf_df)
-
-            self.make_pd_plots()
+               
+            self.single_species_thres = round(10 ** self.log_cutoff)
+            self.make_pd_plots_in_plotly()
             # Transform back, and round to the nearest integer
             print(f"{round(10 ** self.log_cutoff)}", end="")
       else:
@@ -143,7 +145,7 @@ class CellCaller:
             else:
                self.mmus_log_cutoff = self.get_cutoff(self.mmus_pdf_df)
 
-            self.make_pd_plots()
+            self.make_pd_plots_in_plotly()
             self.hsap_thres = round(10 ** self.hsap_log_cutoff)
             self.mmus_thres = round(10 ** self.mmus_log_cutoff)
             # Transform back, and round to the nearest integer
@@ -230,56 +232,188 @@ class CellCaller:
          # If there are any minima that are above 2, find the smallest one.
          log_cutoff = min(potential_minima_cutoffs)
       return log_cutoff
-
-   def make_pd_plots(self):
+         
+   def make_pd_plots_in_plotly(self):      
       """
-      # TODO convert to plotly.
-      Plot probability density with the default cutoffs
-      and cell caller cutoff, and save the plot as a png
+      Plot probability density with the cell caller cutoff, 
+      and save the plot as a png (separate plots for mixed species)
       """
       if self.single_species:
-         plt.plot(self.pdf_df['data_space'], self.pdf_df['evaluated'])
-         plt.axvline(self.log_cutoff, color = 'red', label = f"Cell Caller\n {str(round(10 ** self.log_cutoff))}")
-         plt.axvline(np.log10(self.minimum_count_threshold), color = 'black', label = f"Default\n{str(round(self.minimum_count_threshold))}")
-         plt.title("Cell Caller minimum count\nthreshold calculation", fontdict = {'family':'sans-serif','color':'black','size':12,'fontweight':'bold'})
-         plt.xlabel("log10(total_counts + 1)")
-         plt.ylabel("Density")
-         plt.legend(bbox_to_anchor = (1.0, 1), loc = 'upper right', title="Method", fontsize=7)
-         plt.savefig(f"{self.sample_name}_pdf_with_cutoff.png", dpi=900) 
-         plt.close()    # close the figure window
-      else:
-         # Create a new figure
-         plt.figure(figsize=(7, 10))
-
-         # First subplot for hsap
-         plt.subplot(2, 1, 1)  # (rows, columns, panel number)
-         plt.plot(self.hsap_pdf_df['data_space'], self.hsap_pdf_df['evaluated'])
-         plt.axvline(self.hsap_log_cutoff, color='red', label=f"Cell Caller\n {str(round(10 ** self.hsap_log_cutoff))}")
-         plt.axvline(np.log10(self.minimum_count_threshold), color='black', label=f"Default\n{str(round(self.minimum_count_threshold))}")
-         plt.title("Cell Caller minimum human count threshold calculation\nin majority human-count barcodes", fontdict={'family': 'sans-serif', 'color': 'black', 'size': 12, 'fontweight': 'bold'})
-         plt.xlabel("log10(hsap_counts + 1)")
-         plt.ylabel("Density")
-         plt.legend(bbox_to_anchor=(1.0, 1), loc='upper right', title="Method", fontsize=7)
-
-         # Second subplot for mmus
-         plt.subplot(2, 1, 2)  # (rows, columns, panel number)
-         plt.plot(self.mmus_pdf_df['data_space'], self.mmus_pdf_df['evaluated'])
-         plt.axvline(self.mmus_log_cutoff, color='red', label=f"Cell Caller\n {str(round(10 ** self.mmus_log_cutoff))}")
-         plt.axvline(np.log10(self.minimum_count_threshold), color='black', label=f"Default\n{str(round(self.minimum_count_threshold))}")
-         plt.title("Cell Caller minimum mouse count threshold calculation\nin majority mouse-count barcodes", fontdict={'family': 'sans-serif', 'color': 'black', 'size': 12, 'fontweight': 'bold'})
-         plt.xlabel("log10(mmus_counts + 1)")
-         plt.ylabel("Density")
-         plt.legend(bbox_to_anchor=(1.0, 1), loc='upper right', title="Method", fontsize=7)
-
-         # Adjust layout to prevent overlapping content
-         plt.tight_layout()
-
-         # Save the figure as a single .png image
-         plt.savefig(f"{self.sample_name}_combined_pdf_with_cutoff.png", dpi=900)
-
-         # Close the figure window to free up memory
-         plt.close()
+         fig_single_species = px.line(self.pdf_df, x="data_space", y="evaluated",
+                                    labels={"data_space":"log10(hsap_counts + 1)", "evaluated":"Density"},
+                                    title="Cell Caller minimum human count threshold calculation<br>in majority human-count barcodes",
+                                    width=1100, height=900
+                                    )
          
+         fig_single_species.update_traces(line_color='#0081D4')
+         
+         fig_single_species.add_vline(
+         x=self.log_cutoff, line_color="red",
+         )
+         
+         fig_single_species.add_trace(go.Scatter(
+         x=[self.log_cutoff, self.log_cutoff],
+         y=[0, 0.01],
+         mode='lines',
+         name=f"Cell Caller<br>{str(round(10 ** self.log_cutoff))}",
+         line=dict(color = "red"))
+         )
+               
+         fig_single_species.update_layout(
+               font=dict(family="Lexend, sans-serif", color="black"),
+                font_family = 'Lexend, sans-serif',
+                title_font_size=30,
+                legend_font_size=20,
+                yaxis = dict(
+                  tickfont = dict(size=20),
+                  titlefont = dict(size=25)),
+               xaxis = dict(
+                   tickfont = dict(size=20),
+                   titlefont = dict(size=25)),
+                plot_bgcolor="white",
+                legend=dict(yanchor="top", y=0.99, 
+                            xanchor="right",x=0.99, 
+                            bordercolor="Black",
+                            borderwidth=2,
+                            title="    Method"),
+                title_x=0.5
+               )
+         
+         fig_single_species.update_xaxes(
+         mirror=True,
+         ticks='outside',
+         showline=True,
+         linecolor='black',
+         dtick=1
+         )
+      
+         fig_single_species.update_yaxes(
+         mirror=True,
+         ticks='outside',
+         showline=True,
+         linecolor='black',
+         dtick=0.2
+         )
+         
+         fig_single_species.write_image(f"{self.sample_name}_pdf_with_cutoff.png", scale=4)         
+         
+      else:
+         fig_hsap = px.line(self.hsap_pdf_df, x="data_space", y="evaluated",
+                           labels={"data_space":"log10(hsap_counts + 1)", "evaluated":"Density"},
+                           title="Cell Caller minimum human count threshold calculation<br>in majority human-count barcodes",
+                           width=1100, height=900
+                       )
+         fig_hsap.update_traces(line_color='#0081D4')
+         
+         fig_hsap.add_vline(
+            x=self.hsap_log_cutoff, line_color="red",
+         )
+         
+         fig_hsap.add_trace(go.Scatter(
+         x=[self.hsap_log_cutoff, self.hsap_log_cutoff],
+         y=[0, 0.01],
+         mode='lines',
+         name=f"Cell Caller<br>{str(round(10 ** self.hsap_log_cutoff))}",
+         line=dict(color = "red"))
+         )
+         
+         fig_hsap.update_layout(
+               font=dict(family="Lexend, sans-serif", color="black"),
+                font_family = 'Lexend, sans-serif',
+                title_font_size=30,
+                legend_font_size=20,
+                yaxis = dict(
+                  tickfont = dict(size=20),
+                  titlefont = dict(size=25)),
+               xaxis = dict(
+                   tickfont = dict(size=20),
+                   titlefont = dict(size=25)),
+                plot_bgcolor="white",
+                legend=dict(yanchor="top", y=0.99, 
+                            xanchor="right",x=0.99, 
+                            bordercolor="Black",
+                            borderwidth=2,
+                            title="    Method"),
+                title_x=0.5
+               )
+         
+         fig_hsap.update_xaxes(
+         mirror=True,
+         ticks='outside',
+         showline=True,
+         linecolor='black',
+         dtick=1
+         )
+      
+         fig_hsap.update_yaxes(
+         mirror=True,
+         ticks='outside',
+         showline=True,
+         linecolor='black',
+         dtick=0.2
+         )
+         
+         fig_hsap.write_image(f"{self.sample_name}_hsap_pdf_with_cutoff.png", scale=4)
+         #fig_hsap.show()
+         
+         fig_mmus = px.line(self.mmus_pdf_df, x="data_space", y="evaluated",
+                           labels={"data_space":"log10(mmus_counts + 1)", "evaluated":"Density"},
+                           title="Cell Caller minimum mouse count threshold calculation<br>in majority mouse-count barcodes",
+                           width=1100, height=900
+                       )
+         
+         fig_mmus.update_traces(line_color='#0081D4')
+         
+         fig_mmus.add_vline(
+            x=self.mmus_log_cutoff, line_color="red",
+         )
+         
+         fig_mmus.add_trace(go.Scatter(
+         x=[self.mmus_log_cutoff, self.mmus_log_cutoff],
+         y=[0, 0.01],
+         mode='lines',
+         name=f"Cell Caller<br>{str(round(10 ** self.mmus_log_cutoff))}",
+         line=dict(color = "red"))
+         )
+         
+         fig_mmus.update_layout(
+               font=dict(family="Lexend, sans-serif", color="black"),
+                font_family = 'Lexend, sans-serif',
+                title_font_size=30,
+                legend_font_size=20,
+                yaxis = dict(
+                  tickfont = dict(size=20),
+                  titlefont = dict(size=25)),
+               xaxis = dict(
+                   tickfont = dict(size=20),
+                   titlefont = dict(size=25)),
+                plot_bgcolor="white",
+                legend=dict(yanchor="top", y=0.99, 
+                            xanchor="right",x=0.99, 
+                            bordercolor="Black",
+                            borderwidth=2,
+                            title="    Method"),
+                title_x=0.5
+               )
+         
+         fig_mmus.update_xaxes(
+         mirror=True,
+         ticks='outside',
+         showline=True,
+         linecolor='black',
+         dtick=1
+         )
+      
+         fig_mmus.update_yaxes(
+         mirror=True,
+         ticks='outside',
+         showline=True,
+         linecolor='black',
+         dtick=0.2
+         )
+         
+         fig_mmus.write_image(f"{self.sample_name}_mmus_pdf_with_cutoff.png", scale=4)
+          
    def prepare_and_make_l_plots(self):
       l_plots_df = self.prepare_l_plot_df()
       self.make_L_plots(l_plots_df)
@@ -305,7 +439,7 @@ class CellCaller:
          barcode = "multiplet" 
       elif hsap_counts >= self.hsap_thres or mmus_counts >= self.mmus_thres:
          barcode = "single-cell"
-      elif hsap_counts < self.hsap_thres and mmus_counts <self.mmus_thres:
+      elif hsap_counts < self.hsap_thres and mmus_counts < self.mmus_thres:
          barcode = "noise"
       return barcode
       
@@ -325,7 +459,7 @@ class CellCaller:
                        labels={"hsap_counts":"Number of counts from human genes", "mmus_counts":"Number of counts from mouse genes", "barcode_type":""},
                        title="Counts based L-plot",
                        opacity=0.7,
-                       width=1200, height=1005,
+                       width=1100, height=900,
                        color_discrete_map={"noise": "#9AA3A8", "single-cell":"#36BA00", "multiplet":"#0081D4"}
                        )
       
@@ -361,7 +495,7 @@ class CellCaller:
       
       #update layout to set correct fonts, axes ranges and white background
       fig.update_layout(
-                font_family = 'Lexend, sans-serif',
+                font=dict(family = 'Lexend, sans-serif', color="black"),
                 title_font_size=25,
                 legend_font_size=15,
                 yaxis = dict(
@@ -402,7 +536,7 @@ class CellCaller:
       #But for some reason a scale value of >= 5 causes the points to shift up in the plot so leaving at 4
       fig.write_image(f"{self.sample_name}_L_plot.png", scale=4)
       
-      fig.show()
+      #fig.show()
       
 if __name__ == "__main__":
    CellCaller()
