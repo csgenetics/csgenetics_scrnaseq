@@ -4,3 +4,5 @@
 results
 results_test
 work
+.latch/.logs/*
+*__pycache__*
