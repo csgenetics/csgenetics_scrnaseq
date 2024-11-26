@@ -25,7 +25,6 @@ from latch_cli.services.register.utils import import_module_by_path
 
 meta = Path("latch_metadata") / "__init__.py"
 import_module_by_path(meta)
-import latch_metadata
 
 @custom_task(cpu=0.25, memory=0.5, storage_gib=1)
 def initialize() -> str:
@@ -116,7 +115,7 @@ def curate_samplesheet(input_csv: typing.List[Sample], single_species: bool) -> 
         return [MixedSpeciesSample(sample=sample.sample, fastq_1=sample.fastq_1, fastq_2=sample.fastq_2, hsap_manual_cell_caller_threshold=sample.hsap_manual_cell_caller_threshold, mmus_manual_cell_caller_threshold=sample.mmus_manual_cell_caller_threshold) for sample in input_csv]
 
 @nextflow_runtime_task(cpu=4, memory=8, storage_gib=100)
-def nextflow_runtime(pvc_name: str, input_csv: typing.List[Sample], outdir: LatchDir, star_index: typing.Optional[LatchDir], gtf: typing.Optional[LatchFile], genome: ReferenceGenome, mitochondria_chromosome: str, minimum_count_threshold: float) -> None:
+def nextflow_runtime(pvc_name: str, input_csv: typing.Union[typing.List[SingleSpeciesSample], typing.List[MixedSpeciesSample]], outdir: LatchDir, star_index: typing.Optional[LatchDir], gtf: typing.Optional[LatchFile], genome: ReferenceGenome, mitochondria_chromosome: str, minimum_count_threshold: float) -> None:
     shared_dir = Path("/nf-workdir")
 
     exec_name = _get_execution_name()
