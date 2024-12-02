@@ -20,6 +20,8 @@ from latch_cli.nextflow.utils import _get_execution_name
 from latch_cli.utils import urljoins
 from latch.types import metadata
 from flytekit.core.annotation import FlyteAnnotation
+from latch import message
+from functools import partial
 
 from latch_cli.services.register.utils import import_module_by_path
 
@@ -97,10 +99,12 @@ def validate_genome_selection(genome: ReferenceGenome, star_index: typing.Option
         # No curated genome has been selected so we are expecting a user-supplied STAR index and GTF file.
         if star_index is None or gtf is None:
             raise ValueError("If you are not using a curated genome, you must provide a STAR index and GTF file.")
+        message(typ='info', data={'title': "Genome configuration", "body":"Custom genome configured"})
     else:
         # A curated genome has been selected so the user should not provide a STAR index or GTF file.
         if star_index is not None or gtf is not None:
             raise ValueError("If you are using a preconfigured genome, you cannot provide a STAR index or GTF file.")
+        message(typ='info', data={'title': "Genome configuration", "body":"Curated genome configured"})
         
     if genome == ReferenceGenome.mouse_human_mix:
         single_species = False
@@ -110,12 +114,16 @@ def validate_genome_selection(genome: ReferenceGenome, star_index: typing.Option
 @nextflow_runtime_task(cpu=1, memory=4, storage_gib=10)
 def curate_samplesheet(input_csv: typing.List[Sample], single_species: bool) -> typing.Union[typing.List[SingleSpeciesSample], typing.List[MixedSpeciesSample]]:
     if single_species:
-        return [SingleSpeciesSample(sample=sample.sample, fastq_1=sample.fastq_1, fastq_2=sample.fastq_2, manual_cellcaller_threshold=sample.manual_cellcaller_threshold) for sample in input_csv]
+        curated_samplesheet = [SingleSpeciesSample(sample=sample.sample, fastq_1=sample.fastq_1, fastq_2=sample.fastq_2, manual_cellcaller_threshold=sample.manual_cellcaller_threshold) for sample in input_csv]
+        message(typ='info', data={'title': "Species configuration", "body":f"Single species configured: {str(curated_samplesheet)}"})
+        return curated_samplesheet
     else:
-        return [MixedSpeciesSample(sample=sample.sample, fastq_1=sample.fastq_1, fastq_2=sample.fastq_2, hsap_manual_cell_caller_threshold=sample.hsap_manual_cell_caller_threshold, mmus_manual_cell_caller_threshold=sample.mmus_manual_cell_caller_threshold) for sample in input_csv]
+        curated_samplesheet = [MixedSpeciesSample(sample=sample.sample, fastq_1=sample.fastq_1, fastq_2=sample.fastq_2, hsap_manual_cell_caller_threshold=sample.hsap_manual_cell_caller_threshold, mmus_manual_cell_caller_threshold=sample.mmus_manual_cell_caller_threshold) for sample in input_csv]
+        message(typ='info', data={'title': "Species configuration", "body":f"Mixed species configured: {str(curated_samplesheet)}"})
+        return curated_samplesheet
 
 @nextflow_runtime_task(cpu=4, memory=8, storage_gib=100)
-def nextflow_runtime(pvc_name: str, input_csv: typing.Union[typing.List[SingleSpeciesSample], typing.List[MixedSpeciesSample]], outdir: LatchDir, star_index: typing.Optional[LatchDir], gtf: typing.Optional[LatchFile], genome: ReferenceGenome, mitochondria_chromosome: str, minimum_count_threshold: float) -> None:
+def nextflow_runtime(pvc_name: str, input_csv: typing.Union[typing.List[SingleSpeciesSample], typing.List[MixedSpeciesSample]], outdir: LatchDir, star_index: typing.Optional[LatchDir], gtf: typing.Optional[LatchFile], genome: ReferenceGenome, mitochondria_chromosome: str, minimum_count_threshold: float, single_species: bool) -> None:
     shared_dir = Path("/nf-workdir")
 
     exec_name = _get_execution_name()
@@ -136,7 +144,18 @@ def nextflow_runtime(pvc_name: str, input_csv: typing.Union[typing.List[SingleSp
     results.append(os.path.join(outdir.remote_path, 'multiqc'))
     add_execution_results(results)
 
-    input_csv_samplesheet = input_csv_construct_samplesheet(input_csv)
+    # The below call to input_csv_contruct_samplesheet will write out the csv
+    # file that will be supplied to the NextflowPipeline to the input_csv flag.
+    # The input_csv_contruct_samplesheet function was originally created
+    # with the t (type) set to <Sample>. We need to update the type to 
+    # SingleSpeciesSample or MixedSpeciesSample depending on the workflow
+    # so that the correct cell caller count threshold columns are written out. 
+    if isinstance(input_csv[0], SingleSpeciesSample):
+        t = SingleSpeciesSample
+    else:
+        t = MixedSpeciesSample
+
+    input_csv_samplesheet = input_csv_construct_samplesheet(input_csv, t=t)
 
     ignore_list = [
         "latch",
@@ -256,10 +275,15 @@ def nf_cs_genetics_simplecell_pipeline(input_csv: typing.List[Sample], outdir: L
 
     Sample Description
     """
+    local_var_message_str = "\n".join([f"{name}: {value}" for name, value in locals().items()])
+    message(typ='info', data={'title': "Local variables", "body":local_var_message_str})
+
+    global_var_message_str = "\n".join([f"{name}: {value}" for name, value in globals().items()])
+    message(typ='info', data={'title': "Global variables", "body":global_var_message_str})
 
     pvc_name: str = initialize()
     # Run validate_genome_selection to check that the user has provided a valid selection of genomic references.
-    genome, star_index, gtf, mitochondria_chromosome, single_species = validate_genome_selection(genome, star_index, gtf, mitochondria_chromosome)
+    genome, star_index, gtf, mitochondria_chromosome, single_species = validate_genome_selection(genome=genome, star_index=star_index, gtf=gtf, mitochondria_chromosome=mitochondria_chromosome)
     # Run curate_samplesheet to adjust the input CSV schema based on whether the workflow is single or mixed species.
-    input_csv_curated = curate_samplesheet(input_csv, single_species)
-    nextflow_runtime(pvc_name=pvc_name, input_csv=input_csv_curated, outdir=outdir, genome=genome, star_index=star_index, gtf=gtf, mitochondria_chromosome=mitochondria_chromosome, minimum_count_threshold=minimum_count_threshold)
+    input_csv_curated = curate_samplesheet(input_csv=input_csv, single_species=single_species)
+    nextflow_runtime(pvc_name=pvc_name, input_csv=input_csv_curated, outdir=outdir, genome=genome, star_index=star_index, gtf=gtf, mitochondria_chromosome=mitochondria_chromosome, minimum_count_threshold=minimum_count_threshold, single_species=single_species)
