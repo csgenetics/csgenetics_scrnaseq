@@ -219,7 +219,6 @@ def nextflow_runtime(pvc_name: str, input_csv: typing.Union[typing.List[SingleSp
             "-c",
             "latch.config",
             "-resume",
-            "--genome", "custom",
             *get_flag('input_csv', input_csv_samplesheet),
             *get_flag('outdir', outdir),
             *get_flag('genome', genome),
