@@ -123,7 +123,7 @@ def curate_samplesheet(input_csv: typing.List[Sample], single_species: bool) -> 
         return curated_samplesheet
 
 @nextflow_runtime_task(cpu=4, memory=8, storage_gib=100)
-def nextflow_runtime(pvc_name: str, input_csv: typing.Union[typing.List[SingleSpeciesSample], typing.List[MixedSpeciesSample]], outdir: LatchDir, star_index: typing.Optional[LatchDir], gtf: typing.Optional[LatchFile], genome: ReferenceGenome, mitochondria_chromosome: str, minimum_count_threshold: float, single_species: bool) -> None:
+def nextflow_runtime(pvc_name: str, input_csv: typing.Union[typing.List[SingleSpeciesSample], typing.List[MixedSpeciesSample]], outdir: LatchDir, star_index: typing.Optional[LatchDir], gtf: typing.Optional[LatchFile], genome: ReferenceGenome, mitochondria_chromosome: str, minimum_count_threshold: float, ) -> None:
     shared_dir = Path("/nf-workdir")
 
     exec_name = _get_execution_name()
@@ -187,25 +187,46 @@ def nextflow_runtime(pvc_name: str, input_csv: typing.Union[typing.List[SingleSp
 
     profiles = ','.join(profile_list)
 
-    cmd = [
-        "/root/nextflow",
-        "run",
-        str(shared_dir / "main.nf"),
-        "-work-dir",
-        str(shared_dir),
-        "-profile",
-        profiles,
-        "-c",
-        "latch.config",
-        "-resume",
-        *get_flag('input_csv', input_csv_samplesheet),
-                *get_flag('outdir', outdir),
-                *get_flag('genome', genome),
-                *get_flag('star_index', star_index),
-                *get_flag('gtf', gtf),
-                *get_flag('mitochondria_chromosome', mitochondria_chromosome),
-                *get_flag('minimum_count_threshold', minimum_count_threshold)
-    ]
+    if star_index is not None:
+        message(typ='info', data={'title': "Pipeline Launch", "body":" Launching Nextflow with custom genome configuration."})
+        cmd = [
+            "/root/nextflow",
+            "run",
+            str(shared_dir / "main.nf"),
+            "-work-dir",
+            str(shared_dir),
+            "-profile",
+            profiles,
+            "-c",
+            "latch.config",
+            "-resume",
+            "--genome", "custom",
+            *get_flag('input_csv', input_csv_samplesheet),
+            *get_flag('outdir', outdir),
+            *get_flag('star_index', star_index),
+            *get_flag('gtf', gtf),
+            *get_flag('mitochondria_chromosome', mitochondria_chromosome),
+            *get_flag('minimum_count_threshold', minimum_count_threshold)
+        ]
+    else:
+        message(typ='info', data={'title': "Pipeline Launch", "body":" Launching Nextflow with curated genome configuration."})
+        cmd = [
+            "/root/nextflow",
+            "run",
+            str(shared_dir / "main.nf"),
+            "-work-dir",
+            str(shared_dir),
+            "-profile",
+            profiles,
+            "-c",
+            "latch.config",
+            "-resume",
+            "--genome", "custom",
+            *get_flag('input_csv', input_csv_samplesheet),
+            *get_flag('outdir', outdir),
+            *get_flag('genome', genome),
+            *get_flag('minimum_count_threshold', minimum_count_threshold)
+        ]
 
     print("Launching Nextflow Runtime")
     print(' '.join(cmd))
