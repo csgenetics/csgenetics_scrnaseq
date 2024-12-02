@@ -99,13 +99,11 @@ def validate_genome_selection(genome: ReferenceGenome, star_index: typing.Option
         # No curated genome has been selected so we are expecting a user-supplied STAR index and GTF file.
         if star_index is None or gtf is None:
             raise ValueError("If you are not using a curated genome, you must provide a STAR index and GTF file.")
-        message(typ='info', data={'title': "Genome configuration", "body":"Custom genome configured"})
     else:
         # A curated genome has been selected so the user should not provide a STAR index or GTF file.
         if star_index is not None or gtf is not None:
             raise ValueError("If you are using a preconfigured genome, you cannot provide a STAR index or GTF file.")
-        message(typ='info', data={'title': "Genome configuration", "body":"Curated genome configured"})
-        
+
     if genome == ReferenceGenome.mouse_human_mix:
         single_species = False
 
@@ -296,15 +294,9 @@ def nf_cs_genetics_simplecell_pipeline(input_csv: typing.List[Sample], outdir: L
 
     Sample Description
     """
-    local_var_message_str = "\n".join([f"{name}: {value}" for name, value in locals().items()])
-    message(typ='info', data={'title': "Local variables", "body":local_var_message_str})
-
-    global_var_message_str = "\n".join([f"{name}: {value}" for name, value in globals().items()])
-    message(typ='info', data={'title': "Global variables", "body":global_var_message_str})
-
     pvc_name: str = initialize()
     # Run validate_genome_selection to check that the user has provided a valid selection of genomic references.
     genome, star_index, gtf, mitochondria_chromosome, single_species = validate_genome_selection(genome=genome, star_index=star_index, gtf=gtf, mitochondria_chromosome=mitochondria_chromosome)
     # Run curate_samplesheet to adjust the input CSV schema based on whether the workflow is single or mixed species.
     input_csv_curated = curate_samplesheet(input_csv=input_csv, single_species=single_species)
-    nextflow_runtime(pvc_name=pvc_name, input_csv=input_csv_curated, outdir=outdir, genome=genome, star_index=star_index, gtf=gtf, mitochondria_chromosome=mitochondria_chromosome, minimum_count_threshold=minimum_count_threshold, single_species=single_species)
+    nextflow_runtime(pvc_name=pvc_name, input_csv=input_csv_curated, outdir=outdir, genome=genome, star_index=star_index, gtf=gtf, mitochondria_chromosome=mitochondria_chromosome, minimum_count_threshold=minimum_count_threshold)
