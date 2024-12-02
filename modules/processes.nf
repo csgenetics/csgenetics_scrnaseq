@@ -1,6 +1,23 @@
 #!/usr/bin/env nextflow
 
 nextflow.enable.dsl=2
+import groovy.json.JsonOutput
+
+process save_resolved_configuration{
+  tag "Save resolved configuration"
+  publishDir "${params.outdir}/pipeline_info/", mode: 'copy'
+
+  output:
+  path("resolved_configuration.txt")
+
+  script:
+  json_str = JsonOutput.toJson(params)
+  json_indented = JsonOutput.prettyPrint(json_str)
+  // NOTE: single quotes are critical here;
+  """
+  echo '${json_indented}' > resolved_configuration.txt
+  """
+}
 
 /*
 * Download the star index from the s3://csgx.public.readonly bucket
