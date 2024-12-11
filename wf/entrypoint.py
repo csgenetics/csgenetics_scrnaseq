@@ -285,13 +285,36 @@ def nextflow_runtime(pvc_name: str, input_csv: typing.Union[typing.List[SingleSp
     if failed:
         sys.exit(1)
 
-
+#TODO include a test set to run the pipeline with a single species and mixed species input CSV.
 @workflow(metadata._nextflow_metadata)
 def nf_cs_genetics_simplecell_pipeline(input_csv: typing.List[Sample], outdir: LatchDir, star_index: typing.Optional[LatchDir], gtf: typing.Optional[LatchFile], genome: ReferenceGenome = ReferenceGenome.no_selection, mitochondria_chromosome: str = '', minimum_count_threshold: float = 100.0) -> None:
     """
-    CS Genetics SimpleCell pipeline
+    CS Genetics SimpleCell&trade; pipeline
 
-    Sample Description
+    ** The SimpleCell&trade; scRNA-Seq pipeline** is a bioinformatics best-practices analysis pipeline for processing sequencing files generated using CS Genetics' SimpleCell&trade; kits.
+
+    Paired sequencing files are processed to generate count matrices.
+
+    To access the source code, please visit [our repository](https://github.com/csgenetics/csgenetics_scrnaseq).
+
+    The output count tables can be imported directly into one of CS Genetics' LatchBio Pods or Plots to perform further analyses.
+
+    To launch a pipeline run, please follow the input instructions on the 'Parameters' tab.
+
+    Once launched, a 'Graphs & Logs' tab will appear where you can monitor the progress of the pipeline
+    and once the `wf.entrypoint.nextflow_runtime` task is initiated, a 'Process Nodes' tab will appear.
+
+    This tab will allow you granular insight into the pipeline's progress. Here you'll be able to
+    inspect each Nextflow-defined task including logs, outputs and resources being consumed.
+
+    As the pipeline progresses, the 'Results' tab will populate with the outputs of the pipeline.
+
+    These output files are also available at the bottom of the right-hand panel.
+
+    The 'Usage Report' tab will provide a summary of the resources consumed by the pipeline.
+
+    For further documentation please refer to the LatchBio documentation on [Workflows](https://wiki.latch.bio/workflows/overview).
+
     """
     pvc_name: str = initialize()
     # Run validate_genome_selection to check that the user has provided a valid selection of genomic references.
