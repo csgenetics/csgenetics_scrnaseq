@@ -59,7 +59,7 @@ generated_parameters = {
         batch_table_column=False,
         type=ReferenceGenome,
         default=ReferenceGenome.no_selection,
-        description="A string representing the preconfigured genomic resources to use. If using a preconfigured reference, do not set the star_index, gtf_dir or mitochondra_chromosome variables, they will automatically be set to the correct values for you. If using a custom set of references, set this to 'custom'.",
+        description="A string representing the curated genomic resource to use. If using a curated reference, do not set the star_index, gtf_dir or mitochondra_chromosome variables, they will automatically be set to the correct values for you. If using a custom set of references, leave this blank.",
     ),
     'star_index': NextflowParameter(
         display_name="STAR index dir path",

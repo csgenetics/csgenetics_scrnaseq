@@ -10,6 +10,8 @@ from .parameters import generated_parameters
 
 NextflowMetadata(
     display_name='CS Genetics SimpleCell pipeline',
+    repository="https://github.com/csgenetics/csgenetics_scrnaseq",
+    license="MIT",
     author=LatchAuthor(
         name="CS Genetics",
     ),
@@ -28,13 +30,13 @@ NextflowMetadata(
 ### Sample input
  
 Sample information can be added by:
-- manually adding row information,
-- importing rows from Registry, or
-- importing from bulk sequencing data
+- manually adding rows and populating them with the pertinent information,
+- importing rows from an existing Registry, or
+- importing pairs of fastq.gz files from a location in the Latch Data file system using the 'Add Rows from Bulk Sequencing Data' button
 
 There should be one row for every R1/R2 pair of fastq.gz files.
 
-For samples that use multiple fastq.gz pairs, create one row for each pair, with the same sample name.
+Rows with the same sample name will have their fastq.gz files merged.
 
 In addition to the first three required columns:
 - sample
@@ -45,9 +47,9 @@ an additional column(s) can be provided to manually set the cell calling theshol
 
 See the [Cell Caller documentation](https://github.com/csgenetics/csgenetics_scrnaseq?tab=readme-ov-file#cell-calling) for further details on cell calling.
 
-For a single species workflow populate the manual_cellcaller_threshold.
+For a single species workflow populate the `manual_cellcaller_threshold` column.
 
-For a mixed species workflow, populate hsap_manual_cell_caller_threshold and/or mmus_manual_cell_caller_threshold.
+For a mixed species workflow, populate the `hsap_manual_cell_caller_threshold` and/or the `mmus_manual_cell_caller_threshold` columns.
 
 The cell caller thresholds should be left blank if the cell calling algorithm should be used.
 """
@@ -58,9 +60,11 @@ The cell caller thresholds should be left blank if the cell calling algorithm sh
     Section("Genomic references",
         Text(
 """
-### The pipeline can be run using using:
+### The pipeline can be run using:
 - a CS Genetics-curated reference genome, or
 - a user-supplied set of genomic resources
+
+Select a curated reference genome from below or select 'Custom' to provide your own genomic references.
 """),
         Fork(
             'custom_genome',
