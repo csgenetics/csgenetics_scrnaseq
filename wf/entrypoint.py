@@ -58,8 +58,6 @@ class ReferenceGenome(Enum):
     mouse_human_mix = 'mouse_human_mix'
 
 
-
-
 @dataclass
 class Sample:
     sample: str
@@ -285,21 +283,24 @@ def nextflow_runtime(pvc_name: str, input_csv: typing.Union[typing.List[SingleSp
     if failed:
         sys.exit(1)
 
-#TODO include a test set to run the pipeline with a single species and mixed species input CSV.
 @workflow(metadata._nextflow_metadata)
 def nf_cs_genetics_simplecell_pipeline(input_csv: typing.List[Sample], outdir: LatchDir, star_index: typing.Optional[LatchDir], gtf: typing.Optional[LatchFile], genome: ReferenceGenome = ReferenceGenome.no_selection, mitochondria_chromosome: str = '', minimum_count_threshold: float = 100.0) -> None:
     """
-    CS Genetics SimpleCell&trade; pipeline
+    CS Genetics' SimpleCell pipeline
 
-    ** The SimpleCell&trade; scRNA-Seq pipeline** is a bioinformatics best-practices analysis pipeline for processing sequencing files generated using CS Genetics' SimpleCell&trade; kits.
+    # CS Genetics' SimpleCell&trade; pipeline
+
+    **The SimpleCell&trade; scRNA-Seq pipeline** is a bioinformatics best-practices analysis pipeline for processing sequencing files generated using CS Genetics' SimpleCell&trade; kits.
 
     Paired sequencing files are processed to generate count matrices.
 
     To access the source code, please visit [our repository](https://github.com/csgenetics/csgenetics_scrnaseq).
 
-    The output count tables can be imported directly into one of CS Genetics' LatchBio Pods or Plots to perform further analyses.
+    The output count tables can be imported directly into one of CS Genetics' LatchBio [Pods](https://console.latch.bio/apps) or [Plots](https://console.latch.bio/plots) to perform further analyses.
 
     To launch a pipeline run, please follow the input instructions on the 'Parameters' tab.
+
+    If you don't have your own samples, you can run a test dataset by selecting 'Use Test Data' from the 'Parameters' tab.
 
     Once launched, a 'Graphs & Logs' tab will appear where you can monitor the progress of the pipeline
     and once the `wf.entrypoint.nextflow_runtime` task is initiated, a 'Process Nodes' tab will appear.
