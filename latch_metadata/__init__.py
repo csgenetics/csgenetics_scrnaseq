@@ -9,7 +9,7 @@ from latch.types.directory import LatchDir
 from .parameters import generated_parameters
 
 NextflowMetadata(
-    display_name='CS Genetics SimpleCell pipeline',
+    display_name="CS Genetics' SimpleCell pipeline",
     repository="https://github.com/csgenetics/csgenetics_scrnaseq",
     license="MIT",
     author=LatchAuthor(
