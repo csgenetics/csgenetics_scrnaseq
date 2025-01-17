@@ -726,14 +726,12 @@ process count_matrix {
 process cell_caller {
   tag "$sample_id"
 
-  publishDir "${params.outdir}/plots", pattern: "${sample_id}_pdf_with_cutoff.png", mode: 'copy'
-
   input:
   tuple val(sample_id), path(count_matrix_h5ad), val(manual_threshold_str)
 
   output:
   tuple val(sample_id), stdout, emit: cell_caller_out
-  tuple val(sample_id), path("${sample_id}*_pdf_with_cutoff.png"), emit: cell_caller_plot
+  tuple val(sample_id), path("${sample_id}*_counts_pdf_with_threshold.html"), path("${sample_id}*_barnyard_plot.html"), emit: cell_caller_plots
 
   script:
   """
@@ -801,7 +799,7 @@ process single_summary_report {
   publishDir "${params.outdir}/report/${sample_id}", mode: 'copy'
   
   input:
-  tuple val(sample_id), path(metrics_csv), path(plot_png)
+  tuple val(sample_id), path(metrics_csv), path(pdf_plot_html), path(barnyard_plot_html)
   path(html_template)
 
   output:
@@ -810,7 +808,7 @@ process single_summary_report {
 
   script:
   """
-  create_single_sample_report.py $sample_id $plot_png $metrics_csv $html_template ${params.mixed_species}
+  create_single_sample_report.py $sample_id $pdf_plot_html $barnyard_plot_html $metrics_csv $html_template ${params.mixed_species}
   """
 }
 

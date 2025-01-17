@@ -21,6 +21,10 @@
     .card,.headline-stat{
       margin-bottom: 1rem;
     }
+    .plotly-div {
+      width: 100%;
+      height: auto;
+    }
   </style>
  </head>
  <body>
@@ -80,7 +84,7 @@
   <!-- Second row; contains remainder of the stats distributed in two columns -->
   <div class="row">
     <!-- First col contains three cards -->
-    <div class="col">
+    <div class="col-6">
       <!-- Will create a card for each of Read QC and Deduplication -->
       {% for first_col_stat in ["Read QC", "Deduplication"] %}
         <div class="card border-left-success shadow py-2">
@@ -110,18 +114,20 @@
       {% endfor %}
 
       {% if show_cell_caller_plot %}
-      <!-- Cell caller plot -->
-      <div class="card border-left-success shadow py-2">
-        <div class="card-body">
-        <img alt='...' class='img-fluid' src='data:image/png;base64,{{ encoded_png_str }}'/>
+        <!-- Cell caller plot -->
+        <div class="card border-left-success shadow py-2">
+          <div class="card-body">
+            <div style="max-width: 100%; max-height: 100%; overflow: hidden; width: auto; height: auto;">
+              {{ pdf_plot | safe }}
+            </div>
+          </div>
         </div>
-      </div>
       {% endif %}
 
     </div>
 
     <!-- Second col contains alignment and cell stats -->
-    <div class="col">
+    <div class="col-6">
       <!-- Cell stats -->
       <div class="card border-left-success shadow py-2">
         <div class="card-body">
@@ -187,9 +193,20 @@
                   </tbody>
                 </table>
               {% endif %}
-        </div>
-      </div>
 
+        </div>
+
+      </div>
+      {% if show_barnyard_plot %}
+      <!-- Barnyard plot -->
+        <div class="card border-left-success shadow py-2">
+          <div class="card-body">
+            <div style="max-width: 100%; max-height: 100%; overflow: hidden; width: auto; height: auto;">
+              {{ barnyard_plot | safe }}
+            </div>
+          </div>
+        </div>
+      {% endif %}
     </div>
 
   </div>
