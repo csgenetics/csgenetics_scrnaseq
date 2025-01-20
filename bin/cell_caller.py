@@ -150,7 +150,7 @@ class CellCaller:
 
    def clean_exit_on_error(self):
       """
-      If we encounter an error we output a empty figures and return the
+      If we encounter an error, we output empty figures and return the
       default minimum_count_threshold in either single or mixed species format
       """
       open(f"{self.sample_name}_counts_pdf_with_threshold.html", "w").close()
