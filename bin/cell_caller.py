@@ -3,7 +3,6 @@
 import anndata as ad
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 from scipy.signal import argrelextrema
 from scipy.stats import gaussian_kde
 import sys, argparse
@@ -52,6 +51,40 @@ Mmus_counts < Mmus_threshold & Hsap_counts < Hsap_threshold is a noisy barcode.
 Mmus_counts > Mmus_threshold & Hsap_counts > Hsap_threshold is a multiplet.
 """
 
+# The plot to html method is defined outside the class as it will also be used later in the multi-sample summary report process. 
+def output_plot_to_html(dict_of_figs_and_names, html_filename):
+   """
+   Output a suite of plots to an html file, incorporating the Lexend font.
+   Expects as input a dictionary of plotly figures and their names.
+   Figure names are used to name the .svg files which can be downloaded from the html.
+   """
+   # Add custom CSS to embed the Lexend font
+   html_content = """
+   <head>
+      <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;700&display=swap" rel="stylesheet">
+   </head>
+   <body>
+   """
+
+   # Add each figure to the HTML content
+   for fig_name in dict_of_figs_and_names.keys():
+      fig = dict_of_figs_and_names[fig_name]
+      html_content += pio.to_html(fig, full_html=False, include_plotlyjs='cdn', config={"responsive": True, 
+                                                                                          'displaylogo': False, 
+                                                                                          'toImageButtonOptions': {'format': 'svg',
+                                                                                                                  'filename': fig_name,
+                                                                                                                  'scale': 1 
+                                                                                                                  }
+                                                                                       })
+
+   # Close the HTML tags
+   html_content += """
+   </body>
+   """
+
+   # Write the HTML content to the file
+   with open(html_filename, "w") as f:
+      f.write(html_content)
 class CellCaller:
 
    def __init__(self):
@@ -235,11 +268,11 @@ class CellCaller:
       pdf_html_filename = f"{self.sample_name}_counts_pdf_with_threshold.html"
       if self.single_species:
          total_counts_pdf_fig = self.pdf_plotter(self.pdf_df, self.log_cutoff, "total")
-         self.output_plot_to_html({f"{self.sample_name}_cellcaller_plot":total_counts_pdf_fig}, pdf_html_filename)
+         output_plot_to_html({f"{self.sample_name}_cellcaller_plot":total_counts_pdf_fig}, pdf_html_filename)
       else:
          human_counts_pdf_fig = self.pdf_plotter(self.hsap_pdf_df, self.hsap_log_cutoff, "human")
          mouse_counts_pdf_fig = self.pdf_plotter(self.mmus_pdf_df, self.mmus_log_cutoff, "mouse")
-         self.output_plot_to_html({f"{self.sample_name}_hsap_cellcaller_plot":human_counts_pdf_fig, f"{self.sample_name}_mmus_cellcaller_plot":mouse_counts_pdf_fig}, 
+         output_plot_to_html({f"{self.sample_name}_hsap_cellcaller_plot":human_counts_pdf_fig, f"{self.sample_name}_mmus_cellcaller_plot":mouse_counts_pdf_fig}, 
                                    pdf_html_filename)
 
    def pdf_plotter(self, input_pdf_df, input_log_cutoff, count_type_str):
@@ -311,40 +344,6 @@ class CellCaller:
                            )
 
       return pdf_fig
-
-   def output_plot_to_html(self, dict_of_figs_and_names, html_filename):
-      """
-      Output a suite of plots to an html file, incorporating the Lexend font.
-      Expects as input a dictionary of plotly figures and their names.
-      Figure names are used to name the .svg files which can be downloaded from the html.
-      """
-      # Add custom CSS to embed the Lexend font
-      html_content = """
-      <head>
-         <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;700&display=swap" rel="stylesheet">
-      </head>
-      <body>
-      """
-
-      # Add each figure to the HTML content
-      for fig_name in dict_of_figs_and_names.keys():
-         fig = dict_of_figs_and_names[fig_name]
-         html_content += pio.to_html(fig, full_html=False, include_plotlyjs='cdn', config={"responsive": True, 
-                                                                                           'displaylogo': False, 
-                                                                                           'toImageButtonOptions': {'format': 'svg',
-                                                                                                                    'filename': fig_name,
-                                                                                                                    'scale': 1 
-                                                                                                                    }
-                                                                                          })
-
-      # Close the HTML tags
-      html_content += """
-      </body>
-      """
-
-      # Write the HTML content to the file
-      with open(html_filename, "w") as f:
-         f.write(html_content)
 
    def assign_barcode_type(self, hsap_counts, mmus_counts):
       """
@@ -458,7 +457,7 @@ class CellCaller:
 
          barnyard_html_filename = f"{self.sample_name}_barnyard_plot.html"
 
-         self.output_plot_to_html({f"{self.sample_name}_barnyard_plot":barnyard_fig}, barnyard_html_filename)
+         output_plot_to_html({f"{self.sample_name}_barnyard_plot":barnyard_fig}, barnyard_html_filename)
       
 if __name__ == "__main__":
    CellCaller()

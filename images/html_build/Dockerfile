@@ -1,20 +1,9 @@
-################## BASE IMAGE #####################
+FROM continuumio/miniconda3
 
-FROM ubuntu:18.04
+ADD html_build.yml /tmp/html_build.yml
+RUN conda env create -f /tmp/html_build.yml
 
-################## METADATA #######################
-
-LABEL about.summary="Ubuntu image containing Python3 with HTML editing packages installed. Used to run the CS Genetics scRNA-Seq pipeline."
-
-################## MAIN ###########################
-RUN apt-get update && apt-get install -y apt-utils nano curl wget gosu 
-RUN apt-get update && apt-get install -y software-properties-common gcc && \
-    add-apt-repository -y ppa:deadsnakes/ppa
-RUN apt-get update && apt-get install -y python3.6 python3-distutils python3-pip python3-apt
-
-RUN pip3 install pandas \
-jinja2 \
-glob2
-
-# CMD will be replaced by the command line arguments.
-CMD ["/bin/bash"]
+# This will not have any effect for Singularity containers
+RUN echo "source activate html_build" > ~/.bashrc
+# Rather, manually append the env to the path so it is the default python run
+ENV PATH /opt/conda/envs/html_build/bin:$PATH
