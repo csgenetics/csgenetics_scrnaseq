@@ -81,57 +81,60 @@ class MultipleSampleSummaries:
         """
         Plots violin plots across all samples for a set of key metrics
         """
-        # Calculate y-axis ranges for each metric
-        y_ranges = self.calculate_y_ranges()
+        if self.plotting_df.empty:
+            open("multisample_summary_plots.html", "w").close()
+        else:
+            # Calculate y-axis ranges for each metric
+            y_ranges = self.calculate_y_ranges()
 
-        # Generate subplot titles which include number of datapoints available for each metric
-        subplot_titles = self.generate_subplot_titles()
+            # Generate subplot titles which include number of datapoints available for each metric
+            subplot_titles = self.generate_subplot_titles()
 
-        csgx_colors = [
-                            "rgb(54,186,0)",  # CSG Green
-                            "rgb(37,127,193)",  # CSG Blue
-                            "rgb(52,187,207)"  # CSG Teal
-                        ]
+            csgx_colors = [
+                                "rgb(54,186,0)",  # CSG Green
+                                "rgb(37,127,193)",  # CSG Blue
+                                "rgb(52,187,207)"  # CSG Teal
+                            ]
 
-        n_metrics = len(self.metrics_to_plot)
+            n_metrics = len(self.metrics_to_plot)
 
-        fig = make_subplots(
-            rows=1, cols=n_metrics,
-            subplot_titles=subplot_titles,
-            horizontal_spacing=0.05  # Adjust this value to reduce the white space
-        )
-
-        for i, (metric, label) in enumerate(self.metrics_to_plot.items()):
-            fig.add_trace(go.Violin(
-                y=self.plotting_df[metric], 
-                name=label, 
-                box_visible=True, 
-                points="all",
-                line_color=csgx_colors[i % 3],  
-                fillcolor=csgx_colors[i % 3],  
-                opacity=0.6,
-                box=dict(visible=True, line_color='black'),  # Ensure box plot is visible
-                customdata=self.plotting_df.index,  # Add sample names as custom data
-                hovertemplate=f'<b>%{{customdata}}</b><br>{label}: %{{text}}<extra></extra>',  # Customize hover text
-                text=[self.abbreviate_number(y) for y in self.plotting_df[metric]]  # Use abbreviated values for hover text
-            ),
-            row=1, col=i+1
+            fig = make_subplots(
+                rows=1, cols=n_metrics,
+                subplot_titles=subplot_titles,
+                horizontal_spacing=0.05  # Adjust this value to reduce the white space
             )
-            fig.update_yaxes(title_text=label, 
-                             range=y_ranges[metric],
-                             row=1, col=i+1)
-            fig.update_xaxes(showticklabels=False, 
-                             row=1, col=i+1)
 
-        fig.update_layout(
-            showlegend=False,
-            font=dict(family = 'Lexend, sans-serif', color="black"),
-            title_text="Multisample summary plots",
-            margin = dict(l=45,r=45,t=150,b=150),
-            autosize=True
-        )
+            for i, (metric, label) in enumerate(self.metrics_to_plot.items()):
+                fig.add_trace(go.Violin(
+                    y=self.plotting_df[metric], 
+                    name=label, 
+                    box_visible=True, 
+                    points="all",
+                    line_color=csgx_colors[i % 3],  
+                    fillcolor=csgx_colors[i % 3],  
+                    opacity=0.6,
+                    box=dict(visible=True, line_color='black'),  # Ensure box plot is visible
+                    customdata=self.plotting_df.index,  # Add sample names as custom data
+                    hovertemplate=f'<b>%{{customdata}}</b><br>{label}: %{{text}}<extra></extra>',  # Customize hover text
+                    text=[self.abbreviate_number(y) for y in self.plotting_df[metric]]  # Use abbreviated values for hover text
+                ),
+                row=1, col=i+1
+                )
+                fig.update_yaxes(title_text=label, 
+                                range=y_ranges[metric],
+                                row=1, col=i+1)
+                fig.update_xaxes(showticklabels=False, 
+                                row=1, col=i+1)
 
-        output_plot_to_html({"multisample_summary_plots":fig}, "multisample_summary_plots.html")
+            fig.update_layout(
+                showlegend=False,
+                font=dict(family = 'Lexend, sans-serif', color="black"),
+                title_text="Multisample summary plots",
+                margin = dict(l=45,r=45,t=150,b=150),
+                autosize=True
+            )
+
+            output_plot_to_html({"multisample_summary_plots":fig}, "multisample_summary_plots.html")
 
     def generate_subplot_titles(self):
         # Create subplot titles with number of datapoints
