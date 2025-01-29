@@ -825,7 +825,6 @@ process multi_sample_report {
   output:
   path('multisample_report.html')
   path('multisample_out.csv')
-  path('multisample_summary_plots.html')
 
   script:
   """

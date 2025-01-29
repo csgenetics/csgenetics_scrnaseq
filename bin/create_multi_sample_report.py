@@ -20,7 +20,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots 
-from create_single_sample_report import get_cell_stat_cat_dict_obj
+from create_single_sample_report import get_cell_stat_cat_dict_obj, read_html_plot
 from cell_caller import output_plot_to_html
 
 class MultipleSampleSummaries:
@@ -34,9 +34,9 @@ class MultipleSampleSummaries:
             self.mixed = False
 
         self.sample_name_list, self.metrics_dict = self.make_metrics_dict_and_sample_list()
-        self.render_and_write_report()
         self.write_out_csv_and_make_plotting_df()
         self.generate_summary_plots()
+        self.render_and_write_report()
 
     def write_out_csv_and_make_plotting_df(self):
         """
@@ -127,11 +127,12 @@ class MultipleSampleSummaries:
                                 row=1, col=i+1)
 
             fig.update_layout(
-                showlegend=False,
                 font=dict(family = 'Lexend, sans-serif', color="black"),
-                title_text="Multisample summary plots",
-                margin = dict(l=45,r=45,t=150,b=150),
-                autosize=True
+                autosize=True,
+                showlegend=False,
+                height=600,
+                width=None,
+                margin=dict(l=30, r=30, t=100, b=30)
             )
 
             output_plot_to_html({"multisample_summary_plots":fig}, "multisample_summary_plots.html")
@@ -190,6 +191,7 @@ class MultipleSampleSummaries:
         final_report = self.template.render(
             sample_name_list=self.sample_name_list, metrics_dict=self.metrics_dict,
             mixed=self.mixed,
+            summary_plot = read_html_plot("multisample_summary_plots.html"),
             alignment_tooltip_dict = {
                 "Post read QC alignment": "Mapping of the post QC reads i.e. after trimming (polyX end and internal polyA) and barcode verification.",
                 "Annotated reads alignment": "High confidence reads annotated with a gene ID (XT bam tag)."
