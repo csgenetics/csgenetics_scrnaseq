@@ -27,6 +27,10 @@ def get_cell_stat_cat_dict_obj(mixed):
                                 }
     else:
         return {}
+    
+def read_html_plot(path):
+    with open(f"{path}", "r", encoding="utf-8") as html_file:
+        return html_file.read()
 
 class SingleSampleHTMLReport:
     """
@@ -64,7 +68,7 @@ class SingleSampleHTMLReport:
             print("Cell Caller plot size is 0. Hiding Cell Caller plot card.")
         else:
             self.show_cell_caller_plot=True
-            self.pdf_plot = self.read_html_plot(self.pdf_plot_path)
+            self.pdf_plot = read_html_plot(self.pdf_plot_path)
 
         # If mixed species and the size of barnyard plot file is 0, 
         # then set self.show_barnyard_plot to False.
@@ -76,16 +80,12 @@ class SingleSampleHTMLReport:
                 print("Barnyard plot size is 0. Hiding Barnyard plot card.")
             else:
                 self.show_barnyard_plot=True
-                self.barnyard_plot = self.read_html_plot(self.barnyard_plot_path)
+                self.barnyard_plot = read_html_plot(self.barnyard_plot_path)
         else:
             self.show_barnyard_plot=False
             self.barnyard_plot = None
 
         self.render_and_write_report()
-
-    def read_html_plot(self, path):
-        with open(f"{path}", "r", encoding="utf-8") as html_file:
-            return html_file.read()
 
     def render_and_write_report(self):
         # For mixed species cell metrics we need to create 'cell_stat_cat_dict'.
