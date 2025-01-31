@@ -7,7 +7,7 @@
 
 nextflow.enable.dsl=2
 include {
-  download_star_index; download_gtf; download_input_csv; download_barcode_list; download_public_fastq;
+  save_resolved_configuration; download_star_index; download_gtf; download_input_csv; download_barcode_list; download_public_fastq;
   features_file; merge_lanes; merged_fastp; barcode_correction_list; io_extract; io_extract_fastp;
   trim_extra_polya; post_polyA_fastp; star;
   create_valid_empty_bam as create_valid_empty_bam_star;
@@ -44,6 +44,12 @@ workflow {
   // params.gtf
   // params.input_csv
   
+  // Nextflow currently doesn't have functionality to output the resolved configuration
+  // https://github.com/nextflow-io/nextflow/issues/1515
+  // They may develop this functionality in the future, but for now we will use a process
+  // to output the resolved configuration to a file.
+  save_resolved_configuration()
+
   // Check whether params.star_index starts with s3://csgx.public.readonly
   // and if it does, download the file in a process and set the star_index to the downloaded file
   if (params.star_index.startsWith("s3://csgx.public.readonly")){
@@ -362,10 +368,10 @@ workflow {
   // Generate summary statistics
   summary_statistics(ch_summary_statistics_in)
 
-  ch_summary_metrics_and_plot = summary_statistics.out.metrics_csv.join(cell_caller.out.cell_caller_plot, by:0)
+  ch_summary_metrics_and_plots = summary_statistics.out.metrics_csv.join(cell_caller.out.cell_caller_plots, by:0)
 
   // Generate single sample report
-  single_summary_report(ch_summary_metrics_and_plot, single_sample_report_template)
+  single_summary_report(ch_summary_metrics_and_plots, single_sample_report_template)
 
   // Generate multi sample report
   multi_sample_report(single_summary_report.out.single_sample_metric_out.collect(), multi_sample_report_template)

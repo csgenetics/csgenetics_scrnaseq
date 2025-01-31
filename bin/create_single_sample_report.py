@@ -1,4 +1,5 @@
-#!/usr/bin/python3
+#!/usr/bin/env python
+
 import sys
 from jinja2 import Template
 import base64
@@ -26,6 +27,10 @@ def get_cell_stat_cat_dict_obj(mixed):
                                 }
     else:
         return {}
+    
+def read_html_plot(path):
+    with open(f"{path}", "r", encoding="utf-8") as html_file:
+        return html_file.read()
 
 class SingleSampleHTMLReport:
     """
@@ -36,40 +41,51 @@ class SingleSampleHTMLReport:
     def __init__(self):
         
         self.sample_id = sys.argv[1]
-        self.plot_path = sys.argv[2]
+        self.pdf_plot_path = sys.argv[2]
+        self.barnyard_plot_path = sys.argv[3]
 
         # Create a nested dict grouping by table
         self.metrics_dict = defaultdict(dict)
-        with open(sys.argv[3]) as metrics_handle:
+        with open(sys.argv[4]) as metrics_handle:
             header_line = next(metrics_handle)
             for line in metrics_handle:
                 var_name, var_value, var_human_readable_name, var_tooltip, var_group = line.strip().split(",")
                 self.metrics_dict[var_group][var_name] = (var_human_readable_name, self.format_number_to_string(var_value), var_tooltip)
 
-        with open(sys.argv[4]) as html_template:
+        with open(sys.argv[5]) as html_template:
             self.jinja_template = Template(html_template.read())
 
-        if sys.argv[5].upper() == "TRUE":
+        if sys.argv[6].upper() == "TRUE":
             self.mixed = True
         else:
             self.mixed = False
 
-        # If 'empty' in the name of the Cell Caller plot
-        # then set self.show_cell_caller_plot to False.
-        # Will cause the Cell Caller plot to be hidden.
-        if os.path.getsize(self.plot_path) == 0:
+        # If size of cell caller plot file is 0, then set self.show_cell_caller_plot to False.
+        # This will cause the Cell Caller plot to be hidden.
+        if os.path.getsize(self.pdf_plot_path) == 0:
             self.show_cell_caller_plot=False
-            self.encoded_png_str = None
+            self.pdf_plot = None
             print("Cell Caller plot size is 0. Hiding Cell Caller plot card.")
         else:
             self.show_cell_caller_plot=True
-            self.encoded_png_str = self.generate_encoded_png_str()
+            self.pdf_plot = read_html_plot(self.pdf_plot_path)
+
+        # If mixed species and the size of barnyard plot file is 0, 
+        # then set self.show_barnyard_plot to False.
+        # If single species, then set self.show_barnyard_plot to False always.
+        if self.mixed:
+            if os.path.getsize(self.barnyard_plot_path) == 0:
+                self.show_barnyard_plot=False
+                self.barnyard_plot = None
+                print("Barnyard plot size is 0. Hiding Barnyard plot card.")
+            else:
+                self.show_barnyard_plot=True
+                self.barnyard_plot = read_html_plot(self.barnyard_plot_path)
+        else:
+            self.show_barnyard_plot=False
+            self.barnyard_plot = None
 
         self.render_and_write_report()
-
-    def generate_encoded_png_str(self):
-        with open(f"{self.plot_path}", "rb") as image_file:
-            return base64.b64encode(image_file.read()).decode("utf-8")
 
     def render_and_write_report(self):
         # For mixed species cell metrics we need to create 'cell_stat_cat_dict'.
@@ -90,10 +106,11 @@ class SingleSampleHTMLReport:
 
         cell_stat_cat_dict_obj = get_cell_stat_cat_dict_obj(self.mixed)
 
-
         final_report = self.jinja_template.render(metrics_dict=self.metrics_dict,
                                             show_cell_caller_plot=self.show_cell_caller_plot,
-                                            encoded_png_str=self.encoded_png_str,
+                                            pdf_plot=self.pdf_plot,
+                                            show_barnyard_plot=self.show_barnyard_plot,
+                                            barnyard_plot=self.barnyard_plot,
                                             sample_id=self.sample_id,
                                             mixed = self.mixed,
                                             # These dicts are required to supply the tooltips, the accordion header ID and the collapse ID for each of the categories of alignment statistics
@@ -104,8 +121,8 @@ class SingleSampleHTMLReport:
                                             alignment_cat_dict = {
                                                 "Post read QC alignment": ("Mapping of the post QC reads i.e. after trimming (polyX end and internal polyA) and barcode verification.", "qc_accord_header", "qc_collapse"),
                                                 "Annotated reads alignment": ("High confidence reads annotated with a gene ID (XT bam tag).", "ann_accord_header", "ann_collapse")
-                                                },  cell_stat_cat_dict = cell_stat_cat_dict_obj)
-
+                                            },  
+                                            cell_stat_cat_dict = cell_stat_cat_dict_obj)
 
         # Write out the rendered template.
         with open(f"{self.sample_id}_report.html", "w") as f_output:
