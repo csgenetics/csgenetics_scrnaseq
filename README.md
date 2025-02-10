@@ -221,7 +221,7 @@ To test that your environment is set up correctly, the pipeline can be run using
 nextflow run main.nf -profile test
 ```
 
-The test profile will run using a set of remotely hosted resources. By default, the work and results directories will be created in the current working directory at `./work` and `./results`, respectively.
+The test profile will run using a set of remotely hosted resources. By default, the work and results directories will be created in the current working directory at `./work` and `./results_test`, respectively.
 
 For a full list of the configurable parameters that can be can be supplied to the pipeline
 and other options for configuration see [Configurable parameters](#configurable-parameters).
@@ -286,12 +286,15 @@ Nextflow pipeline configurable parameters can be set in groups by specifying pro
 
 See the [Config profiles](https://www.nextflow.io/docs/latest/config.html#config-profiles) section of the Netflow documentation for further details.
 
-There are five standard profiles available for the CS Genetics scRNA-Seq pipeline:
+There are six standard profiles available for the CS Genetics scRNA-Seq pipeline:
 
 - `test`
   - A profile with a complete configuration for automated testing.
+  - Configured to process 2 'lite' samples of 1M raw reads each.
+  - Results in approx. 300 and 500 cells at approx. 60 genes detected per cell.
   - Includes links to test data so requires no other parameters.
   - Runs Docker containers for each process using Docker.
+  - Takes approx. 5 minutes to run on most systems.
 - `test_singularity`
   - A profile with a complete configuration for automated testing.
   - Includes links to test data so requires no other parameters.
@@ -303,6 +306,12 @@ There are five standard profiles available for the CS Genetics scRNA-Seq pipelin
   - See the Nextflow documentation on [Singularity](https://www.nextflow.io/docs/latest/container.html#singularity) for further details.
 - `local`
   - Uses the [local executor](https://www.nextflow.io/docs/latest/executor.html#local). Software required for each process should be pre-installed on your local system.
+- `test_pbmc_4_sample_full`
+  - A profile with a complete configuration for automated testing.
+  - Configured to process 4 'full-sized' PBMC samples containing between 54-66M reads resulting in raw reads per cell between 16-24k.
+  - Includes links to test data so requires no other parameters.
+  - Runs Docker containers for each process using Docker.
+  - Will take several hours to run on most systems
 
 One of the above profiles must be used for the pipeline to be configured correctly.
 
