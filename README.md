@@ -307,8 +307,12 @@ There are six standard profiles available for the CS Genetics scRNA-Seq pipeline
 - `local`
   - Uses the [local executor](https://www.nextflow.io/docs/latest/executor.html#local). Software required for each process should be pre-installed on your local system.
 - `test_pbmc_4_sample_full`
-  - A profile with a complete configuration for automated testing.
-  - Configured to process 4 'full-sized' PBMC samples containing between 54-66M reads resulting in raw reads per cell between 16-24k.
+  - Configured to process 4 PBMC samples containing between 54-66M reads resulting in raw reads per cell between 16-24k.
+  - Includes links to test data so requires no other parameters.
+  - Runs Docker containers for each process using Docker.
+  - Will take several hours to run on most systems
+- `test_hsap_mmus_2_sample_full`
+  - Configured to process 2 H. sapiens / M. musculus mixed species samples containing 99 and 133M reads resulting in raw reads per cell of 50 and 64k.
   - Includes links to test data so requires no other parameters.
   - Runs Docker containers for each process using Docker.
   - Will take several hours to run on most systems
