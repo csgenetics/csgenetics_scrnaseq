@@ -6,3 +6,5 @@ results_test
 work
 .latch/.logs/*
 *__pycache__*
+results_test_pbmc_4_sample_full
+results_test_hsap_mmus_2_sample_full
