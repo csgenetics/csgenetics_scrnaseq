@@ -849,12 +849,19 @@ process count_matrix {
 process cell_caller {
   tag "$sample_id"
 
+  // Publish the plots; the glob pattern is used to collect the mixed species and single species plots
+  // Single species are named: {self.sample_name}_pdf_with_cutoff.png
+  // Mixed species are named: {self.sample_name}_hsap_pdf_with_cutoff.png and {self.sample_name}_mmus_pdf_with_cutoff.png
+  publishDir "${params.outdir}/plots", pattern: "${sample_id}*_pdf_with_cutoff.png", mode: 'copy'
+
   input:
   tuple val(sample_id), path(count_matrix_h5ad), val(manual_threshold_str)
 
   output:
   tuple val(sample_id), stdout, emit: cell_caller_out
-  tuple val(sample_id), path("${sample_id}*_counts_pdf_with_threshold.html"), path("${sample_id}*_barnyard_plot.html"), emit: cell_caller_plots
+  tuple val(sample_id), path("${sample_id}_counts_pdf_with_threshold.html"), path("${sample_id}_barnyard_plot.html"), emit: cell_caller_plots
+  // publiDir statement only works on files output in the ouput directive
+  tuple val(sample_id), path("${sample_id}*_pdf_with_cutoff.png"), emit: cell_caller_png
 
   script:
   """
