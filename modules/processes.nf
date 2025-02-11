@@ -432,26 +432,7 @@ process run_rseqc {
   '''
 }
 
-/*
-* Annotate the bam alignment with gene feature annotations
-* and use these to filter the reads so that only reads with
-* unambiguous annotations are carried through.
-* We implement a strategy to reassign ambiguous initial annotations.
-* We handle uniquely mapped reads (UMRs) and multimapped reads separately.
-* UMRs
-* 1 - Reads are first annotated using the gene feature. Unambigously annotated reads
-* (tagged "Assigned") are extracted and retained to merge with other retained reads.
-* 2 - Those reads that were classified as Unassigned_Ambiguity are passed into a second
-* round of featureCount, this time annotating against the exon feature. 'Assigned' reads
-* are retained to merge with other retained reads.
-* Multimapped reads
-* 1 - Reads that are asociated unambiguously to only 1 gene
-* are retained as UMRs to the associated alignment.
-* 2 - Reads that are ambiguously assigned are annotated with the exon feature
-* and assigned reads from this annotation are retained.
-* See the top of the gawk script for further details on how the multimappers are handled.
-*/
-process feature_counts {
+process initial_feature_count {
   tag "$sample_id"
 
   publishDir "${params.outdir}/featureCounts", mode: 'copy'
@@ -459,104 +440,231 @@ process feature_counts {
   input:
   tuple val(sample_id), path(bam), val(aligned_count)
   path(gtf)
-  path(multi_mapper_resolution_script)
 
   output:
-  tuple val(sample_id), path("${sample_id}.mapped.sorted.filtered.annotated.bam"), env(alignment_count), emit: out_bam
+  tuple val(sample_id), path("${sample_id}_Aligned.sortedByCoord.out.bam.featureCounts.bam"), emit: feature_count_bam
 
-  shell:
+  script:
   """
   if [[ $aligned_count > 0 ]] # If the bam is not empty
-    then
-      samtools sort $bam -o ${sample_id}_Aligned.sortedByCoord.out.bam
-      # Start by running feature counts on the star output
-      # including strandedness and annotation of multimappers
-      featureCounts -a $gtf -o ${sample_id}.star.featureCounts.gene.txt -R BAM ${sample_id}_Aligned.sortedByCoord.out.bam -T 4 -t transcript -g gene_id --fracOverlap 0.5 --extraAttributes gene_name -s 1 -M
+  then
+    samtools sort $bam -o ${sample_id}_Aligned.sortedByCoord.out.bam
+    # Start by running feature counts on the star output
+    # including strandedness and annotation of multimappers
+    featureCounts -a $gtf -o ${sample_id}.star.featureCounts.gene.txt -R BAM ${sample_id}_Aligned.sortedByCoord.out.bam -T 4 -t transcript -g gene_id --fracOverlap 0.5 --extraAttributes gene_name -s 1 -M
+  else
+    # Simply rename the input bam so that it can be collected
+    cp $bam ${sample_id}_Aligned.sortedByCoord.out.bam.featureCounts.bam
+  fi
+  """
+}
 
-      # Process the multimapped and uniquely mapped reads separately.
-      # Generate the UMRs
-      samtools view -h -b -e '[NH]==1 && ([nM]==0 || [nM]==1 || [nM]==2 || [nM]==3)' -b ${sample_id}_Aligned.sortedByCoord.out.bam.featureCounts.bam > ${sample_id}.UMRs.bam.featureCounts.bam
-      # Generate the multimapped reads
-      samtools view -h -b -e '[NH]>1 && ([nM]==0 || [nM]==1 || [nM]==2 || [nM]==3)' -b ${sample_id}_Aligned.sortedByCoord.out.bam.featureCounts.bam > ${sample_id}.multimapped.bam.featureCounts.bam
+// Filter alignments to allow for at most 3 mismatches to the reference.
+process filter_for_UMRs_mismatch {
+  tag "$sample_id"
 
-      ##### UMR processing ####
-      # Filter out the reads that were 'Assigned' a gene target
-      samtools view -h -b -e '[XN]==1 && [XT] && [XS]=="Assigned"' -b ${sample_id}.UMRs.bam.featureCounts.bam > ${sample_id}.UMRs.gene.assigned.bam
+  input:
+  tuple val(sample_id), path(featurecount_bam)
 
-      # Filter out the reads that were that were classified as Unassigned_Ambiguity and run them through
-      # featureCounts using the exon tag to see if the ambiguity can be cleared up based on exon mapping.
-      samtools view -h -b -e '[XS]=="Unassigned_Ambiguity"' -b ${sample_id}.UMRs.bam.featureCounts.bam > ${sample_id}.UMRs.gene.unassigned_ambiguity.bam
+  output:
+  tuple val(sample_id), path("${sample_id}.UMRs.bam.featureCounts.bam"), emit: umr_mismatch_bam
 
-      # We have to remove the XS tag from the *.gene.unassigned_ambiguity.bam because featureCounts adds
-      # an additional tag, that prevents proper fitltering with samtools
-      samtools view -h ${sample_id}.UMRs.gene.unassigned_ambiguity.bam | sed 's/\\tXS\\:Z\\:[^\\t]*//' | samtools view -h -b > ${sample_id}.UMRs.gene.unassigned_ambiguity.no_xs_tag.bam
+  script:
+  """
+  samtools view -h -b -e '[NH]==1 && ([nM]==0 || [nM]==1 || [nM]==2 || [nM]==3)' -b ${featurecount_bam} > ${sample_id}.UMRs.bam.featureCounts.bam
+  """
+}
 
-      # Do exon tie-breaking and filter to those that are assigned.
-      featureCounts -a $gtf -o ${sample_id}.UMRs.exon.assigned.txt -R BAM ${sample_id}.UMRs.gene.unassigned_ambiguity.no_xs_tag.bam -T 4 -t exon -g gene_id --fracOverlap 0.5 --extraAttributes gene_name -s 1
-      samtools view -h -b -e '[XN]==1 && [XT] && [XS]=="Assigned"' -b ${sample_id}.UMRs.gene.unassigned_ambiguity.no_xs_tag.bam.featureCounts.bam > ${sample_id}.UMRs.exon.assigned.bam  
+// Collect those UMRs that have unambiguous transcript annotations based on transcript feature (i.e. no exon tie-breaking required)
+process umr_transcript_assignment {
+  tag "$sample_id"
 
-      ##### Multimapper processing ####
-      # Sort the bam file by query name in preparation for running through the gawk program for the first time.
-      # Run the multimapped, annotated alignments through the gawk program that pulls
-      # out alignments that can be associated directly as 'Assigned' and alignments that are ambiguous and should be passed onto
-      # exon tie breaking.
-      # See the script's header for more information on how it works.
-      samtools sort -n ${sample_id}.multimapped.bam.featureCounts.bam | samtools view | gawk -f $multi_mapper_resolution_script
+  input:
+  tuple val(sample_id), path(umr_mismatch_bam)
 
-      # Produces assigned_reads.sam_body and ambiguous_reads.sam_body corresponding to the Assigned and still ambigous reads, respectively.
-      # These files will only be produced if there were reads of the respective type identified.
-      # The assigned_reads.sam_body should be converted into a valid bam by adding the headers back in
-      if [ -f assigned_reads.sam_body ]; then
-        # Cat with the headers of the featureCounts bam
-        cat <(samtools view -H ${sample_id}.multimapped.bam.featureCounts.bam) assigned_reads.sam_body | samtools view -b -h > ${sample_id}.multimapped.gene.assigned.bam;
-        # Remove the file so that it doesn't get confused with the next round of the gawk script's outputs
-        rm assigned_reads.sam_body
-      fi
+  output:
+  tuple val(sample_id), path("${sample_id}.UMRs.transcript.assigned.bam"), emit: umr_transcript_assigned_bam
 
-      # If the ambigous_reads.sam_body exists then we convert this back to a genuine bam, by adding the headers and then rerun it through featureCounts using the -t exon
-      # assignment to do the exon tie break. NB. the featureCount-derived bam tags e.g. XS, XT and XN have been removed in the gawk script.
-      if [ -f ambiguous_reads.sam_body ]; then
-        # Cat with the headers of the featureCounts bam
-        # before rerunning through featureCounts for exon tie-breaking
-        cat <(samtools view -H ${sample_id}.multimapped.bam.featureCounts.bam) ambiguous_reads.sam_body | samtools view -h -b > ${sample_id}.multimapped.gene.unassigned_ambiguity.no_xs_tag.bam;
-        # Do exon tie-breaking and then run back through the gawk script to pull out those
-        # reads that have a single Assigned alignment.
-        featureCounts -a $gtf -o ${sample_id}.multimapped.exon.assigned.txt -R BAM ${sample_id}.multimapped.gene.unassigned_ambiguity.no_xs_tag.bam -T 4 -t exon -g gene_id --fracOverlap 0.5 --extraAttributes gene_name -s 1 -M
-        samtools sort -n ${sample_id}.multimapped.gene.unassigned_ambiguity.no_xs_tag.bam.featureCounts.bam | samtools view | gawk -f $multi_mapper_resolution_script
-        # If the assigned_reads.sam_body file exists then we were successfuly able to pull out further assigned reads
-        if [ -f assigned_reads.sam_body ]; then
-          # Cat with the headers of the featureCounts bam
-          cat <(samtools view -H ${sample_id}.multimapped.gene.unassigned_ambiguity.no_xs_tag.bam.featureCounts.bam) assigned_reads.sam_body | samtools view -b -h > ${sample_id}.multimapped.exon.assigned.bam;
-        fi
-        rm ambiguous_reads.sam_body
-        # If the assigned_reads.sam_body doesn't exist then we weren't able to pull out any further assigned reads. 
-      fi
-      
-      # Finally, merge together any of the four *.assigned.bam files that exist
-      if [ -f ${sample_id}.UMRs.exon.assigned.bam ]; then
-        samtools merge -o ${sample_id}.UMRs.annotated.bam ${sample_id}.UMRs.gene.assigned.bam ${sample_id}.UMRs.exon.assigned.bam;
-      else
-        mv ${sample_id}.UMRs.gene.assigned.bam ${sample_id}.UMRs.annotated.bam;
-      fi
+  script:
+  """
+  # Filter for the reads that were 'Assigned' a transcript target
+  samtools view -h -b -e '[XN]==1 && [XT] && [XS]=="Assigned"' -b ${umr_mismatch_bam} > ${sample_id}.UMRs.transcript.assigned.bam
+  """
+}
 
-      if [ -f ${sample_id}.multimapped.gene.assigned.bam ]; then
-        samtools merge -o ${sample_id}.multimapped.temp.annotated.bam ${sample_id}.UMRs.annotated.bam ${sample_id}.multimapped.gene.assigned.bam;
-      else
-        mv ${sample_id}.UMRs.annotated.bam ${sample_id}.multimapped.temp.annotated.bam;
-      fi
+process umr_exon_assignment {
+  tag "$sample_id"
 
-      if [ -f ${sample_id}.multimapped.exon.assigned.bam ]; then
-        samtools merge -o ${sample_id}.mapped.sorted.filtered.annotated.bam ${sample_id}.multimapped.temp.annotated.bam ${sample_id}.multimapped.exon.assigned.bam;
-      else
-        mv ${sample_id}.multimapped.temp.annotated.bam ${sample_id}.mapped.sorted.filtered.annotated.bam;
-      fi
+  input:
+  tuple val(sample_id), path(umr_mismatch_filtered_bam)
+  path(gtf)
 
-    else
-      # Simply rename the input bam so that it can be collected
-      cp $bam ${sample_id}.mapped.sorted.filtered.annotated.bam
+  output:
+  tuple val(sample_id), path("${sample_id}.UMRs.exon.assigned.bam"), emit: umr_exon_assigned_bam
+
+  script:
+  """
+  # Filter out the reads that were that were classified as Unassigned_Ambiguity and run them through
+  # featureCounts using the exon tag to see if the ambiguity can be cleared up based on exon mapping.
+  samtools view -h -b -e '[XS]=="Unassigned_Ambiguity"' -b $umr_mismatch_filtered_bam > ${sample_id}.UMRs.transcript.unassigned_ambiguity.bam
+
+  # We have to remove the XS tag from the *.transcript.unassigned_ambiguity.bam because featureCounts adds
+  # an additional tag, that prevents proper fitltering with samtools
+  samtools view -h ${sample_id}.UMRs.transcript.unassigned_ambiguity.bam | sed 's/\\tXS\\:Z\\:[^\\t]*//' | samtools view -h -b > ${sample_id}.UMRs.transcript.unassigned_ambiguity.no_xs_tag.bam
+
+  # Do exon tie-breaking and filter to those that are assigned.
+  featureCounts -a $gtf -o ${sample_id}.UMRs.exon.assigned.txt -R BAM ${sample_id}.UMRs.transcript.unassigned_ambiguity.no_xs_tag.bam -T 4 -t exon -g gene_id --fracOverlap 0.5 --extraAttributes gene_name -s 1
+  samtools view -h -b -e '[XN]==1 && [XT] && [XS]=="Assigned"' -b ${sample_id}.UMRs.transcript.unassigned_ambiguity.no_xs_tag.bam.featureCounts.bam > ${sample_id}.UMRs.exon.assigned.bam
+  """
+}
+
+process filter_for_multimappers_mismatch {
+  tag "$sample_id"
+
+  input:
+  tuple val(sample_id), path(feature_count_bam)
+
+  output:
+  tuple val(sample_id), path("${sample_id}.multimapped.bam.featureCounts.bam"), emit: multimap_mismatch_bam
+
+  script:
+  """
+  samtools view -h -b -e '[NH]>1 && ([nM]==0 || [nM]==1 || [nM]==2 || [nM]==3)' -b ${feature_count_bam} > ${sample_id}.multimapped.bam.featureCounts.bam
+  """
+}
+
+process multimapper_transcript_assignment{
+  tag "$sample_id"
+
+  input:
+  tuple val(sample_id), path(multimapper_mismatch_filtered_bam)
+  path(multi_mapper_script)
+
+  output:
+  tuple val(sample_id), path("${sample_id}.multimapped.transcript.assigned.bam"), emit: assigned_bam
+  tuple val(sample_id), path("${sample_id}.multimapped.transcript.unassigned_ambiguity.no_xs_tag.bam"), emit: unassigned_bam
+
+  script:
+  """
+  # Sort the bam file by query name in preparation for running through the gawk program for the first time.
+  # Run the multimapped, annotated alignments through the gawk program that pulls
+  # out alignments that can be associated directly as 'Assigned' and alignments that are ambiguous and should be passed onto
+  # exon tie breaking.
+  # See the script's header for more information on how it works.
+  samtools sort -n $multimapper_mismatch_filtered_bam | samtools view | gawk -f $multi_mapper_script
+
+  # multi_mapper_script produces assigned_reads.sam_body and ambiguous_reads.sam_body corresponding to the Assigned and still ambigous reads, respectively.
+  # These files will only be produced if there were reads of the respective type identified.
+  # If they exist, we need to convert both of these files back into valid bam format by adding a header and converting from sam->bam
+  # If they don't exist then we should create a valid empty bam by the same name.
+
+  if [ -f assigned_reads.sam_body ]; then
+    # Cat with the headers of the featureCounts bam
+    cat <(samtools view -H $multimapper_mismatch_filtered_bam) assigned_reads.sam_body | samtools view -b -h > ${sample_id}.multimapped.transcript.assigned.bam
+  else
+    samtools view -H -b $multimapper_mismatch_filtered_bam > ${sample_id}.multimapped.transcript.assigned.bam
   fi
 
-  alignment_count=\$(samtools view -c ${sample_id}.mapped.sorted.filtered.annotated.bam)
+  # If the ambigous_reads.sam_body exists then we convert this back to a valid bam.
+  if [ -f ambiguous_reads.sam_body ]; then
+    # Cat with the headers of the featureCounts bam
+    # before rerunning through featureCounts for exon tie-breaking
+    cat <(samtools view -H $multimapper_mismatch_filtered_bam) ambiguous_reads.sam_body | samtools view -h -b > ${sample_id}.multimapped.transcript.unassigned_ambiguity.no_xs_tag.bam
+  else
+    samtools view -H -b $multimapper_mismatch_filtered_bam > ${sample_id}.multimapped.transcript.unassigned_ambiguity.no_xs_tag.bam
+  fi
+  """
+}
+
+process multimapper_exon_assignment{
+  tag "$sample_id"
+
+  input:
+  tuple val(sample_id), path(multimapper_unassigned_bam)
+  path(gtf)
+  path(multi_mapper_script)
+
+  output:
+  tuple val(sample_id), path("${sample_id}.multimapped.exon.assigned.bam"), emit: assigned_bam
+
+  script:
+  """
+  # Run featureCounts using the exon feature to do tie-breaking and then run back through the gawk script to pull out those
+  # reads that have a single Assigned alignment.
+  featureCounts -a $gtf -o ${sample_id}.multimapped.exon.assigned.txt -R BAM $multimapper_unassigned_bam -T 4 -t exon -g gene_id --fracOverlap 0.5 --extraAttributes gene_name -s 1 -M
+  samtools sort -n ${sample_id}.multimapped.transcript.unassigned_ambiguity.no_xs_tag.bam.featureCounts.bam | samtools view | gawk -f $multi_mapper_script
+
+  # If the assigned_reads.sam_body file exists then we were successfuly able to pull out further assigned reads
+  if [ -f assigned_reads.sam_body ]; then
+    # Cat with the headers of the featureCounts bam
+    cat <(samtools view -H ${sample_id}.multimapped.transcript.unassigned_ambiguity.no_xs_tag.bam.featureCounts.bam) assigned_reads.sam_body | samtools view -b -h > ${sample_id}.multimapped.exon.assigned.bam;
+  else
+    # There were no further reads successfuly annotated
+    # Create a valid empty bam
+    samtools view -H -b ${sample_id}.multimapped.transcript.unassigned_ambiguity.no_xs_tag.bam.featureCounts.bam > ${sample_id}.multimapped.exon.assigned.bam
+  fi
+  """
+}
+
+process merge_transcript_exon_umr_bams {
+  tag "$sample_id"
+
+  input:
+  tuple val(sample_id), path(umr_transcript_bam), path(umr_exon_bam)
+
+  output:
+  tuple val(sample_id), path("${sample_id}.umr.annotated.bam"), emit: high_conf_annotated_umr_bam
+
+  script:
+  """
+  samtools merge -o ${sample_id}.umr.annotated.bam $umr_transcript_bam $umr_exon_bam
+  """
+}
+
+process merge_transcript_exon_multimapper_bams {
+  tag "$sample_id"
+
+  input:
+  tuple val(sample_id), path(multimapper_transcript_bam), path(multimapper_exon_bam)
+
+  output:
+  tuple val(sample_id), path("${sample_id}.multimapped.annotated.bam"), emit: high_conf_annotated_multimapped_bam
+
+  script:
+  """
+  samtools merge -o ${sample_id}.multimapped.annotated.bam $multimapper_transcript_bam $multimapper_exon_bam
+  """
+}
+
+process merge_annotated_UMRs_with_annotated_multimappers {
+  tag "$sample_id"
+
+  publishDir "${params.outdir}/featureCounts", mode: 'copy', pattern: "${sample_id}.annotated.bam"
+
+  input:
+  tuple val(sample_id), path(umr_annotated_bam), path(multimapper_annotated_bam)
+
+  output:
+  tuple val(sample_id), path("${sample_id}.mapped.sorted.filtered.annotated.bam"), emit: high_conf_annotated_bam
+
+  script:
+  """
+  samtools merge -o ${sample_id}.mapped.sorted.filtered.annotated.bam $umr_annotated_bam $multimapper_annotated_bam
+  """
+}
+
+process count_high_conf_annotated_umr_multimap {
+  tag "$sample_id"
+
+  input:
+  tuple val(sample_id), path(umr_multimapper_annotated_bam)
+
+  output:
+  tuple val(sample_id), env(alignment_count), emit: aligned_count
+
+  script:
+  """
+  alignment_count=\$(samtools view -c ${umr_multimapper_annotated_bam})
   """
 }
 
@@ -623,18 +731,17 @@ process sort_index_bam {
   tag "$sample_id"
 
   input:
-  tuple val (sample_id), path(bam), val(count)
+  tuple val (sample_id), path(bam)
 
   output:
   tuple val(sample_id), path("${sample_id}.antisense.txt"), emit: antisense_out
-  tuple val (sample_id), path("${sample_id}_sorted.bam"), path("${sample_id}_sorted.bam.bai"), env(alignment_count), emit: sort_index_bam_out
+  tuple val (sample_id), path("${sample_id}_sorted.bam"), path("${sample_id}_sorted.bam.bai"), emit: sort_index_bam_out
 
   script:
   """
   samtools view -c -f 16 ${bam} > ${sample_id}.antisense.txt
   samtools sort ${bam} -O BAM -o ${sample_id}_sorted.bam
   samtools index ${sample_id}_sorted.bam
-  alignment_count=\$(samtools view -c ${sample_id}_sorted.bam)
   """
 }
 
@@ -711,7 +818,6 @@ process io_count {
 process count_matrix {
   tag "$sample_id"
 
-  publishDir "${params.outdir}/count_matrix/raw_feature_bc_matrix/${sample_id}/", mode: 'copy', pattern: "*.raw_feature_bc_matrix.h5ad"
   publishDir "${params.outdir}/count_matrix/raw_feature_bc_matrix/${sample_id}/", mode: 'copy', pattern: "matrix.mtx.gz"
   publishDir "${params.outdir}/count_matrix/raw_feature_bc_matrix/${sample_id}/", mode: 'copy', pattern: "barcodes.tsv.gz"
   publishDir "${params.outdir}/count_matrix/raw_feature_bc_matrix/${sample_id}/", mode: 'copy', pattern: "features.tsv.gz"
@@ -743,12 +849,19 @@ process count_matrix {
 process cell_caller {
   tag "$sample_id"
 
+  // Publish the plots; the glob pattern is used to collect the mixed species and single species plots
+  // Single species are named: {self.sample_name}_pdf_with_cutoff.png
+  // Mixed species are named: {self.sample_name}_hsap_pdf_with_cutoff.png and {self.sample_name}_mmus_pdf_with_cutoff.png
+  publishDir "${params.outdir}/plots", pattern: "${sample_id}*_pdf_with_cutoff.png", mode: 'copy'
+
   input:
   tuple val(sample_id), path(count_matrix_h5ad), val(manual_threshold_str)
 
   output:
   tuple val(sample_id), stdout, emit: cell_caller_out
-  tuple val(sample_id), path("${sample_id}*_counts_pdf_with_threshold.html"), path("${sample_id}*_barnyard_plot.html"), emit: cell_caller_plots
+  tuple val(sample_id), path("${sample_id}_counts_pdf_with_threshold.html"), path("${sample_id}_barnyard_plot.html"), emit: cell_caller_plots
+  // publiDir statement only works on files output in the ouput directive
+  tuple val(sample_id), path("${sample_id}*_pdf_with_cutoff.png"), emit: cell_caller_png
 
   script:
   """
@@ -768,6 +881,7 @@ process filter_count_matrix{
   publishDir "${params.outdir}/count_matrix/filtered_feature_bc_matrix/${sample_id}/", mode: 'copy', pattern: "matrix.mtx.gz"
   publishDir "${params.outdir}/count_matrix/filtered_feature_bc_matrix/${sample_id}/", mode: 'copy', pattern: "barcodes.tsv.gz"
   publishDir "${params.outdir}/count_matrix/filtered_feature_bc_matrix/${sample_id}/", mode: 'copy', pattern: "features.tsv.gz"
+  publishDir "${params.outdir}/count_matrix/raw_feature_bc_matrix/${sample_id}/", mode: 'copy', pattern: "*.raw_feature_bc_matrix.h5ad"
 
   input:
   tuple val(sample_id), val(count_threshold), path(h5ad_raw_count_matrix)

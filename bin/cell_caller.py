@@ -9,6 +9,7 @@ import sys, argparse
 import plotly.express as px
 import plotly.graph_objects as go
 import plotly.io as pio
+from plotly.subplots import make_subplots
 
 """
 This is the cell caller function.
@@ -188,6 +189,8 @@ class CellCaller:
       """
       open(f"{self.sample_name}_counts_pdf_with_threshold.html", "w").close()
       open(f"{self.sample_name}_barnyard_plot.html", "w").close()
+      open(f"{self.sample_name}_pdf_with_cutoff.png", "w").close()
+
       if self.single_species:
          print(int(self.minimum_count_threshold), end="")
       else:
@@ -266,14 +269,25 @@ class CellCaller:
          
    def generate_pdf_plot(self):
       pdf_html_filename = f"{self.sample_name}_counts_pdf_with_threshold.html"
+
       if self.single_species:
          total_counts_pdf_fig = self.pdf_plotter(self.pdf_df, self.log_cutoff, "total")
          output_plot_to_html({f"{self.sample_name}_cellcaller_plot":total_counts_pdf_fig}, pdf_html_filename)
+
+         # Save the figure as a PNG file
+         pdf_png_filename = f"{self.sample_name}_pdf_with_cutoff.png"
+         pio.write_image(total_counts_pdf_fig, pdf_png_filename)
       else:
          human_counts_pdf_fig = self.pdf_plotter(self.hsap_pdf_df, self.hsap_log_cutoff, "human")
          mouse_counts_pdf_fig = self.pdf_plotter(self.mmus_pdf_df, self.mmus_log_cutoff, "mouse")
          output_plot_to_html({f"{self.sample_name}_hsap_cellcaller_plot":human_counts_pdf_fig, f"{self.sample_name}_mmus_cellcaller_plot":mouse_counts_pdf_fig}, 
-                                   pdf_html_filename)
+                              pdf_html_filename)
+         
+         # Save the figures as PNG files
+         human_pdf_png_filename = f"{self.sample_name}_hsap_pdf_with_cutoff.png"
+         pio.write_image(human_counts_pdf_fig, human_pdf_png_filename)
+         mouse_pdf_png_filename = f"{self.sample_name}_mmus_pdf_with_cutoff.png"
+         pio.write_image(mouse_counts_pdf_fig, mouse_pdf_png_filename)
 
    def pdf_plotter(self, input_pdf_df, input_log_cutoff, count_type_str):
       """
