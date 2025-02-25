@@ -295,7 +295,7 @@ class CellCaller:
       and save the plot as an html (two plots for mixed species)
       """
 
-      title_str = f"Cell caller minimum {count_type_str}-count threshold derived from <br> distribution of {count_type_str} counts"
+      title_str = f"Cell caller minimum {count_type_str}-count threshold derived from <br> distribution of {count_type_str} counts: {self.sample_name}"
       if self.mixed_species:
          title_str += f" in majority {count_type_str}-count barcodes"
 
