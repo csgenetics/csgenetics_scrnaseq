@@ -387,6 +387,7 @@ Resources are available for the following species:
 - Mouse; `GRCm39` [build notes](https://s3.amazonaws.com/csgx.public.readonly/resources/references/Ensembl_Gencode_resources/STAR_2_7_11b/GRCm39.Ensembl110.GENCODEvM33_with_pcLoF_without_readthrough/build_notes.txt)
 - Drosophila melanogaster; `BDGP6` [build notes](https://s3.amazonaws.com/csgx.public.readonly/resources/references/Ensembl_resources/STAR_2_7_11b/Drosophila_melanogaster.BDGP6.46/build_notes.txt)
 - Pig; `Sscrofa11` [build notes](https://s3.amazonaws.com/csgx.public.readonly/resources/references/Ensembl_resources/STAR_2_7_11b/Sus_scrofa_Sscrofa11.1/build_notes.txt)
+- Danio rerio: `GRCz11` [build notes](https://s3.us-east-1.amazonaws.com/csgx.public.readonly/resources/references/Ensembl_resources/STAR_2_7_11b/Danio_rerio.GRCz11/build_notes.txt)
 - Mixed (Human - Mouse); `mouse_human_mix` [build_notes](https://s3.amazonaws.com/csgx.public.readonly/resources/references/Ensembl_Gencode_resources/STAR_2_7_11b/GRCh38.Ensembl109.GENCODEv44_GRCm39.Ensembl110.GENCODEvM33_with_pcLoF_without_readthrough/build_notes.txt)
 
 By passing one of these keys as an argument to `--genome`, the pipeline will automatically be configured to use the relevant set of resources for the following parameters:
