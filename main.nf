@@ -120,9 +120,13 @@ workflow {
     .groupTuple(by:0)
     .set { ch_input }
 
-  // The following paths will always need to be downloaded from the s3://csgx.public.readonly bucket:
-  // params.barcode_list_path
-  barcode_list = download_barcode_list()
+  // Check whether params.barcode_list starts with s3://csgx.public.readonly
+  // and if it does, download the file in a process and set the barcode_list to the downloaded file
+  if (params.barcode_list_path.startsWith("s3://csgx.public.readonly")) {
+    barcode_list = download_barcode_list()
+  } else {
+    barcode_list = file(params.barcode_list)
+  }
 
   // Create path objects to HTML report templates
   single_sample_report_template = file("${baseDir}/templates/single_sample_report_template.html.jinja2")
