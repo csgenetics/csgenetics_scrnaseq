@@ -298,6 +298,7 @@ class CellCaller:
       title_str = f"Cell caller minimum {count_type_str}-count threshold derived from <br> distribution of {count_type_str} counts"
       if self.mixed_species:
          title_str += f" in majority {count_type_str}-count barcodes"
+      title_str += f":<br>{self.sample_name}"
 
       pdf_fig = px.line(input_pdf_df, 
                         x="data_space", 
@@ -328,6 +329,7 @@ class CellCaller:
             
       pdf_fig.update_layout(font=dict(family = 'Lexend, sans-serif', color="black"),
                             title_x=0.5,
+                            title_y=0.93,
                             plot_bgcolor="white",
                             autosize=True,
                             xaxis = dict(
