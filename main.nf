@@ -7,8 +7,8 @@
 
 nextflow.enable.dsl=2
 include {
-  save_resolved_configuration; download_star_index; download_gtf; download_input_csv; download_barcode_list; download_public_fastq;
-  features_file; merge_lanes; merged_fastp; barcode_correction_list; io_extract; io_extract_fastp;
+  save_resolved_configuration; download_star_index; download_gtf; download_input_csv; download_barcode_list; download_barcode_correction_list; download_public_fastq;
+  features_file; merge_lanes; merged_fastp; io_extract; io_extract_fastp;
   trim_extra_polya; post_polyA_fastp; star;
   create_valid_empty_bam as create_valid_empty_bam_star;
   gtf2bed; run_rseqc as raw_rseqc; run_rseqc as annotated_rseqc;
@@ -128,6 +128,14 @@ workflow {
     barcode_list = file(params.barcode_list)
   }
 
+  // Check whether params.barcode_correction_list_path starts with s3://csgx.public.readonly
+  // and if it does, download the file in a process and set the barcode_correction_list to the downloaded file
+  if (params.barcode_correction_list_path.startsWith("s3://csgx.public.readonly")) {
+    barcode_correction_list = download_barcode_correction_list()
+  } else {
+    barcode_correction_list = file(params.barcode_correction_list_path)
+  }
+
   // Create path objects to HTML report templates
   single_sample_report_template = file("${baseDir}/templates/single_sample_report_template.html.jinja2")
   multi_sample_report_template = file("${baseDir}/templates/multi_sample_report_template.html.jinja2")
@@ -181,17 +189,9 @@ workflow {
   merged_fastp(io_extract_in_ch, params.barcode_pattern)
   ch_merged_fastp_multiqc = merged_fastp.out.merged_fastp_multiqc
 
-  // Create a 1 hamming-distance barcode correction list from the input barcode list file
-  // We choose to pass in the .awk scripts as files
-  // rather than call them directly in the process
-  // using the relative baseDir path so that
-  // if we make changes to the scripts, the hash of the task
-  // will be modified and Nextflow will know to invalidate the cache.
-  barcode_correction_list(barcode_list, file("${baseDir}/bin/make_1_hamming_dist_barcode_list.awk"))
-
   // Extract reads and correct barcodes from the fastqs
-  // using umitools and the 1 hamming-distance barcode correction list
-  io_extract(io_extract_in_ch, barcode_correction_list.out.corrected_barcode_list, params.barcode_pattern)
+  // using umitools and the pre-generated barcode correction list
+  io_extract(io_extract_in_ch, barcode_correction_list, params.barcode_pattern)
   ch_io_extract_out = io_extract.out.io_extract_out
 
   // Trim and remove low quality reads with fastp

@@ -77,6 +77,21 @@ process download_barcode_list {
   """
 }
 
+/* Download the csgx hosted barcode correction list tsv
+* from the s3://csgx.public.readonly bucket.
+*/
+process download_barcode_correction_list {
+  tag "Get barcode correction list"
+
+  output:
+  path("*.tsv")
+
+  script:
+  """
+  aws s3 cp --no-sign-request ${params.barcode_correction_list_path} .
+  """
+}
+
 /* Download a fastq hosted on the s3://csgx.public.readonly bucket */
 process download_public_fastq {
   tag "${sample_id} ${fastq_1.tokenize('/').last()}"
@@ -169,24 +184,6 @@ process merged_fastp{
   '''
 }
 
-/*
-* This process takes the input barcode list and creates a barcode list of allowed barcodes
-* within 1 hamming distance i.e. 1bp change of the input barcode list
-*/
-process barcode_correction_list {
-  input:
-  path(barcode_list)
-  path(make_corrected_barcode_list_script)
-
-  output:
-  path("modified_barcode_list.tsv"), emit: corrected_barcode_list 
-
-  script:
-    """
-  # Create umi-tools compatible barcode_list with all barcodes + alts with 1 hamming distance
-  awk -f ${make_corrected_barcode_list_script} ${barcode_list} > modified_barcode_list.tsv
-  """
-}
 
 /*
 * Extract the 13bp barcode from the R2 read and append it to the header of the R1 read.
