@@ -70,7 +70,8 @@ class CountMatrix:
         # Load CS Genetics barcode_list of IOs
         bcl = read_csv(self.barcode_list)
         bcl.columns = ['cell', 'io','ioID']
-        bcl = bcl.iloc[:,[0,1]]
+        # Keep only the io column for merging - we'll use the 13bp barcodes directly
+        bcl = bcl.iloc[:,[1]]  # Keep only io column (13bp barcode)
 
         # Load count table from io_count
         try:
@@ -86,11 +87,11 @@ class CountMatrix:
         # Load feature (gene) names from the genome GTF file
         genes_all = read_table(self.gene_list).drop_duplicates()
 
-        # First merge by IOs
+        # First merge by IOs - this ensures we only keep barcodes that are in our whitelist
         counts = merge(bcl, counts)
 
-        # Sum together counts corresponding to the same cell-gene_name pair
-        counts = counts.groupby(['cell', 'gene_id']).size().reset_index(name='count')
+        # Sum together counts corresponding to the same io-gene_name pair
+        counts = counts.groupby(['io', 'gene_id']).size().reset_index(name='count')
 
         # Second merge by gene ID
         counts = merge(counts, genes_all, how='left')
@@ -98,12 +99,13 @@ class CountMatrix:
         zero_genes = genes_all.loc[-genes_all.gene_id.isin(counts.gene_id)]
 
         # Transform a long counts DataFrame into a sparse matrix
-        cell_c = CategoricalDtype(sorted(counts.cell.unique()), ordered=True)
+        # Use io (13bp barcode) instead of cell (cellXXX format)
+        io_c = CategoricalDtype(sorted(counts.io.unique()), ordered=True)
         name_c = CategoricalDtype(sorted(counts.gene_id.unique()), ordered=True)
         row = counts.gene_id.astype(name_c).cat.codes
-        col = counts.cell.astype(cell_c).cat.codes
+        col = counts.io.astype(io_c).cat.codes
 
-        non_zero_matrix = csr_matrix((counts["count"], (col,row)), shape=(cell_c.categories.size,name_c.categories.size))
+        non_zero_matrix = csr_matrix((counts["count"], (col,row)), shape=(io_c.categories.size,name_c.categories.size))
         # Create a zero matrix for all zero-genes
         zero_matrix = csr_matrix((non_zero_matrix.shape[0], zero_genes.shape[0]))
 
@@ -122,7 +124,8 @@ class CountMatrix:
         self.anndata_obj = AnnData(sparse_matrix_float32,var=self.ft_names)
         self.anndata_obj.var_names = self.ft_names.gene_name.tolist()
         self.anndata_obj.var_names_make_unique()
-        self.anndata_obj.obs_names = cell_c.categories
+        # Use the 13bp barcodes as obs_names instead of cellXXX format
+        self.anndata_obj.obs_names = io_c.categories
 
         # It is important to add the sample name to make the barcode names unique
         # for use in Seurat v5.
