@@ -799,7 +799,7 @@ process io_count {
   # use sed to replace the first '_' in each line, and any 'XT:Z:' strings with empty string with sed
   
   # output has 2 columns: io_sequence and gene_name for every deduplicated alignments with gene assignment
-  samtools view !{f} | awk '/XT:/ {match($0, /_[A-Z]+_/); printf substr($0,RSTART+1,RLENGTH-2); match($0, /XT:Z:[A-Za-z0-9_]+/); print "\t" substr($0,RSTART+5,RLENGTH-5)}' > !{sample_id}_bcGeneSummary.txt
+  samtools view !{f} | awk '/XT:/ {match($1, /_[A-Z]+_$/); printf substr($0,RSTART+1,RLENGTH-2); match($0, /XT:Z:[A-Za-z0-9_]+/); print "\t" substr($0,RSTART+5,RLENGTH-5)}' > !{sample_id}_bcGeneSummary.txt
   '''
 
 }
