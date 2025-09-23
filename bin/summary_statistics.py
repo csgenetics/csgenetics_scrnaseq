@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 
 """
-Stats are pulled from the commandline-supplied input files:
-    summary_statistics.py $sample_id $h5ad $multiqc_data_json $antisense $dedup $raw_rseqc $annotated_rseqc
+Stats are pulled from the commandline-supplied input files.
 
     A csv is written out ({sample_id}.metrics.csv) containing:
         the variable name
@@ -13,7 +12,7 @@ Stats are pulled from the commandline-supplied input files:
 """
 
 import anndata
-import sys
+import argparse
 import json
 import re
 import numpy as np
@@ -21,12 +20,11 @@ from collections import defaultdict
 import pandas as pd
 
 class SummaryStatistics:
-    def __init__(self):
-        self.sample_id = sys.argv[1]
-        if sys.argv[8] == "TRUE":
-            self.mixed = True
-        else:
-            self.mixed = False
+    def __init__(self, args):
+        self.args = args
+        self.sample_id = args.sample_id
+        self.read_categorization_csv = args.read_categorization_csv
+        self.mixed = args.mixed_species
 
         # Primary keys will be:
         #   Read QC
@@ -42,7 +40,7 @@ class SummaryStatistics:
         # value of the metric, and the tooltip text. They will be accessed as
         # [0] [1], and [2] in the jinja template.
         self.metrics_dict = defaultdict(dict)
-        with open(sys.argv[3], "r") as json_handle:
+        with open(self.args.multiqc_json, "r") as json_handle:
             self.multiqc_json_dict = json.load(json_handle)
         self.multiqc_data_sources_dict = self.make_multiqc_dicts()
         
@@ -62,6 +60,7 @@ class SummaryStatistics:
 
     def generate_metrics(self):
         self.get_sequencing_stats()
+        self.get_read_categorization_metrics()
         self.get_cell_stats()
         self.write_out_dict_to_csv()
 
@@ -460,7 +459,7 @@ class SummaryStatistics:
         # Try to read in the raw h5ad and handle if it is empty
         # by checking for an OSError (empty file) or a 0 barcode count.
         try:
-            self.anndata = anndata.read_h5ad(sys.argv[2])
+            self.anndata = anndata.read_h5ad(self.args.h5ad)
         except OSError: # If the h5ad is an empty file, output empty metrics
             self.set_cell_and_called_cell_and_multiplet_stats_to_zero()
         else:
@@ -565,14 +564,14 @@ class SummaryStatistics:
         bam. Ideally we would want this stat for each level of filtering
         I.e. raw, umr filtered and allocated
         """
-        with open(sys.argv[4], "r") as antisense_handle:
+        with open(self.args.antisense, "r") as antisense_handle:
             self.metrics_dict["annotated_alignment_stats"]["annotated_antisense_mapping_reads"] = ("Reads aligned antisense", int(antisense_handle.read().rstrip()), "Number of reads aligned antisense.")
 
     def get_duplication_stats(self):
         # Reads before deduplication
         # Reads after deduplication
         # Sequencing saturation
-        with open(sys.argv[5], "r") as dedup_handle:
+        with open(self.args.dedup_log, "r") as dedup_handle:
             for line in dedup_handle:
                 if "INFO Reads: Input Reads:" in line:
                     try:
@@ -587,10 +586,49 @@ class SummaryStatistics:
         else:
             self.metrics_dict["Deduplication"]["sequencing_saturation"] = ("Sequencing saturation", 0.0, "(1 - (Reads after deduplication / reads before deduplication)) * 100")
     
+    def get_read_categorization_metrics(self):
+        """
+        Read the categorization metrics from the CSV file and populate into self.metrics_dict
+        """
+        # Read the CSV file
+        df = pd.read_csv(self.read_categorization_csv)
+
+        # Extract metrics from the dataframe
+        row = df.iloc[0]  # Should only be one row for single sample
+
+        # Add read categorization metrics to Read QC section
+        self.metrics_dict["Read QC"]["reads_in_cells"] = (
+            "Reads in cells",
+            int(row['reads_in_cells']),
+            "Number of reads mapped to genome associated with cellular barcodes"
+        )
+        self.metrics_dict["Read QC"]["reads_out_of_cells"] = (
+            "Reads out of cells",
+            int(row['reads_out_of_cells']),
+            "Number of reads mapped to genome associated with non-cellular barcodes"
+        )
+        self.metrics_dict["Read QC"]["unusable_reads"] = (
+            "Unusable reads",
+            int(row['unusable_reads']),
+            "Number of reads that couldn't be mapped or processed (Raw reads - reads in cells - reads out of cells)"
+        )
+
+        # Add count metrics to Cell metrics section
+        self.metrics_dict["Cell metrics"]["counts_in_cells"] = (
+            "Counts in cells",
+            int(row['counts_in_cells']),
+            "Post-deduplication counts associated with cellular barcodes"
+        )
+        self.metrics_dict["Cell metrics"]["counts_out_of_cells"] = (
+            "Counts out of cells",
+            int(row['counts_out_of_cells']),
+            "Post-deduplication counts associated with non-cellular barcodes"
+        )
+
     def get_mapping_stats(self):
         # Get rseqc stats from multiqc
-        self.get_rseqc_stats(sys.argv[6], "Post read QC alignment")
-        self.get_rseqc_stats(sys.argv[7], "Annotated reads alignment")
+        self.get_rseqc_stats(self.args.raw_rseqc, "Post read QC alignment")
+        self.get_rseqc_stats(self.args.annotated_rseqc, "Annotated reads alignment")
 
     def get_rseqc_stats(self, path, category):
         # Read in rseqc log
@@ -670,5 +708,22 @@ class SummaryStatistics:
         self.metrics_dict["Read QC"]["rna_bases_q30_perc"] = ("R1 bp >= Q30 percentage; post-QC trimming", self.as_perc(float(self.multiqc_general_stats_dict[f"{self.sample_id}.polyAtrimmed"]["after_filtering_q30_rate"])), "The percentage of the R1 bases (post-QC trimming) with a Phred score >= 30.")
 
 
+def main():
+    parser = argparse.ArgumentParser(description='Generate summary statistics for single-cell RNA-seq pipeline')
+    parser.add_argument('--sample-id', required=True, dest='sample_id', help='Sample identifier')
+    parser.add_argument('--h5ad', required=True, help='Path to H5AD raw count matrix file')
+    parser.add_argument('--multiqc-json', required=True, dest='multiqc_json', help='Path to MultiQC JSON data file')
+    parser.add_argument('--antisense', required=True, help='Path to antisense count file')
+    parser.add_argument('--dedup-log', required=True, dest='dedup_log', help='Path to deduplication log file')
+    parser.add_argument('--raw-rseqc', required=True, dest='raw_rseqc', help='Path to raw RSeQC results file')
+    parser.add_argument('--annotated-rseqc', required=True, dest='annotated_rseqc', help='Path to annotated RSeQC results file')
+    parser.add_argument('--read-categorization', required=True, dest='read_categorization_csv', help='Path to read categorization CSV file')
+    parser.add_argument('--mixed-species', action='store_true', dest='mixed_species', help='Flag for mixed species samples')
+
+    args = parser.parse_args()
+
+    stats = SummaryStatistics(args)
+    stats.generate_metrics()
+
 if __name__ == "__main__":
-    SummaryStatistics().generate_metrics()
+    main()

@@ -899,22 +899,58 @@ process filter_count_matrix{
 }
 
 /*
+* Categorize reads based on whether they are associated with cellular or non-cellular barcodes
+* Also calculate counts in cells vs out of cells
+*/
+process categorize_reads {
+  tag "$sample_id"
+
+  input:
+  tuple val(sample_id), path(star_bam), path(raw_count_matrix_h5ad), path(fastp_json)
+
+  output:
+  tuple val(sample_id), path("${sample_id}.read_categorization.csv"), emit: read_categories
+
+  script:
+  def barcode_length = params.barcode_pattern.count('C')
+  def mixed_flag = params.mixed_species ? "--mixed_species" : ""
+  """
+  categorize_reads.py \
+    --sample_id ${sample_id} \
+    --star_bam ${star_bam} \
+    --raw_count_matrix_h5ad ${raw_count_matrix_h5ad} \
+    --fastp_json ${fastp_json} \
+    --barcode_length ${barcode_length} \
+    ${mixed_flag}
+  """
+}
+
+/*
 * Generate the summary statistics required for HTML report
 */
 process summary_statistics {
   tag "$sample_id"
 
   publishDir "${params.outdir}/report/${sample_id}", mode: 'copy', pattern: "*.csv"
-  
+
   input:
-  tuple val(sample_id), val(minimum_count_threshold), path(raw_h5ad), path(antisense), path(dedup), path("${sample_id}.multiqc.data.json"), path("${sample_id}_raw_rseqc_results.txt"), path("${sample_id}_annotated_rseqc_results.txt")
+  tuple val(sample_id), val(minimum_count_threshold), path(raw_h5ad), path(antisense), path(dedup), path("${sample_id}.multiqc.data.json"), path("${sample_id}_raw_rseqc_results.txt"), path("${sample_id}_annotated_rseqc_results.txt"), path(read_categorization_csv)
   output:
   tuple val(sample_id), path("${sample_id}.metrics.csv"), emit: metrics_csv
 
   script:
-  def mixed_args = params.mixed_species ? "TRUE" : "FALSE"
+  def mixed_flag = params.mixed_species ? "--mixed-species" : ""
   """
-  summary_statistics.py ${sample_id} ${raw_h5ad} ${sample_id}.multiqc.data.json ${antisense} ${dedup} ${sample_id}_raw_rseqc_results.txt ${sample_id}_annotated_rseqc_results.txt $mixed_args
+  summary_statistics.py \
+    --sample-id ${sample_id} \
+    --h5ad ${raw_h5ad} \
+    --multiqc-json ${sample_id}.multiqc.data.json \
+    --antisense ${antisense} \
+    --dedup-log ${dedup} \
+    --raw-rseqc ${sample_id}_raw_rseqc_results.txt \
+    --annotated-rseqc ${sample_id}_annotated_rseqc_results.txt \
+    --read-categorization ${read_categorization_csv} \
+    ${mixed_flag}
   """
 }
 

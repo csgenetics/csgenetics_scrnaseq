@@ -18,7 +18,7 @@ include {
   merge_annotated_UMRs_with_annotated_multimappers; count_high_conf_annotated_umr_multimap;
   single_sample_multiqc;; multi_sample_multiqc;
   sort_index_bam; dedup; io_count; count_matrix;
-  filter_count_matrix; cell_caller; summary_statistics; single_summary_report;
+  filter_count_matrix; cell_caller; categorize_reads; summary_statistics; single_summary_report;
   multi_sample_report
   } from './modules/processes.nf'
 
@@ -399,9 +399,19 @@ workflow {
   // Output filtered (cells only) count tables
   filter_count_matrix(ch_filter_count_matrix_in)
 
+  // Create input channel for categorize_reads process
+  // Need to combine STAR BAM, raw count matrix H5AD, and fastp JSON (R1 only)
+  ch_categorize_reads_in = star_out_ch.good_bam
+    .map({[it[0], it[1]]})  // [sample_id, star_bam]
+    .join(filter_count_matrix.out.raw_count_matrix)  // [sample_id, star_bam, raw_h5ad]
+    .join(ch_merged_fastp_multiqc.map({[it[0], it[2][0]]}))  // [sample_id, star_bam, raw_h5ad, fastp_json_r1]
+
+  // Run categorize_reads to calculate read and count metrics
+  categorize_reads(ch_categorize_reads_in)
+
   // structure of ch_summary_statistics_in is
   // [sample, min_nuc_gene_cutoff, raw_h5ad,
-  // antisense, dedup.log, multiqc_data, raw_seqc, annotated_rseqc]
+  // antisense, dedup.log, multiqc_data, raw_seqc, annotated_rseqc, read_categorization_csv]
   ch_cell_caller_out
   .join(filter_count_matrix.out.raw_count_matrix)
   .join(sort_index_bam.out.antisense_out)
@@ -409,6 +419,7 @@ workflow {
   .join(single_sample_multiqc.out.multiqc_json)
   .join(raw_rseqc.out.rseqc_log)
   .join(annotated_rseqc.out.rseqc_log)
+  .join(categorize_reads.out.read_categories.map({[it[0], it[1]]}))
   .set({ch_summary_statistics_in})
 
   // Generate summary statistics
