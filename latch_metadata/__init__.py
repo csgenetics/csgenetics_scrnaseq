@@ -91,7 +91,7 @@ To use a custom set of genomic references you must supply the following paramete
 ### Minimum count threshold for cell calling
 For full documentation on the minimum count threshold for cell calling (`minium_count_threshold`), please refer to the [CS Genetics' pipeline documentation](https://github.com/csgenetics/csgenetics_scrnaseq?tab=readme-ov-file#cell-calling).
 
-For most purposes the default value of 1000 is recommended.
+For most purposes the default value of 100 is recommended.
 
 **N.B. If a samples cell calling threshold has been set manually, the `minimum_count_threshold` will have no effect.**
 """
