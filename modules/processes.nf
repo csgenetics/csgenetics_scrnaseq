@@ -205,25 +205,17 @@ process io_extract {
 
   script:
   """
-  # UMI-tools expects the io to be the stdin, so we set this to r2, and read2-in to r1
-  # filtered-out and filtered-out2 will contain r2s r1s, respectively, that don't pass the filter
-  umi_tools extract --stdin=${r2} --read2-in=${r1} --whitelist=${corrected_barcode_list} -L ${sample_id}.log --bc-pattern="${barcode_pattern}" --error-correct-cell --stdout="${sample_id}.io_extract.R2.fastq.gz" --read2-out="${sample_id}.io_extract.R1.fastq.gz" --filtered-out="io_extract_${sample_id}_filteredOut_R2.fastq.gz" --filtered-out2="io_extract_${sample_id}_filteredOut_R1.fastq.gz"
-  
-  # Get number of reads passing filter from log and write to file
-  if [ -f "${sample_id}.log" ]; then
-    grep "Reads output:" ${sample_id}.log | cut -d' ' -f4- > ${sample_id}.io_extract.log
-  else
-    echo "Reads output: 0" > ${sample_id}.io_extract.log
-  fi
+  # Run io_extract Rust binary (available in PATH from container)
+  io_extract \
+    ${r1} ${r2} ${corrected_barcode_list} \
+    --sample-id ${sample_id} \
+    --output-dir . \
+    --no-filtered
 
-  # Check if the output file exists
-  # If it doesn't exist, create an empty file
-  if [ -f "${sample_id}.io_extract.R1.fastq.gz" ]; then
-    echo "${sample_id}.io_extract.R1.fastq.gz file exists"
-  else
+  # Check if output exists, create empty file if not
+  if [ ! -f "${sample_id}.io_extract.R1.fastq.gz" ]; then
     touch ${sample_id}.io_extract.R1.fastq && gzip ${sample_id}.io_extract.R1.fastq
   fi
-  output_count=\$(cat ${sample_id}.io_extract.log | cut -d ' ' -f3)
   """
 }
 
