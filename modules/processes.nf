@@ -196,7 +196,7 @@ process merged_fastp{
 process qc {
   tag "$sample_id"
 
-  container 'quay.io/csgenetics/qc:0.2'
+  container 'quay.io/csgenetics/qc:0.3'
 
   input:
   tuple val(sample_id), path(r1), path(r2)
@@ -205,6 +205,7 @@ process qc {
   output:
   tuple val(sample_id), path("${sample_id}.qc.R1.fastq.gz"), emit: qc_out
   tuple val(sample_id), path("${sample_id}.qc.log"), emit: qc_log
+  tuple val(sample_id), path("${sample_id}.R1.preQC.fastp.json"), path("${sample_id}.R2.preQC.fastp.json"), path("${sample_id}.R1.postQC.fastp.json"), emit: qc_multiqc
 
   script:
   """

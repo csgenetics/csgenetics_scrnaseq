@@ -8,7 +8,7 @@
 nextflow.enable.dsl=2
 include {
   save_resolved_configuration; download_star_index; download_gtf; download_input_csv; download_barcode_list; download_barcode_correction_list; download_public_fastq;
-  features_file; merge_lanes; merged_fastp; qc; star;
+  features_file; merge_lanes; qc; star;
   create_valid_empty_bam as create_valid_empty_bam_star;
   gtf2bed; run_rseqc as raw_rseqc; run_rseqc as annotated_rseqc;
   initial_feature_count; filter_for_UMRs_mismatch; umr_transcript_assignment; umr_exon_assignment;
@@ -183,20 +183,17 @@ workflow {
   // Merge the merged and non-merged fastqs
   io_extract_in_ch = ch_merge_lanes_out_merged.mix(ch_input_split_single_lane_flattened)
 
-  // TODO run separate taks of merged_fastp for each of the R1 and R2 files
-  // to increase parallelization.
-  merged_fastp(io_extract_in_ch, params.barcode_pattern)
-  ch_merged_fastp_multiqc = merged_fastp.out.merged_fastp_multiqc
-
-  // Run unified QC process (replaces io_extract + io_extract_fastp + trim_extra_polya + post_polyA_fastp)
+  // Run unified QC process (replaces io_extract + io_extract_fastp + trim_extra_polya + post_polyA_fastp + merged_fastp)
   // This single process:
   // 1. Extracts and corrects barcodes
   // 2. Performs SSS trimming and polyX trimming
   // 3. Trims internal polyA
   // 4. Calculates Q30 metrics for R2 barcode and R1 output
+  // 5. Outputs JSON files for MultiQC
   qc(io_extract_in_ch, barcode_correction_list)
   ch_qc_out = qc.out.qc_out
   ch_qc_log = qc.out.qc_log
+  ch_qc_multiqc = qc.out.qc_multiqc
 
   // Filter for empty fastq
   // Pipe good to STAR
@@ -287,9 +284,9 @@ workflow {
   annotated_rseqc(annotated_rseqc_in_ch, gtf2bed.out.bed, empty_rseqc_template, "annotated")
   ch_annotated_rseqc_multiqc = annotated_rseqc.out.rseqc_log
 
-  // Generate input channel containing all the files needed for multiqc per samples. 
+  // Generate input channel containing all the files needed for multiqc per samples.
   // The final channel structure is [sample, [file1, file2, file3, ...]]
-  ch_merged_fastp_multiqc
+  ch_qc_multiqc
     .mix(ch_raw_rseqc_multiqc)
     .mix(ch_annotated_rseqc_multiqc)
     .groupTuple(by:0, size: 3)
@@ -385,11 +382,11 @@ workflow {
   filter_count_matrix(ch_filter_count_matrix_in)
 
   // Create input channel for categorize_reads process
-  // Need to combine STAR BAM, raw count matrix H5AD, and fastp JSON (R1 only)
+  // Need to combine STAR BAM, raw count matrix H5AD, and qc JSON (main qc.json file)
   ch_categorize_reads_in = star_out_ch.good_bam
     .map({[it[0], it[1]]})  // [sample_id, star_bam]
     .join(filter_count_matrix.out.raw_count_matrix)  // [sample_id, star_bam, raw_h5ad]
-    .join(ch_merged_fastp_multiqc.map({[it[0], it[2][0]]}))  // [sample_id, star_bam, raw_h5ad, fastp_json_r1]
+    .join(ch_qc_multiqc.map({[it[0], it[1]]}))  // [sample_id, star_bam, raw_h5ad, qc_json]
 
   // Run categorize_reads to calculate read and count metrics
   categorize_reads(ch_categorize_reads_in)
