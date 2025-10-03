@@ -196,8 +196,6 @@ process merged_fastp{
 process qc {
   tag "$sample_id"
 
-  container 'quay.io/csgenetics/qc:0.3'
-
   input:
   tuple val(sample_id), path(r1), path(r2)
   path(corrected_barcodelist)
