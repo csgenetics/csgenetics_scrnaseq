@@ -12,9 +12,9 @@ class MultiqcModule(BaseMultiqcModule):
     def __init__(self):
         log.info("unified_qc module __init__ called")
         super(MultiqcModule, self).__init__(
-            name="Unified QC",
-            anchor="unified_qc",
-            info="CS Genetics unified QC process (barcode extraction + trimming + filtering)"
+            name="QC",
+            anchor="qc",
+            info="CS Genetics QC process (barcode extraction + trimming + filtering)"
         )
 
         log.info("unified_qc module initialized, starting file search")
@@ -25,7 +25,7 @@ class MultiqcModule(BaseMultiqcModule):
             log.debug("No Unified QC files found")
             return
 
-        log.info(f"Found {len(data_by_sample)} Unified QC sample sets")
+        log.info(f"Found {len(data_by_sample)} QC sample sets")
 
         # Add to general stats table
         self.unified_qc_general_stats_table(data_by_sample)
@@ -33,7 +33,7 @@ class MultiqcModule(BaseMultiqcModule):
         # Add sequence quality plot with Pre-QC / Post-QC toggle
         self.add_section(
             name="Sequence Quality",
-            anchor="unified-qc-seq-quality",
+            anchor="qc-seq-quality",
             description="Average sequencing quality over each base (Pre-QC vs Post-QC)",
             plot=self.unified_qc_quality_plot(data_by_sample)
         )
@@ -41,7 +41,7 @@ class MultiqcModule(BaseMultiqcModule):
         # Add GC content plot with Pre-QC / Post-QC toggle
         self.add_section(
             name="GC Content",
-            anchor="unified-qc-gc-content",
+            anchor="qc-gc-content",
             description="Average GC content over each base (Pre-QC vs Post-QC)",
             plot=self.unified_qc_gc_plot(data_by_sample)
         )
@@ -49,9 +49,17 @@ class MultiqcModule(BaseMultiqcModule):
         # Add N content plot with Pre-QC / Post-QC toggle
         self.add_section(
             name="N Content",
-            anchor="unified-qc-n-content",
+            anchor="qc-n-content",
             description="Average N content over each base (Pre-QC vs Post-QC)",
             plot=self.unified_qc_n_plot(data_by_sample)
+        )
+
+        # Add read length distribution plot with Pre-QC / Post-QC toggle
+        self.add_section(
+            name="Read Length Distribution",
+            anchor="qc-length-dist",
+            description="Distribution of read lengths (Pre-QC vs Post-QC)",
+            plot=self.unified_qc_length_dist_plot(data_by_sample)
         )
 
     def parse_unified_qc_files(self):
@@ -144,6 +152,13 @@ class MultiqcModule(BaseMultiqcModule):
                 "suffix": "%",
                 "format": "{:,.1f}"
             },
+            "mean_length": {
+                "title": "Mean Length",
+                "description": "Mean read length (bp)",
+                "scale": "GnBu",
+                "suffix": " bp",
+                "format": "{:,.1f}"
+            },
         }
 
         # Create 3 entries per sample: R1 pre-QC, R2 pre-QC, R1 post-QC
@@ -156,7 +171,8 @@ class MultiqcModule(BaseMultiqcModule):
                     "total_reads": r1_pre['total_reads'],
                     "q30_rate": r1_pre['q30_rate'],
                     "q30_bases": r1_pre['q30_bases'],
-                    "gc_content": r1_pre['gc_content']
+                    "gc_content": r1_pre['gc_content'],
+                    "mean_length": r1_pre['read1_mean_length']
                 }
 
             # R2 Pre-QC
@@ -166,7 +182,8 @@ class MultiqcModule(BaseMultiqcModule):
                     "total_reads": r2_pre['total_reads'],
                     "q30_rate": r2_pre['q30_rate'],
                     "q30_bases": r2_pre['q30_bases'],
-                    "gc_content": r2_pre['gc_content']
+                    "gc_content": r2_pre['gc_content'],
+                    "mean_length": r2_pre['read1_mean_length']
                 }
 
             # R1 Post-QC
@@ -176,7 +193,8 @@ class MultiqcModule(BaseMultiqcModule):
                     "total_reads": r1_post['total_reads'],
                     "q30_rate": r1_post['q30_rate'],
                     "q30_bases": r1_post['q30_bases'],
-                    "gc_content": r1_post['gc_content']
+                    "gc_content": r1_post['gc_content'],
+                    "mean_length": r1_post['read1_mean_length']
                 }
 
         self.general_stats_addcols(stats_data, headers)
@@ -215,8 +233,8 @@ class MultiqcModule(BaseMultiqcModule):
 
         # Configure plot with data_labels for toggle buttons
         pconfig = {
-            "id": "unified-qc-seq-quality-plot",
-            "title": "Unified QC: Sequence Quality",
+            "id": "qc-seq-quality-plot",
+            "title": "QC: Sequence Quality",
             "xlab": "Read Position (bp)",
             "ylab": "Mean Quality Score",
             "ymin": 0,
@@ -260,8 +278,8 @@ class MultiqcModule(BaseMultiqcModule):
                     postqc_data[f"{s_name}: R1 Post-QC"] = {i+1: gc*100 for i, gc in enumerate(gc_content)}
 
         pconfig = {
-            "id": "unified-qc-gc-content-plot",
-            "title": "Unified QC: GC Content",
+            "id": "qc-gc-content-plot",
+            "title": "QC: GC Content",
             "xlab": "Read Position (bp)",
             "ylab": "GC Content (%)",
             "ymin": 0,
@@ -307,8 +325,8 @@ class MultiqcModule(BaseMultiqcModule):
                     postqc_data[f"{s_name}: R1 Post-QC"] = {i+1: n*100 for i, n in enumerate(n_content)}
 
         pconfig = {
-            "id": "unified-qc-n-content-plot",
-            "title": "Unified QC: N Content",
+            "id": "qc-n-content-plot",
+            "title": "QC: N Content",
             "xlab": "Read Position (bp)",
             "ylab": "N Content (%)",
             "ymin": 0,
@@ -317,6 +335,51 @@ class MultiqcModule(BaseMultiqcModule):
             "data_labels": [
                 {"name": "Pre-QC", "ylab": "Pre-QC: N Content (%)"},
                 {"name": "Post-QC", "ylab": "Post-QC: N Content (%)"}
+            ]
+        }
+
+        return linegraph.plot([preqc_data, postqc_data], pconfig)
+
+    def unified_qc_length_dist_plot(self, data_by_sample):
+        """Create read length distribution plot with Pre-QC / Post-QC toggle buttons
+
+        Pre-QC view: Shows R1 and R2 pre-QC data
+        Post-QC view: Shows R1 post-QC data only
+        """
+
+        preqc_data = {}
+        postqc_data = {}
+
+        for s_name, data in data_by_sample.items():
+            # Pre-QC: Show both R1 and R2 length distributions
+            if 'r1_preqc' in data and 'read1_before_filtering' in data['r1_preqc']:
+                r1_before = data['r1_preqc']['read1_before_filtering']
+                if 'length_distribution' in r1_before:
+                    length_dist = r1_before['length_distribution']
+                    preqc_data[f"{s_name}: R1 Pre-QC"] = {int(length): count for length, count in length_dist.items()}
+
+            if 'r2_preqc' in data and 'read1_before_filtering' in data['r2_preqc']:
+                r2_before = data['r2_preqc']['read1_before_filtering']
+                if 'length_distribution' in r2_before:
+                    length_dist = r2_before['length_distribution']
+                    preqc_data[f"{s_name}: R2 Pre-QC"] = {int(length): count for length, count in length_dist.items()}
+
+            # Post-QC: Show R1 only
+            if 'r1_postqc' in data and 'read1_after_filtering' in data['r1_postqc']:
+                r1_after = data['r1_postqc']['read1_after_filtering']
+                if 'length_distribution' in r1_after:
+                    length_dist = r1_after['length_distribution']
+                    postqc_data[f"{s_name}: R1 Post-QC"] = {int(length): count for length, count in length_dist.items()}
+
+        pconfig = {
+            "id": "qc-length-dist-plot",
+            "title": "QC: Read Length Distribution",
+            "xlab": "Read Length (bp)",
+            "ylab": "Number of Reads",
+            "ymin": 0,
+            "data_labels": [
+                {"name": "Pre-QC", "ylab": "Pre-QC: Number of Reads"},
+                {"name": "Post-QC", "ylab": "Post-QC: Number of Reads"}
             ]
         }
 
