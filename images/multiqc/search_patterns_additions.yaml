@@ -1,0 +1,14 @@
+
+# Modify fastp pattern to exclude our QC files (will override the default)
+fastp:
+  fn: "*.json"
+  contents: '"before_filtering": {'
+  num_lines: 50
+  exclude_fn:
+    - "*.R1.preQC.fastp.json"
+    - "*.R2.preQC.fastp.json"
+    - "*.R1.postQC.fastp.json"
+
+# Add unified_qc module search pattern
+unified_qc:
+  fn_re: '.*\.(R[12]\.preQC|R1\.postQC)\.fastp\.json$'

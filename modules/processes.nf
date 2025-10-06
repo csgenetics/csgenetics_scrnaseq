@@ -184,135 +184,40 @@ process merged_fastp{
   '''
 }
 
-
 /*
-* Extract the 13bp barcode from the R2 read and append it to the header of the R1 read.
-* Keep reads where the barcode exactly matches a barcode in the barcode list
-* Correct the barcode for reads where the barcode doesn't exactly match the barcode list, but does match the corrected barcode list, append the corrected barcode to the read header
-* Discard any reads that don't match the barcode list or corrected barcode list
+* Unified QC process - replaces io_extract + io_extract_fastp + trim_extra_polya
+* This process combines:
+* 1. Barcode extraction and correction (io_extract functionality)
+* 2. SSS trimming and polyX trimming (io_extract_fastp functionality)
+* 3. Internal polyA trimming (trim_extra_polya functionality)
+* 4. Q30 calculation for both R2 barcode and R1 output
+* All in a single Rust binary for maximum performance
 */
-process io_extract {
+process qc {
   tag "$sample_id"
 
   input:
   tuple val(sample_id), path(r1), path(r2)
-  path(corrected_barcode_list)
-  val(barcode_pattern)
+  path(corrected_barcodelist)
 
   output:
-  tuple val(sample_id), path("${sample_id}.io_extract.R1.fastq.gz"), emit: io_extract_out
-  tuple val(sample_id), path("${sample_id}.io_extract.log"), emit: io_extract_log
+  tuple val(sample_id), path("${sample_id}.qc.R1.fastq.gz"), emit: qc_out
+  tuple val(sample_id), path("${sample_id}.qc.log"), emit: qc_log
+  tuple val(sample_id), path("${sample_id}.R1.preQC.fastp.json"), path("${sample_id}.R2.preQC.fastp.json"), path("${sample_id}.R1.postQC.fastp.json"), emit: qc_multiqc
 
   script:
   """
-  # Run io_extract Rust binary (available in PATH from container)
-  io_extract \
-    ${r1} ${r2} ${corrected_barcode_list} \
-    --sample-id ${sample_id} \
-    --output-dir . \
+  # Run unified qc Rust binary (available in PATH from container)
+  qc \\
+    ${r1} ${r2} ${corrected_barcodelist} \\
+    --sample-id ${sample_id} \\
+    --output-dir . \\
     --no-filtered
 
   # Check if output exists, create empty file if not
-  if [ ! -f "${sample_id}.io_extract.R1.fastq.gz" ]; then
-    touch ${sample_id}.io_extract.R1.fastq && gzip ${sample_id}.io_extract.R1.fastq
+  if [ ! -f "${sample_id}.qc.R1.fastq.gz" ]; then
+    touch ${sample_id}.qc.R1.fastq && gzip ${sample_id}.qc.R1.fastq
   fi
-  """
-}
-
-/*
-* Use fastp to trim reads and remove low quality reads
-* https://github.com/OpenGene/fastp
-* trim 5' sss_nmer
-* trim 3' polyA and polyG of length >=15
-* remove reads of length <=20
-* disable adapter trimming
-* disable polyG trimming 
-*/
-process io_extract_fastp {
-  tag "$sample_id"
-
-  publishDir "${params.outdir}/fastp", pattern: '*.{json,html}', mode: 'copy'
-
-  input:
-  tuple val(sample_id), path(r1)
-
-  output:
-  tuple val(sample_id), path("${sample_id}_R1.io_extract.fastp.fastq.gz"), emit: fastp_out
-  tuple val(sample_id), path("${sample_id}_R1.io_extract.fastp.html"), path("${sample_id}_R1.io_extract.fastp.json"), emit: fastp_multiqc
-
-  shell:
-  '''
-  # SSS trimming
-  # 3' polyX trimming with min length of 15 bases
-  # remove reads of length <= 20 bases
-  # disable adapter trimming
-  # disable polyG trimming 
-  
-  fastp -i !{r1} \
-    -f !{params.sss_nmer} \
-    -x --poly_x_min_len 15 \
-    -l 5 \
-    -A \
-    -G \
-    -j !{sample_id}_R1.io_extract.fastp.json \
-    -h !{sample_id}_R1.io_extract.fastp.html \
-    --stdout \
-     2> fastp.log | gzip > !{sample_id}_R1.io_extract.fastp.fastq.gz
-  '''     
-}
-
-/*
-* Trims reads from positions that match the regexs: A{15,} or A{13,}CG 
-* I.e. A homopolymers >= 15 bp or >=13bp + CG are identified and trimmed along with any following bps.
-* Only reads > 6bp in length (after trimming) are retained .
-*/
-process trim_extra_polya {
-  tag "$sample_id"
-
-  input:
-  tuple val(sample_id), path(fastq)
-  path(trim_polyA_script)
-
-  output:
-  tuple val(sample_id), path("${sample_id}.polyAtrimmed.fastq.gz"), emit: trim_extra_polya_out
-
-  script:
-  """
-  zcat $fastq | awk -f $trim_polyA_script -v sample_id=${sample_id}
-
-  # Check if the output file exists and rename it to the sample_id
-  # If it doesn't exist, create an empty file
-  if [ ! -f "${sample_id}.polyAtrimmed.fastq.gz" ]; then
-    touch ${sample_id}.polyAtrimmed.fastq && gzip ${sample_id}.polyAtrimmed.fastq
-  fi
-  """
-}
-
-process post_polyA_fastp{
-  tag "$sample_id"
-
-  publishDir "${params.outdir}/fastp", pattern: '*.{json,html}', mode: 'copy'
-
-  input: tuple val(sample_id), path(r1)
-
-  output:
-  tuple val(sample_id), path("${sample_id}_R1.post_polyA_fastp.fastq.gz"), emit: fastp_out
-  tuple val(sample_id), path("${sample_id}_R1.post_polyA_fastp.html"), path("${sample_id}_R1.post_polyA_fastp.json"), emit: fastp_multiqc
-
-  script:
-  """
-  # remove reads of length <= 20 bases
-  # disable adapter trimming
-  # disable polyG trimming 
-  
-  fastp -i $r1 \
-    -l 20 \
-    -A \
-    -G \
-    -j ${sample_id}_R1.post_polyA_fastp.json \
-    -h ${sample_id}_R1.post_polyA_fastp.html \
-    --stdout \
-     2> fastp.log | gzip > ${sample_id}_R1.post_polyA_fastp.fastq.gz
   """
 }
 
@@ -681,7 +586,7 @@ process single_sample_multiqc {
     -f \
     --title "${sample_id} multiqc" \
     --filename "${sample_id}_multiqc.html" \
-    -m fastp \
+    -m unified_qc \
     -m rseqc
   """
 }
@@ -708,7 +613,7 @@ process multi_sample_multiqc {
     -f \
     --title "multisample multiqc" \
     --filename "multisample_multiqc.html" \
-    -m fastp \
+    -m unified_qc \
     -m rseqc
   """
 }
@@ -926,7 +831,7 @@ process summary_statistics {
   publishDir "${params.outdir}/report/${sample_id}", mode: 'copy', pattern: "*.csv"
 
   input:
-  tuple val(sample_id), val(minimum_count_threshold), path(raw_h5ad), path(antisense), path(dedup), path("${sample_id}.multiqc.data.json"), path("${sample_id}_raw_rseqc_results.txt"), path("${sample_id}_annotated_rseqc_results.txt"), path(read_categorization_csv)
+  tuple val(sample_id), val(minimum_count_threshold), path(raw_h5ad), path(antisense), path(dedup), path("${sample_id}.multiqc.data.json"), path("${sample_id}_raw_rseqc_results.txt"), path("${sample_id}_annotated_rseqc_results.txt"), path(read_categorization_csv), path(qc_log)
   output:
   tuple val(sample_id), path("${sample_id}.metrics.csv"), emit: metrics_csv
 
@@ -942,6 +847,7 @@ process summary_statistics {
     --raw-rseqc ${sample_id}_raw_rseqc_results.txt \
     --annotated-rseqc ${sample_id}_annotated_rseqc_results.txt \
     --read-categorization ${read_categorization_csv} \
+    --qc-log ${qc_log} \
     ${mixed_flag}
   """
 }

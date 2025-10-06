@@ -1,0 +1,2 @@
+unified_qc:
+    fn_re: '.*\.(R[12]\.preQC|R1\.postQC)\.fastp\.json$'
