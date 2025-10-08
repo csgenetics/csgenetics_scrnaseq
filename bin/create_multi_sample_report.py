@@ -33,6 +33,8 @@ class MultipleSampleSummaries:
         else:
             self.mixed = False
 
+        self.qc_cascade_plot_path = sys.argv[3]
+
         self.sample_name_list, self.metrics_dict = self.make_metrics_dict_and_sample_list()
         self.write_out_csv_and_make_plotting_df()
         self.generate_summary_plots()
@@ -176,7 +178,7 @@ class MultipleSampleSummaries:
         associated html. I am leaving the associated code in place so that it
         can be reinstated.
         """
-        
+
         # Populate cell_metric_tooltip_dict here if a mixed sample.
         # The primary keys will need to match the base metric primary keys that have been used in summary_statistics.py
         # e.g. "num_cells", "raw_reads_per_cell" etc. etc. Similar to the single sample summary report you may want
@@ -186,12 +188,16 @@ class MultipleSampleSummaries:
         # slim down to just the tool tips (i.e. get rid of the accordian IDs)
         cell_metric_tooltip_dict_obj = {k: v[0] for k, v in cell_metric_tooltip_dict_obj.items()}
 
+        # Read QC cascade plot
+        qc_cascade_plot = read_html_plot(self.qc_cascade_plot_path)
+
         print(cell_metric_tooltip_dict_obj)
         print(self.metrics_dict)
         final_report = self.template.render(
             sample_name_list=self.sample_name_list, metrics_dict=self.metrics_dict,
             mixed=self.mixed,
             summary_plot = read_html_plot("multisample_summary_plots.html"),
+            qc_cascade_plot = qc_cascade_plot,
             alignment_tooltip_dict = {
                 "Post read QC alignment": "Mapping of the post QC reads i.e. after trimming (polyX end and internal polyA) and barcode verification.",
                 "Annotated reads alignment": "High confidence reads annotated with a gene ID (XT bam tag)."

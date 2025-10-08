@@ -17,8 +17,8 @@ include {
   merge_annotated_UMRs_with_annotated_multimappers; count_high_conf_annotated_umr_multimap;
   single_sample_multiqc;; multi_sample_multiqc;
   sort_index_bam; dedup; io_count; count_matrix;
-  filter_count_matrix; cell_caller; categorize_reads; summary_statistics; single_summary_report;
-  multi_sample_report
+  filter_count_matrix; cell_caller; categorize_reads; summary_statistics; qc_cascade_plot_single;
+  qc_cascade_plot_multi; single_summary_report; multi_sample_report
   } from './modules/processes.nf'
 
 def order_integer_first(it){
@@ -408,12 +408,25 @@ workflow {
   // Generate summary statistics
   summary_statistics(ch_summary_statistics_in)
 
-  ch_summary_metrics_and_plots = summary_statistics.out.metrics_csv.join(cell_caller.out.cell_caller_plots, by:0)
+  // Generate single-sample QC cascade plots
+  qc_cascade_plot_single(summary_statistics.out.metrics_csv)
+
+  // Join metrics CSV with cell caller plots and QC cascade plot
+  ch_summary_metrics_and_plots = summary_statistics.out.metrics_csv
+    .join(cell_caller.out.cell_caller_plots, by:0)
+    .join(qc_cascade_plot_single.out.qc_cascade_plot, by:0)
 
   // Generate single sample report
   single_summary_report(ch_summary_metrics_and_plots, single_sample_report_template)
 
+  // Generate multi-sample QC cascade plot
+  qc_cascade_plot_multi(single_summary_report.out.single_sample_metric_out.collect())
+
   // Generate multi sample report
-  multi_sample_report(single_summary_report.out.single_sample_metric_out.collect(), multi_sample_report_template)
+  multi_sample_report(
+    single_summary_report.out.single_sample_metric_out.collect(),
+    multi_sample_report_template,
+    qc_cascade_plot_multi.out.qc_cascade_plot
+  )
  
 }

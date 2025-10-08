@@ -853,15 +853,58 @@ process summary_statistics {
 }
 
 /*
-* Generate a per sample html report 
+* Generate QC cascade plot for single sample
+*/
+process qc_cascade_plot_single {
+  tag "$sample_id"
+
+  publishDir "${params.outdir}/report/${sample_id}", mode: 'copy'
+
+  input:
+  tuple val(sample_id), path(metrics_csv)
+
+  output:
+  tuple val(sample_id), path("${sample_id}.qc_cascade.html"), emit: qc_cascade_plot
+
+  script:
+  """
+  qc_cascade_plot.py \\
+    --mode single \\
+    --sample-id ${sample_id} \\
+    --metrics-csv ${metrics_csv}
+  """
+}
+
+/*
+* Generate QC cascade plot for all samples (multi-sample)
+*/
+process qc_cascade_plot_multi {
+  publishDir "${params.outdir}/report/", mode: 'copy'
+
+  input:
+  path(csvs)
+
+  output:
+  path("multisample_qc_cascade.html"), emit: qc_cascade_plot
+
+  script:
+  """
+  qc_cascade_plot.py \\
+    --mode multi \\
+    --csv-files ${csvs}
+  """
+}
+
+/*
+* Generate a per sample html report
 */
 process single_summary_report {
   tag "$sample_id"
 
   publishDir "${params.outdir}/report/${sample_id}", mode: 'copy'
-  
+
   input:
-  tuple val(sample_id), path(metrics_csv), path(pdf_plot_html), path(barnyard_plot_html)
+  tuple val(sample_id), path(metrics_csv), path(pdf_plot_html), path(barnyard_plot_html), path(qc_cascade_html)
   path(html_template)
 
   output:
@@ -870,7 +913,7 @@ process single_summary_report {
 
   script:
   """
-  create_single_sample_report.py $sample_id $pdf_plot_html $barnyard_plot_html $metrics_csv $html_template ${params.mixed_species}
+  create_single_sample_report.py $sample_id $pdf_plot_html $barnyard_plot_html $qc_cascade_html $metrics_csv $html_template ${params.mixed_species}
   """
 }
 
@@ -883,14 +926,17 @@ process multi_sample_report {
   input:
   path(csvs)
   path(template)
+  path(qc_cascade_html)
 
   output:
   path('multisample_report.html')
   path('multisample_out.csv')
+  path('multisample_summary_plots.html')
+  path('multisample_qc_cascade.html')
 
   script:
   """
-  create_multi_sample_report.py $template ${params.mixed_species}
+  create_multi_sample_report.py $template ${params.mixed_species} $qc_cascade_html
   """
 }
 
