@@ -39,23 +39,24 @@ class SingleSampleHTMLReport:
         We also inserts a premade png for cell caller.
     """
     def __init__(self):
-        
+
         self.sample_id = sys.argv[1]
         self.pdf_plot_path = sys.argv[2]
         self.barnyard_plot_path = sys.argv[3]
+        self.qc_cascade_plot_path = sys.argv[4]
 
         # Create a nested dict grouping by table
         self.metrics_dict = defaultdict(dict)
-        with open(sys.argv[4]) as metrics_handle:
+        with open(sys.argv[5]) as metrics_handle:
             header_line = next(metrics_handle)
             for line in metrics_handle:
                 var_name, var_value, var_human_readable_name, var_tooltip, var_group = line.strip().split(",")
                 self.metrics_dict[var_group][var_name] = (var_human_readable_name, self.format_number_to_string(var_value), var_tooltip)
 
-        with open(sys.argv[5]) as html_template:
+        with open(sys.argv[6]) as html_template:
             self.jinja_template = Template(html_template.read())
 
-        if sys.argv[6].upper() == "TRUE":
+        if sys.argv[7].upper() == "TRUE":
             self.mixed = True
         else:
             self.mixed = False
@@ -70,7 +71,7 @@ class SingleSampleHTMLReport:
             self.show_cell_caller_plot=True
             self.pdf_plot = read_html_plot(self.pdf_plot_path)
 
-        # If mixed species and the size of barnyard plot file is 0, 
+        # If mixed species and the size of barnyard plot file is 0,
         # then set self.show_barnyard_plot to False.
         # If single species, then set self.show_barnyard_plot to False always.
         if self.mixed:
@@ -84,6 +85,15 @@ class SingleSampleHTMLReport:
         else:
             self.show_barnyard_plot=False
             self.barnyard_plot = None
+
+        # Handle QC cascade plot
+        if os.path.getsize(self.qc_cascade_plot_path) == 0:
+            self.show_qc_cascade_plot=False
+            self.qc_cascade_plot = None
+            print("QC cascade plot size is 0. Hiding QC cascade plot card.")
+        else:
+            self.show_qc_cascade_plot=True
+            self.qc_cascade_plot = read_html_plot(self.qc_cascade_plot_path)
 
         self.render_and_write_report()
 
@@ -111,6 +121,8 @@ class SingleSampleHTMLReport:
                                             pdf_plot=self.pdf_plot,
                                             show_barnyard_plot=self.show_barnyard_plot,
                                             barnyard_plot=self.barnyard_plot,
+                                            show_qc_cascade_plot=self.show_qc_cascade_plot,
+                                            qc_cascade_plot=self.qc_cascade_plot,
                                             sample_id=self.sample_id,
                                             mixed = self.mixed,
                                             # These dicts are required to supply the tooltips, the accordion header ID and the collapse ID for each of the categories of alignment statistics
@@ -121,7 +133,7 @@ class SingleSampleHTMLReport:
                                             alignment_cat_dict = {
                                                 "Post read QC alignment": ("Mapping of the post QC reads i.e. after trimming (polyX end and internal polyA) and barcode verification.", "qc_accord_header", "qc_collapse"),
                                                 "Annotated reads alignment": ("High confidence reads annotated with a gene ID (XT bam tag).", "ann_accord_header", "ann_collapse")
-                                            },  
+                                            },
                                             cell_stat_cat_dict = cell_stat_cat_dict_obj)
 
         # Write out the rendered template.

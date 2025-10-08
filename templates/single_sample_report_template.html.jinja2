@@ -120,6 +120,23 @@
         </div>
       {% endif %}
 
+      {% if show_qc_cascade_plot %}
+        <!-- QC Cascade plot -->
+        <div class="card border-left-success shadow py-2">
+          <div class="card-body">
+            <h2 class="text-xs font-weight-bold me-5 ms-3" style="font-size: 21px; line-height: 1.5">
+              QC Cascade
+              <i class="bi-info-circle" style="font-size:15px" data-bs-toggle="tooltip"
+                 data-bs-title="Visualization showing read retention and loss at each QC processing step. Green bars show reads retained; gray bars show reads removed.">
+              </i>
+            </h2>
+            <div style="max-width: 100%; max-height: 100%; overflow: hidden; width: auto; height: auto;">
+              {{ qc_cascade_plot | safe }}
+            </div>
+          </div>
+        </div>
+      {% endif %}
+
     </div>
 
     <!-- Second col contains alignment and cell stats -->
