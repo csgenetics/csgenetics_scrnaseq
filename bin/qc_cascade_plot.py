@@ -249,20 +249,43 @@ class QCCascadePlotter:
 
         n_steps = len(steps)
 
+        # Calculate global y-axis range: max from first step, min from last step
+        y_max = df[steps[0]].max()
+        y_min = df[steps[-1]].min()
+        y_range = [y_min * 0.95, y_max * 1.05]  # Add 5% padding
+
         fig = make_subplots(
             rows=1, cols=n_steps,
             subplot_titles=[f"{step}<br>(n={df[step].dropna().shape[0]})" for step in steps],
             horizontal_spacing=0.02
         )
 
-        # Add box plot for each step
+        # Add box plot and scatter points for each step
         for i, step in enumerate(steps, 1):
+            # Add box plot
             fig.add_trace(
                 go.Box(
                     y=df[step],
                     name=step,
                     marker_color=self.cs_green,
                     boxmean='sd',
+                    showlegend=False,
+                    hoverinfo='skip'  # Disable box hover, we'll use scatter points instead
+                ),
+                row=1, col=i
+            )
+
+            # Add individual data points as scatter
+            fig.add_trace(
+                go.Scatter(
+                    y=df[step],
+                    x=[0] * len(df[step]),  # All points at x=0 (center of box)
+                    mode='markers',
+                    marker=dict(
+                        color='rgba(54, 186, 0, 0.6)',  # Semi-transparent green
+                        size=6,
+                        line=dict(width=1, color='white')
+                    ),
                     customdata=df['sample_id'],
                     hovertemplate='<b>%{customdata}</b><br>' +
                                   'Reads: %{y:,}<extra></extra>',
@@ -271,10 +294,11 @@ class QCCascadePlotter:
                 row=1, col=i
             )
 
-            # Update y-axis for each subplot
+            # Update y-axis for each subplot with fixed range
             fig.update_yaxes(
                 title_text="Reads" if i == 1 else "",
                 tickformat=',d',
+                range=y_range,
                 row=1, col=i
             )
 
