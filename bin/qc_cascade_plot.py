@@ -219,7 +219,7 @@ class QCCascadePlotter:
     def create_multi_sample_plot(self, csv_files):
         """
         Create box plots showing QC step retention across all samples.
-        One box plot per QC step showing distribution of reads retained.
+        Single plot with one y-axis and rotated x-axis labels.
         """
         # Collect data from all samples
         all_samples_data = []
@@ -243,72 +243,58 @@ class QCCascadePlotter:
 
         df = pd.DataFrame(all_samples_data)
 
-        # Create figure with subplots
+        # Define QC steps in order
         steps = ['Input', 'Barcode\nValidation', 'SSS\nTrimming', 'PolyX\nTrimming',
                  'Quality\nFiltering', 'N-Base\nFiltering', 'PolyA\nTrimming', 'Final\nOutput']
 
-        n_steps = len(steps)
+        # Create single figure with one y-axis
+        fig = go.Figure()
 
-        # Calculate global y-axis range: max from first step, min from last step
-        y_max = df[steps[0]].max()
-        y_min = df[steps[-1]].min()
-        y_range = [y_min * 0.95, y_max * 1.05]  # Add 5% padding
+        # Add box plots and scatter points for each step
+        for i, step in enumerate(steps):
+            step_data = df[step].dropna()
 
-        fig = make_subplots(
-            rows=1, cols=n_steps,
-            subplot_titles=[f"{step}<br>(n={df[step].dropna().shape[0]})" for step in steps],
-            horizontal_spacing=0.02
-        )
-
-        # Add box plot and scatter points for each step
-        for i, step in enumerate(steps, 1):
-            # Add box plot
+            # Add box plot with hover info showing statistics
             fig.add_trace(
                 go.Box(
-                    y=df[step],
+                    y=step_data,
+                    x=[i] * len(step_data),  # Use numeric position
                     name=step,
                     marker_color=self.cs_green,
                     boxmean='sd',
                     showlegend=False,
-                    hoverinfo='skip'  # Disable box hover, we'll use scatter points instead
-                ),
-                row=1, col=i
+                    boxpoints=False,  # Don't show points on box (we'll add them separately)
+                    hovertemplate=f'<b>{step}</b><br>' +
+                                  'Median: %{median:,}<br>' +
+                                  'Mean: %{mean:,}<br>' +
+                                  'Q1: %{q1:,}<br>' +
+                                  'Q3: %{q3:,}<br>' +
+                                  'Min: %{lowerfence:,}<br>' +
+                                  'Max: %{upperfence:,}<br>' +
+                                  f'n = {len(step_data)}<extra></extra>'
+                )
             )
 
-            # Add individual data points as scatter
+            # Add individual data points as scatter, offset to the right of box
             fig.add_trace(
                 go.Scatter(
-                    y=df[step],
-                    x=[0] * len(df[step]),  # All points at x=0 (center of box)
+                    y=step_data,
+                    x=[i + 0.35] * len(step_data),  # Offset to the right by 0.35
                     mode='markers',
                     marker=dict(
                         color='rgba(54, 186, 0, 0.6)',  # Semi-transparent green
                         size=6,
                         line=dict(width=1, color='white')
                     ),
-                    customdata=df['sample_id'],
+                    customdata=df['sample_id'][step_data.index],
                     hovertemplate='<b>%{customdata}</b><br>' +
+                                  f'{step}<br>' +
                                   'Reads: %{y:,}<extra></extra>',
                     showlegend=False
-                ),
-                row=1, col=i
+                )
             )
 
-            # Update y-axis for each subplot with fixed range
-            fig.update_yaxes(
-                title_text="Reads" if i == 1 else "",
-                tickformat=',d',
-                range=y_range,
-                row=1, col=i
-            )
-
-            # Hide x-axis labels
-            fig.update_xaxes(
-                showticklabels=False,
-                row=1, col=i
-            )
-
-        # Update overall layout
+        # Update layout
         fig.update_layout(
             title=dict(
                 text="QC Cascade Across All Samples",
@@ -316,12 +302,25 @@ class QCCascadePlotter:
                 xanchor='center',
                 font=dict(size=18, family='Lexend, sans-serif')
             ),
+            xaxis=dict(
+                title="QC Step",
+                tickangle=-90,  # Rotate labels 90 degrees
+                tickfont=dict(size=10),
+                tickmode='array',
+                tickvals=list(range(len(steps))),  # Position at 0, 1, 2, ...
+                ticktext=steps,  # Use step names as labels
+                range=[-0.5, len(steps) - 0.5]  # Add padding on edges
+            ),
+            yaxis=dict(
+                title="Number of Reads",
+                tickformat=',d'
+            ),
             font=dict(family='Lexend, sans-serif', color='black'),
             plot_bgcolor='white',
             paper_bgcolor='white',
             height=600,
             showlegend=False,
-            margin=dict(l=80, r=40, t=100, b=40)
+            margin=dict(l=80, r=40, t=80, b=120)  # Extra bottom margin for rotated labels
         )
 
         # Save as HTML
