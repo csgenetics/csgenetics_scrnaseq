@@ -737,16 +737,16 @@ process count_matrix {
 /*
 * Run cell caller - this determines a threshold number of counts to call a cell.
 * The threshold is output to stdout and output as cell_caller_out
-* If the h5ad matrix is empty, an empty .png will be output and checked for
+* If the h5ad matrix is empty, an empty .html will be output and checked for
 * in the summary statistic script causing the Cell Caller plot to be hidden.
 */
 process cell_caller {
   tag "$sample_id"
 
   // Publish the plots; the glob pattern is used to collect the mixed species and single species plots
-  // Single species are named: {self.sample_name}_pdf_with_cutoff.png
-  // Mixed species are named: {self.sample_name}_hsap_pdf_with_cutoff.png and {self.sample_name}_mmus_pdf_with_cutoff.png
-  publishDir "${params.outdir}/plots", pattern: "${sample_id}*_pdf_with_cutoff.png", mode: 'copy'
+  // Single species are named: {self.sample_name}_pdf_with_cutoff.html
+  // Mixed species are named: {self.sample_name}_hsap_pdf_with_cutoff.html and {self.sample_name}_mmus_pdf_with_cutoff.html
+  publishDir "${params.outdir}/plots", pattern: "${sample_id}*_pdf_with_cutoff.html", mode: 'copy'
 
   input:
   tuple val(sample_id), path(count_matrix_h5ad), val(manual_threshold_str)
@@ -754,8 +754,8 @@ process cell_caller {
   output:
   tuple val(sample_id), stdout, emit: cell_caller_out
   tuple val(sample_id), path("${sample_id}_counts_pdf_with_threshold.html"), path("${sample_id}_barnyard_plot.html"), emit: cell_caller_plots
-  // publiDir statement only works on files output in the ouput directive
-  tuple val(sample_id), path("${sample_id}*_pdf_with_cutoff.png"), emit: cell_caller_png
+  // publishDir statement only works on files output in the output directive
+  tuple val(sample_id), path("${sample_id}*_pdf_with_cutoff.html"), emit: cell_caller_html
 
   script:
   """
