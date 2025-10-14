@@ -219,7 +219,7 @@ class QCCascadePlotter:
     def create_multi_sample_plot(self, csv_files):
         """
         Create box plots showing QC step retention across all samples.
-        Single plot with one y-axis and rotated x-axis labels.
+        Toggle button to switch between Proportional (default) and Absolute views.
         """
         # Collect data from all samples
         all_samples_data = []
@@ -236,34 +236,87 @@ class QCCascadePlotter:
                 'PolyX\nTrimming': metrics.get('polyx_retained', 0),
                 'Quality\nFiltering': metrics.get('quality_retained', 0),
                 'N-Base\nFiltering': metrics.get('n_base_retained', 0),
-                'PolyA\nTrimming': metrics.get('polya_retained', 0),
-                'Final\nOutput': metrics.get('reads_post_qc', 0)
+                'PolyA\nTrimming': metrics.get('polya_retained', 0)
             }
             all_samples_data.append(sample_data)
 
         df = pd.DataFrame(all_samples_data)
 
-        # Define QC steps in order
+        # Define QC steps in order (removed redundant Final Output)
         steps = ['Input', 'Barcode\nValidation', 'SSS\nTrimming', 'PolyX\nTrimming',
-                 'Quality\nFiltering', 'N-Base\nFiltering', 'PolyA\nTrimming', 'Final\nOutput']
+                 'Quality\nFiltering', 'N-Base\nFiltering', 'PolyA\nTrimming']
 
-        # Create single figure with one y-axis
+        # Calculate proportional data (normalized to Input = 1.0)
+        df_prop = df.copy()
+        for step in steps:
+            if step != 'sample_id':
+                df_prop[step] = df[step] / df['Input']
+
+        # Create figure with updatemenus for toggle
         fig = go.Figure()
 
-        # Add box plots and scatter points for each step
+        # Add PROPORTIONAL traces (visible by default)
         for i, step in enumerate(steps):
-            step_data = df[step].dropna()
+            step_data_abs = df[step].dropna()
+            step_data_prop = df_prop[step].dropna()
 
-            # Add box plot with hover info showing statistics
+            # Proportional box plot
             fig.add_trace(
                 go.Box(
-                    y=step_data,
-                    x=[i] * len(step_data),  # Use numeric position
+                    y=step_data_prop,
+                    x=[i] * len(step_data_prop),
                     name=step,
                     marker_color=self.cs_green,
                     boxmean='sd',
                     showlegend=False,
-                    boxpoints=False,  # Don't show points on box (we'll add them separately)
+                    boxpoints=False,
+                    visible=True,  # Proportional visible by default
+                    hovertemplate=f'<b>{step}</b><br>' +
+                                  'Median: %{median:.2%}<br>' +
+                                  'Mean: %{mean:.2%}<br>' +
+                                  'Q1: %{q1:.2%}<br>' +
+                                  'Q3: %{q3:.2%}<br>' +
+                                  'Min: %{lowerfence:.2%}<br>' +
+                                  'Max: %{upperfence:.2%}<br>' +
+                                  f'n = {len(step_data_prop)}<extra></extra>'
+                )
+            )
+
+            # Proportional scatter points
+            fig.add_trace(
+                go.Scatter(
+                    y=step_data_prop,
+                    x=[i + 0.35] * len(step_data_prop),
+                    mode='markers',
+                    marker=dict(
+                        color='rgba(54, 186, 0, 0.6)',
+                        size=6,
+                        line=dict(width=1, color='white')
+                    ),
+                    customdata=df['sample_id'][step_data_prop.index],
+                    hovertemplate='<b>%{customdata}</b><br>' +
+                                  f'{step}<br>' +
+                                  'Proportion: %{y:.2%}<extra></extra>',
+                    showlegend=False,
+                    visible=True  # Proportional visible by default
+                )
+            )
+
+        # Add ABSOLUTE traces (hidden by default)
+        for i, step in enumerate(steps):
+            step_data_abs = df[step].dropna()
+
+            # Absolute box plot
+            fig.add_trace(
+                go.Box(
+                    y=step_data_abs,
+                    x=[i] * len(step_data_abs),
+                    name=step,
+                    marker_color=self.cs_green,
+                    boxmean='sd',
+                    showlegend=False,
+                    boxpoints=False,
+                    visible=False,  # Absolute hidden by default
                     hovertemplate=f'<b>{step}</b><br>' +
                                   'Median: %{median:,}<br>' +
                                   'Mean: %{mean:,}<br>' +
@@ -271,28 +324,74 @@ class QCCascadePlotter:
                                   'Q3: %{q3:,}<br>' +
                                   'Min: %{lowerfence:,}<br>' +
                                   'Max: %{upperfence:,}<br>' +
-                                  f'n = {len(step_data)}<extra></extra>'
+                                  f'n = {len(step_data_abs)}<extra></extra>'
                 )
             )
 
-            # Add individual data points as scatter, offset to the right of box
+            # Absolute scatter points
             fig.add_trace(
                 go.Scatter(
-                    y=step_data,
-                    x=[i + 0.35] * len(step_data),  # Offset to the right by 0.35
+                    y=step_data_abs,
+                    x=[i + 0.35] * len(step_data_abs),
                     mode='markers',
                     marker=dict(
-                        color='rgba(54, 186, 0, 0.6)',  # Semi-transparent green
+                        color='rgba(54, 186, 0, 0.6)',
                         size=6,
                         line=dict(width=1, color='white')
                     ),
-                    customdata=df['sample_id'][step_data.index],
+                    customdata=df['sample_id'][step_data_abs.index],
                     hovertemplate='<b>%{customdata}</b><br>' +
                                   f'{step}<br>' +
                                   'Reads: %{y:,}<extra></extra>',
-                    showlegend=False
+                    showlegend=False,
+                    visible=False  # Absolute hidden by default
                 )
             )
+
+        # Create toggle buttons
+        # Each step has 2 traces (box + scatter), so total traces = len(steps) * 2 for each view
+        traces_per_view = len(steps) * 2
+
+        # Proportional: first traces_per_view visible, rest hidden
+        proportional_visible = [True] * traces_per_view + [False] * traces_per_view
+
+        # Absolute: first traces_per_view hidden, rest visible
+        absolute_visible = [False] * traces_per_view + [True] * traces_per_view
+
+        fig.update_layout(
+            updatemenus=[
+                dict(
+                    type="buttons",
+                    direction="left",
+                    buttons=list([
+                        dict(
+                            args=[{"visible": proportional_visible},
+                                  {"yaxis.title": "Proportion of Input Reads",
+                                   "yaxis.tickformat": ".0%"}],
+                            label="Proportional",
+                            method="update"
+                        ),
+                        dict(
+                            args=[{"visible": absolute_visible},
+                                  {"yaxis.title": "Number of Reads",
+                                   "yaxis.tickformat": ",d"}],
+                            label="Absolute",
+                            method="update"
+                        )
+                    ]),
+                    pad={"r": 10, "t": 10},
+                    showactive=True,
+                    x=0.0,
+                    xanchor="left",
+                    y=1.15,
+                    yanchor="top",
+                    bgcolor="white",
+                    bordercolor="#36BA00",
+                    borderwidth=2,
+                    font=dict(size=12)
+                ),
+            ]
+        )
 
         # Update layout
         fig.update_layout(
@@ -304,23 +403,23 @@ class QCCascadePlotter:
             ),
             xaxis=dict(
                 title="QC Step",
-                tickangle=-90,  # Rotate labels 90 degrees
+                tickangle=-90,
                 tickfont=dict(size=10),
                 tickmode='array',
-                tickvals=list(range(len(steps))),  # Position at 0, 1, 2, ...
-                ticktext=steps,  # Use step names as labels
-                range=[-0.5, len(steps) - 0.5]  # Add padding on edges
+                tickvals=list(range(len(steps))),
+                ticktext=steps,
+                range=[-0.5, len(steps) - 0.5]
             ),
             yaxis=dict(
-                title="Number of Reads",
-                tickformat=',d'
+                title="Proportion of Input Reads",  # Default to proportional
+                tickformat='.0%'  # Default to percentage format
             ),
             font=dict(family='Lexend, sans-serif', color='black'),
             plot_bgcolor='white',
             paper_bgcolor='white',
             height=600,
             showlegend=False,
-            margin=dict(l=80, r=40, t=80, b=120)  # Extra bottom margin for rotated labels
+            margin=dict(l=80, r=40, t=100, b=120)  # Extra top margin for buttons
         )
 
         # Save as HTML
