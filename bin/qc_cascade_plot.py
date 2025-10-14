@@ -282,14 +282,15 @@ class QCCascadePlotter:
                     showlegend=False,
                     boxpoints=False,
                     visible=True,
-                    hovertemplate=f'<b>{step}</b><br>' +
+                    hovertemplate='<b>' + step + '</b><br>' +
                                   'Median: %{median:.2%}<br>' +
                                   'Mean: %{mean:.2%}<br>' +
                                   'Q1: %{q1:.2%}<br>' +
                                   'Q3: %{q3:.2%}<br>' +
                                   'Min: %{lowerfence:.2%}<br>' +
                                   'Max: %{upperfence:.2%}<br>' +
-                                  f'n = {len(step_data_prop)}<extra></extra>'
+                                  f'n = {len(step_data_prop)}' +
+                                  '<extra></extra>'
                 ),
                 row=1, col=1
             )
@@ -354,14 +355,15 @@ class QCCascadePlotter:
                     showlegend=False,
                     boxpoints=False,
                     visible=False,
-                    hovertemplate=f'<b>{step}</b><br>' +
+                    hovertemplate='<b>' + step + '</b><br>' +
                                   'Median: %{median:,}<br>' +
                                   'Mean: %{mean:,}<br>' +
                                   'Q1: %{q1:,}<br>' +
                                   'Q3: %{q3:,}<br>' +
                                   'Min: %{lowerfence:,}<br>' +
                                   'Max: %{upperfence:,}<br>' +
-                                  f'n = {len(step_data_abs)}<extra></extra>'
+                                  f'n = {len(step_data_abs)}' +
+                                  '<extra></extra>'
                 ),
                 row=1, col=1
             )
