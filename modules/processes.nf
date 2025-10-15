@@ -252,13 +252,14 @@ Process to convert the input GTF to a gene model bed file for rseqc read distrib
 process gtf2bed {
   input:
   path(gtf)
+  path(gtf2bed_script)
 
   output:
   path("gene_model.bed"), emit: bed
 
   shell:
   '''
-  !{projectDir}/bin/gtf2bed !{gtf} > gene_model.bed
+  !{gtf2bed_script} !{gtf} > gene_model.bed
   '''
 }
 

@@ -225,7 +225,7 @@ workflow {
   create_valid_empty_bam_star(qc_out_filtered_ch.empty_fastq.map({[it[0], "_Aligned.sortedByCoord.out"]}).mix(star_out_ch.bad_bam.map({[it[0], "_Aligned.sortedByCoord.out"]})))
 
   // Process to convert input GTF to gene model bed for RSeQC
-  gtf2bed(gtf)
+  gtf2bed(gtf, file("${baseDir}/bin/gtf2bed"))
 
   // RSeQC read distribution on STAR output
   // The 1 and 0 being added in the map represent bams that contain (1)
