@@ -258,7 +258,7 @@ process gtf2bed {
 
   shell:
   '''
-  gtf2bed !{gtf} > gene_model.bed
+  !{projectDir}/bin/gtf2bed !{gtf} > gene_model.bed
   '''
 }
 

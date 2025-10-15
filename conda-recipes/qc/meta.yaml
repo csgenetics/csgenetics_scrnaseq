@@ -1,0 +1,51 @@
+{% set name = "csgenetics-qc" %}
+{% set version = "0.3.4" %}
+
+package:
+  name: {{ name|lower }}
+  version: {{ version }}
+
+source:
+  # Building from local source
+  path: ../../../rnaseq/images/qc
+
+  # Option for future: From GitHub (when repo is ready with tags and LICENSE)
+  # git_url: https://github.com/csgenetics/qc.git
+  # git_rev: v{{ version }}
+
+build:
+  number: 0
+  # Build script: build.sh (for Unix/Linux)
+
+requirements:
+  build:
+    - {{ compiler('rust') }}
+    - cargo-bundle-licenses
+  host:
+    # No host requirements for static binary
+  run:
+    - libgcc-ng  # [linux]
+
+test:
+  commands:
+    # Test that the binary exists and is executable
+    - test -x $PREFIX/bin/qc  # [unix]
+    - qc 2>&1 | grep -q "Usage"  # [unix]
+
+about:
+  home: https://github.com/csgenetics/qc
+  license: Proprietary
+  summary: CS Genetics unified QC binary for barcode extraction, trimming, and quality filtering
+  description: |
+    The CS Genetics QC tool is a high-performance Rust binary that performs:
+    - Barcode extraction and correction from R2 reads
+    - SSS (sample-specific sequence) trimming
+    - PolyX trimming (polyA, polyT, polyG, polyC)
+    - Internal polyA trimming
+    - Q30 quality metrics calculation
+    - FastP-compatible JSON output for MultiQC integration
+  dev_url: https://github.com/csgenetics/qc
+
+extra:
+  recipe-maintainers:
+    - csgenetics

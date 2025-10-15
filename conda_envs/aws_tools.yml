@@ -1,0 +1,5 @@
+name: aws_tools
+channels:
+  - conda-forge
+dependencies:
+  - awscli

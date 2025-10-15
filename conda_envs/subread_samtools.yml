@@ -1,0 +1,7 @@
+name: subread_samtools
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - subread  # contains featureCounts
+  - samtools =1.18
