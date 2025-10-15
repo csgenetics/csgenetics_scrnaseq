@@ -452,17 +452,7 @@ nextflow run main.nf -profile conda --input_csv $HOME/analysis/input_csv/input_c
 - Conda 25.9.1 or newer must be installed and available in your PATH
 
 **Minimum conda version:**
-The pipeline requires conda 25.9.1 or newer. Older versions (e.g., 23.x) may hang during non-interactive environment creation. To check your conda version:
-
-```bash
-conda --version
-```
-
-To update conda to the latest version:
-
-```bash
-conda update -n base -c defaults conda
-```
+The pipeline requires conda 25.9.1 or newer.
 
 **Custom conda packages:**
 The pipeline uses two custom conda packages hosted on the `cs_genetics` anaconda.org channel:
