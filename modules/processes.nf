@@ -149,41 +149,6 @@ process merge_lanes {
   """
 }
 
-process merged_fastp{
-  tag "$sample_id"
-
-  publishDir "${params.outdir}/fastp", mode: 'copy'
-
-  input:
-  tuple val(sample_id), path("${sample_id}.R1.merged.fastq.gz"), path("${sample_id}.R2.merged.fastq.gz")
-  val(barcode_pattern)
-
-  output:
-  tuple val(sample_id), path("${sample_id}_R*.merged_fastp.html"), path("${sample_id}_R*.merged_fastp.json"), emit: merged_fastp_multiqc
-
-  shell:
-  barcode_length = barcode_pattern.size()
-  '''
-  # Get q30_rate for barcode present in fastq2 file 
-  # maximum length which be equal to barcode length 
-  barcode_length=$(echo !{barcode_pattern} | tr -cd 'C' | wc -c)
-
-  # R1 fastp
-  fastp -i !{sample_id}.R1.merged.fastq.gz \
-    -A -G \
-    -j !{sample_id}_R1.merged_fastp.json \
-    -h !{sample_id}_R1.merged_fastp.html
-
-  # R2 fastp
-  fastp -i !{sample_id}.R2.merged.fastq.gz \
-    -A -G \
-    -b !{barcode_length} \
-    -l 13 \
-    -j !{sample_id}_R2.merged_fastp.json \
-    -h !{sample_id}_R2.merged_fastp.html
-  '''
-}
-
 /*
 * Unified QC process - replaces io_extract + io_extract_fastp + trim_extra_polya
 * This process combines:
@@ -287,13 +252,14 @@ Process to convert the input GTF to a gene model bed file for rseqc read distrib
 process gtf2bed {
   input:
   path(gtf)
+  path(gtf2bed_script)
 
   output:
   path("gene_model.bed"), emit: bed
 
   shell:
   '''
-  gtf2bed !{gtf} > gene_model.bed
+  !{gtf2bed_script} !{gtf} > gene_model.bed
   '''
 }
 

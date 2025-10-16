@@ -1,0 +1,12 @@
+[workspace]
+authors = ["didillysquat <didillysquat@gmail.com>"]
+channels = ["conda-forge"]
+name = "conda-recipes"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+conda-build = ">=25.9.0,<26"
+anaconda-client = ">=1.13.0,<2"
