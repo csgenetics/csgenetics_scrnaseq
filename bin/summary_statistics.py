@@ -26,6 +26,12 @@ class SummaryStatistics:
         self.read_categorization_csv = args.read_categorization_csv
         self.mixed = args.mixed_species
 
+        # Parse QC log if provided
+        if hasattr(args, 'qc_log') and args.qc_log:
+            self.qc_metrics = self.parse_qc_log(args.qc_log)
+        else:
+            self.qc_metrics = None
+
         # Primary keys will be:
         #   Read QC
         #   Cell metrics
@@ -56,7 +62,90 @@ class SummaryStatistics:
             as the self.multiqc_json_dict["report_general_stats_data"][0]. To access the desired stats
             dict, we can then use something like int(self.multiqc_general_stats_dict[f"{self.sample_id}.R1"]["before_filtering_total_reads"]).
         """
-        self.multiqc_general_stats_dict = self.multiqc_json_dict["report_general_stats_data"][0]
+        # Check if report_general_stats_data has any entries (for backward compatibility)
+        if self.multiqc_json_dict["report_general_stats_data"]:
+            self.multiqc_general_stats_dict = self.multiqc_json_dict["report_general_stats_data"][0]
+        else:
+            # For unified QC pipeline, MultiQC may not have general stats (we use qc.log instead)
+            self.multiqc_general_stats_dict = {}
+
+    def parse_qc_log(self, qc_log_path):
+        """
+        Parse unified QC log file (v0.4.0+ cascade format) to extract metrics.
+        Returns dict with metrics.
+        """
+        metrics = {}
+        with open(qc_log_path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if ':' in line:
+                    key, value = line.split(':', 1)
+                    key = key.strip()
+                    value = value.strip()
+
+                    # Input
+                    if key == 'raw_reads':
+                        metrics['raw_reads'] = int(value)
+
+                    # Step 1: Barcode Validation
+                    elif key == 'barcode_direct_match':
+                        metrics['barcode_direct_match'] = int(value)
+                    elif key == 'barcode_corrected':
+                        metrics['barcode_corrected'] = int(value)
+                    elif key == 'barcode_failed':
+                        metrics['barcode_failed'] = int(value)
+                    elif key == 'post_barcode_reads_retained':
+                        metrics['post_barcode_reads_retained'] = int(value)
+
+                    # Step 3: SSS Trimming
+                    elif key == 'too_short_after_sss':
+                        metrics['too_short_after_sss'] = int(value)
+                    elif key == 'post_sss_trim_reads_retained':
+                        metrics['post_sss_trim_reads_retained'] = int(value)
+
+                    # Step 4: PolyX Trimming
+                    elif key == 'polyx_trimmed_terminal':
+                        metrics['polyx_trimmed_terminal'] = int(value)
+                    elif key == 'polyx_too_short_after_trim':
+                        metrics['polyx_too_short_after_trim'] = int(value)
+                    elif key == 'post_polyx_trim_reads_retained':
+                        metrics['post_polyx_trim_reads_retained'] = int(value)
+
+                    # Step 5: Quality Filtering
+                    elif key == 'low_quality_reads':
+                        metrics['low_quality_reads'] = int(value)
+                    elif key == 'post_quality_filter_reads_retained':
+                        metrics['post_quality_filter_reads_retained'] = int(value)
+
+                    # Step 6: N-Base Filtering
+                    elif key == 'too_many_n_reads':
+                        metrics['too_many_n_reads'] = int(value)
+                    elif key == 'post_n_filter_reads_retained':
+                        metrics['post_n_filter_reads_retained'] = int(value)
+
+                    # Step 7: PolyA Trimming
+                    elif key == 'polya_trimmed_internal':
+                        metrics['polya_trimmed_internal'] = int(value)
+                    elif key == 'polya_too_short_after_trim':
+                        metrics['polya_too_short_after_trim'] = int(value)
+                    elif key == 'post_polya_trim_reads_retained':
+                        metrics['post_polya_trim_reads_retained'] = int(value)
+
+                    # Output & Quality
+                    elif key == 'reads_output':
+                        metrics['reads_output'] = int(value)
+                    elif key == 'mean_read_length_post_QC':
+                        metrics['mean_read_length_post_QC'] = float(value)
+                    elif key == 'median_read_length_post_QC':
+                        metrics['median_read_length_post_QC'] = float(value)
+                    elif key == 'SSS_gc_perc':
+                        metrics['SSS_gc_perc'] = float(value)
+                    elif key == 'R1_output_Q30_rate':
+                        metrics['R1_output_Q30_rate'] = float(value)
+                    elif key == 'R2_barcode_Q30_rate':
+                        metrics['R2_barcode_Q30_rate'] = float(value)
+
+        return metrics
 
     def generate_metrics(self):
         self.get_sequencing_stats()
@@ -680,32 +769,220 @@ class SummaryStatistics:
         # return f"{float_to_convert:.2f}%"
 
     def get_trimming_qc_stats(self):
-        # Reads pre-QC
-        # Trimming qc stats are generated by fastp, MultiQC puts them in the report_general_stats_data of the multiQC json
-        reads_pre_qc = int(self.multiqc_general_stats_dict[f"{self.sample_id}.R1"]["before_filtering_total_reads"])
-        self.metrics_dict["Read QC"]["reads_pre_qc"] = ("Number of reads pre-QC", reads_pre_qc, "Number of reads in the input R1 fastq files (after merging if applicable).")
-        # Reads containing cellular barcode matching barcode_list, or 1 hamming distance away
-        self.metrics_dict["Read QC"]["valid_barcode_reads"] = ("Number of valid barcode-containing reads", int(self.multiqc_general_stats_dict[f"{self.sample_id}.io_extract.R1"]["before_filtering_total_reads"]), "Number of reads containing a barcode within 1 Hamming distance of a barcode in the barcode_list.")
-        # Valid_barcode_reads as percentage of pre-QC reads
-        if reads_pre_qc != 0:
-            self.metrics_dict["Read QC"]["valid_barcode_reads_perc"] = ("Percentage valid barcode-containing reads", self.as_perc(float(self.metrics_dict["Read QC"]["valid_barcode_reads"][1] / self.metrics_dict["Read QC"]["reads_pre_qc"][1])), "(Number of valid barcode-containing reads / Number of reads pre-QC) * 100.")
-        else:
-            self.metrics_dict["Read QC"]["valid_barcode_reads_perc"] = ("Percentage valid barcode-containing reads", 0, "(Number of valid barcode-containing reads / Number of reads pre-QC) * 100.")
-        # Percentage of barcode bases >= Q30
-        self.metrics_dict["Read QC"]["barcode_bases_q30_perc"] = ("Barcode bp >= Q30 percentage", self.as_perc(float(self.multiqc_general_stats_dict[f"{self.sample_id}.R2"]["after_filtering_q30_rate"])), "The percentage of the barcode bases with a Phred score >= 30.")
-        reads_post_qc = int(self.multiqc_general_stats_dict[f"{self.sample_id}.polyAtrimmed"]["after_filtering_total_reads"])
-        # Reads after polyX tail and polyA internal trimming
-        self.metrics_dict["Read QC"]["reads_post_trimming"] = ("Number of reads post-QC trimming", reads_post_qc, "Number of reads after polyX tail and polyA internal trimming.")
-        # Reads after polyX tail and polyA internal trimming as percentage of valid barcode reads
-        if self.metrics_dict["Read QC"]["valid_barcode_reads"][1] != 0:
-            self.metrics_dict["Read QC"]["reads_post_trimming_perc"] = ("Percentage reads post-QC trimming", self.as_perc(float(reads_post_qc/self.metrics_dict["Read QC"]["valid_barcode_reads"][1])), "(Number of reads after polyX tail and polyA internal trimming / Number of valid barcode-containing reads) * 100.")
-        else:
-            self.metrics_dict["Read QC"]["reads_post_trimming_perc"] = ("Percentage reads post-QC trimming", 0, "(Number of reads after polyX tail and polyA internal trimming / Number of valid barcode-containing reads) * 100.")
+        # Use qc.log metrics if available (unified QC), otherwise use MultiQC (old pipeline)
+        if self.qc_metrics:
+            # Unified QC pipeline - extract all cascade metrics from qc.log
 
-        # Mean read length after polyX tail and polyA internal trimming
-        self.metrics_dict["Read QC"]["mean_post_trim_read_length"] = ("Mean read length post-QC trimming", float(self.multiqc_general_stats_dict[f"{self.sample_id}.polyAtrimmed"]["after_filtering_read1_mean_length"]), "Mean R1 read length post-QC trimming.")
-        # Percentage of bases post trimming >= Q30
-        self.metrics_dict["Read QC"]["rna_bases_q30_perc"] = ("R1 bp >= Q30 percentage; post-QC trimming", self.as_perc(float(self.multiqc_general_stats_dict[f"{self.sample_id}.polyAtrimmed"]["after_filtering_q30_rate"])), "The percentage of the R1 bases (post-QC trimming) with a Phred score >= 30.")
+            # Input
+            reads_pre_qc = self.qc_metrics['raw_reads']
+            self.metrics_dict["Read QC"]["reads_pre_qc"] = (
+                "Number of reads pre-QC",
+                reads_pre_qc,
+                "Total number of input read pairs before any QC processing."
+            )
+
+            # Step 1: Barcode Validation
+            barcode_exact = self.qc_metrics['barcode_direct_match']
+            self.metrics_dict["Read QC"]["barcode_exact_match"] = (
+                "Exact barcode match",
+                barcode_exact,
+                "Number of reads with exact barcode match to whitelist (no correction needed)."
+            )
+
+            barcode_corrected = self.qc_metrics['barcode_corrected']
+            self.metrics_dict["Read QC"]["barcode_corrected"] = (
+                "Corrected barcodes",
+                barcode_corrected,
+                "Number of reads with barcode corrected (1 Hamming distance from whitelist)."
+            )
+
+            barcode_failed = self.qc_metrics['barcode_failed']
+            self.metrics_dict["Read QC"]["barcode_failed"] = (
+                "Invalid barcodes",
+                barcode_failed,
+                "Number of reads rejected due to invalid barcode (R2 < 13bp OR barcode not in whitelist and not correctable)."
+            )
+
+            barcode_valid = self.qc_metrics['post_barcode_reads_retained']
+            self.metrics_dict["Read QC"]["barcode_valid_total"] = (
+                "Valid barcodes total",
+                barcode_valid,
+                "Total reads passing barcode validation (exact match + corrected)."
+            )
+
+            # Percentage: valid barcodes / pre-QC reads
+            if reads_pre_qc != 0:
+                self.metrics_dict["Read QC"]["valid_barcode_reads_perc"] = (
+                    "Valid barcodes (%)",
+                    self.as_perc(float(barcode_valid / reads_pre_qc)),
+                    "(Valid barcodes total / Reads pre-QC) * 100"
+                )
+            else:
+                self.metrics_dict["Read QC"]["valid_barcode_reads_perc"] = (
+                    "Valid barcodes (%)",
+                    0,
+                    "(Valid barcodes total / Reads pre-QC) * 100"
+                )
+
+            # Step 3: SSS Trimming
+            sss_too_short = self.qc_metrics['too_short_after_sss']
+            self.metrics_dict["Read QC"]["sss_too_short"] = (
+                "Too short (SSS trim)",
+                sss_too_short,
+                "Number of reads that became < 5bp after SSS trimming (8bp from 5' end of R1)."
+            )
+
+            sss_retained = self.qc_metrics['post_sss_trim_reads_retained']
+            self.metrics_dict["Read QC"]["sss_retained"] = (
+                "After SSS trim",
+                sss_retained,
+                "Number of reads retained after SSS trimming and length filtering."
+            )
+
+            # Step 4: PolyX Trimming
+            polyx_trimmed = self.qc_metrics['polyx_trimmed_terminal']
+            self.metrics_dict["Read QC"]["polyx_trimmed"] = (
+                "PolyX trimmed",
+                polyx_trimmed,
+                "Number of reads with terminal polyX sequence removed."
+            )
+
+            polyx_too_short = self.qc_metrics['polyx_too_short_after_trim']
+            self.metrics_dict["Read QC"]["polyx_too_short"] = (
+                "Too short (PolyX trim)",
+                polyx_too_short,
+                "Number of reads that became < 5bp after polyX trimming."
+            )
+
+            polyx_retained = self.qc_metrics['post_polyx_trim_reads_retained']
+            self.metrics_dict["Read QC"]["polyx_retained"] = (
+                "After PolyX trim",
+                polyx_retained,
+                "Number of reads retained after polyX trimming and length filtering."
+            )
+
+            # Step 5: Quality Filtering
+            quality_failed = self.qc_metrics['low_quality_reads']
+            self.metrics_dict["Read QC"]["quality_failed"] = (
+                "Low quality removed",
+                quality_failed,
+                "Number of reads removed by quality filtering (mean quality < 15 OR >40% bases with quality < 15)."
+            )
+
+            quality_retained = self.qc_metrics['post_quality_filter_reads_retained']
+            self.metrics_dict["Read QC"]["quality_retained"] = (
+                "After quality filter",
+                quality_retained,
+                "Number of reads retained after quality filtering."
+            )
+
+            # Step 6: N-Base Filtering
+            n_base_failed = self.qc_metrics['too_many_n_reads']
+            self.metrics_dict["Read QC"]["n_base_failed"] = (
+                "Excessive N bases",
+                n_base_failed,
+                "Number of reads removed due to excessive N bases (>5 N's)."
+            )
+
+            n_base_retained = self.qc_metrics['post_n_filter_reads_retained']
+            self.metrics_dict["Read QC"]["n_base_retained"] = (
+                "After N-base filter",
+                n_base_retained,
+                "Number of reads retained after N-base filtering."
+            )
+
+            # Step 7: PolyA Trimming
+            polya_trimmed = self.qc_metrics['polya_trimmed_internal']
+            self.metrics_dict["Read QC"]["polya_trimmed"] = (
+                "PolyA trimmed",
+                polya_trimmed,
+                "Number of reads with internal polyA sequence removed."
+            )
+
+            polya_too_short = self.qc_metrics['polya_too_short_after_trim']
+            self.metrics_dict["Read QC"]["polya_too_short"] = (
+                "Too short (PolyA trim)",
+                polya_too_short,
+                "Number of reads that became < 5bp after internal polyA trimming."
+            )
+
+            polya_retained = self.qc_metrics['post_polya_trim_reads_retained']
+            self.metrics_dict["Read QC"]["polya_retained"] = (
+                "After PolyA trim",
+                polya_retained,
+                "Number of reads retained after internal polyA trimming and length filtering."
+            )
+
+            # Output & Quality
+            reads_post_qc = self.qc_metrics['reads_output']
+            self.metrics_dict["Read QC"]["reads_post_qc"] = (
+                "Reads post-QC",
+                reads_post_qc,
+                "Final number of reads passing all QC steps."
+            )
+
+            # Percentage: post-QC reads / valid barcode reads
+            if barcode_valid != 0:
+                self.metrics_dict["Read QC"]["reads_post_qc_perc"] = (
+                    "Post-QC reads (%)",
+                    self.as_perc(float(reads_post_qc / barcode_valid)),
+                    "(Reads post-QC / Valid barcodes total) * 100"
+                )
+            else:
+                self.metrics_dict["Read QC"]["reads_post_qc_perc"] = (
+                    "Post-QC reads (%)",
+                    0,
+                    "(Reads post-QC / Valid barcodes total) * 100"
+                )
+
+            mean_length = self.qc_metrics['mean_read_length_post_QC']
+            self.metrics_dict["Read QC"]["mean_read_length"] = (
+                "Mean read length (bp)",
+                mean_length,
+                "Mean R1 read length after all QC trimming and filtering."
+            )
+
+            r1_q30_rate = self.qc_metrics['R1_output_Q30_rate']
+            self.metrics_dict["Read QC"]["rna_q30_rate"] = (
+                "R1 Q30 rate",
+                self.as_perc(r1_q30_rate),
+                "Fraction of R1 bases with Phred quality ≥30 in final output reads."
+            )
+
+            r2_barcode_q30_rate = self.qc_metrics['R2_barcode_Q30_rate']
+            self.metrics_dict["Read QC"]["barcode_q30_rate"] = (
+                "Barcode Q30 rate",
+                self.as_perc(r2_barcode_q30_rate),
+                "Fraction of R2 barcode region bases (13bp) with Phred quality ≥30 for reads that passed QC."
+            )
+        else:
+            # Old pipeline - get metrics from MultiQC
+            # Reads pre-QC from MultiQC
+            reads_pre_qc = int(self.multiqc_general_stats_dict[f"{self.sample_id}.R1"]["before_filtering_total_reads"])
+            self.metrics_dict["Read QC"]["reads_pre_qc"] = ("Number of reads pre-QC", reads_pre_qc, "Number of reads in the input R1 fastq files (after merging if applicable).")
+
+            # Reads containing cellular barcode matching barcode_list, or 1 hamming distance away
+            self.metrics_dict["Read QC"]["valid_barcode_reads"] = ("Number of valid barcode-containing reads", int(self.multiqc_general_stats_dict[f"{self.sample_id}: R1 Pre-QC"]["total_reads"]), "Number of reads containing a barcode within 1 Hamming distance of a barcode in the barcode_list.")
+            # Valid_barcode_reads as percentage of pre-QC reads
+            if reads_pre_qc != 0:
+                self.metrics_dict["Read QC"]["valid_barcode_reads_perc"] = ("Percentage valid barcode-containing reads", self.as_perc(float(self.metrics_dict["Read QC"]["valid_barcode_reads"][1] / self.metrics_dict["Read QC"]["reads_pre_qc"][1])), "(Number of valid barcode-containing reads / Number of reads pre-QC) * 100.")
+            else:
+                self.metrics_dict["Read QC"]["valid_barcode_reads_perc"] = ("Percentage valid barcode-containing reads", 0, "(Number of valid barcode-containing reads / Number of reads pre-QC) * 100.")
+            # Percentage of barcode bases >= Q30
+            self.metrics_dict["Read QC"]["barcode_bases_q30_perc"] = ("Barcode bp >= Q30 percentage", self.as_perc(float(self.multiqc_general_stats_dict[f"{self.sample_id}: R2 Pre-QC"]["q30_rate"])), "The percentage of the barcode bases with a Phred score >= 30.")
+            reads_post_qc = int(self.multiqc_general_stats_dict[f"{self.sample_id}: R1 Post-QC"]["total_reads"])
+            # Reads after polyX tail and polyA internal trimming
+            self.metrics_dict["Read QC"]["reads_post_trimming"] = ("Number of reads post-QC trimming", reads_post_qc, "Number of reads after polyX tail and polyA internal trimming.")
+            # Reads after polyX tail and polyA internal trimming as percentage of valid barcode reads
+            if self.metrics_dict["Read QC"]["valid_barcode_reads"][1] != 0:
+                self.metrics_dict["Read QC"]["reads_post_trimming_perc"] = ("Percentage reads post-QC trimming", self.as_perc(float(reads_post_qc/self.metrics_dict["Read QC"]["valid_barcode_reads"][1])), "(Number of reads after polyX tail and polyA internal trimming / Number of valid barcode-containing reads) * 100.")
+            else:
+                self.metrics_dict["Read QC"]["reads_post_trimming_perc"] = ("Percentage reads post-QC trimming", 0, "(Number of reads after polyX tail and polyA internal trimming / Number of valid barcode-containing reads) * 100.")
+
+            # Mean read length after polyX tail and polyA internal trimming
+            self.metrics_dict["Read QC"]["mean_post_trim_read_length"] = ("Mean read length post-QC trimming", float(self.multiqc_general_stats_dict[f"{self.sample_id}: R1 Post-QC"]["mean_length"]), "Mean R1 read length post-QC trimming.")
+            # Percentage of bases post trimming >= Q30
+            self.metrics_dict["Read QC"]["rna_bases_q30_perc"] = ("R1 bp >= Q30 percentage; post-QC trimming", self.as_perc(float(self.multiqc_general_stats_dict[f"{self.sample_id}: R1 Post-QC"]["q30_rate"])), "The percentage of the R1 bases (post-QC trimming) with a Phred score >= 30.")
 
 
 def main():
@@ -718,6 +995,7 @@ def main():
     parser.add_argument('--raw-rseqc', required=True, dest='raw_rseqc', help='Path to raw RSeQC results file')
     parser.add_argument('--annotated-rseqc', required=True, dest='annotated_rseqc', help='Path to annotated RSeQC results file')
     parser.add_argument('--read-categorization', required=True, dest='read_categorization_csv', help='Path to read categorization CSV file')
+    parser.add_argument('--qc-log', required=False, dest='qc_log', help='Path to unified QC log file (optional, for unified QC pipeline)')
     parser.add_argument('--mixed-species', action='store_true', dest='mixed_species', help='Flag for mixed species samples')
 
     args = parser.parse_args()

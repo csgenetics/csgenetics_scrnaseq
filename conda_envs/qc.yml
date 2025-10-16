@@ -1,0 +1,6 @@
+name: qc
+channels:
+  - cs_genetics
+  - conda-forge
+dependencies:
+  - csgenetics-qc =0.3.4

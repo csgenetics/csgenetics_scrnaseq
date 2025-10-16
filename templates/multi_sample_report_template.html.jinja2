@@ -179,6 +179,21 @@
       </div>
     </div>
 
+    <!-- QC Cascade plot -->
+    <div class="card shadow mb-4" style="width: 90vw; height: auto; margin:auto;">
+      <div class="card-body" style="width: 100%; height: 100%;">
+        <h2 class="text-xs font-weight-bold me-5 ms-3" style="font-size: 21px; line-height: 1.5">
+          QC Cascade Across Samples
+          <i class="bi-info-circle" style="font-size:15px" data-bs-toggle="tooltip"
+             data-bs-title="Box plots showing distribution of reads retained at each QC step across all samples. Helps identify samples with unusual QC patterns.">
+          </i>
+        </h2>
+        <div id="qc_cascade_plot" style="width: 100%; height: 100%;">
+          {{ qc_cascade_plot | safe }}
+        </div>
+      </div>
+    </div>
+
   </div>
 
 

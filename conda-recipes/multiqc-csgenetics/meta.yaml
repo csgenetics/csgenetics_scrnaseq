@@ -1,0 +1,56 @@
+{% set name = "multiqc-csgenetics" %}
+{% set version = "0.1.0" %}
+
+package:
+  name: {{ name|lower }}
+  version: {{ version }}
+
+source:
+  # Building from local source
+  path: ../../images/multiqc
+
+  # Option for future: From GitHub (when repo is ready with tags and LICENSE)
+  # git_url: https://github.com/csgenetics/multiqc-plugins.git
+  # git_rev: v{{ version }}
+
+build:
+  noarch: python
+  number: 0
+  script: python -m pip install . --no-deps --no-build-isolation -vv
+
+requirements:
+  host:
+    - python >=3.7
+    - pip
+    - setuptools
+  run:
+    - python >=3.7
+    - multiqc >=1.14
+
+test:
+  commands:
+    # Just verify the package files are installed
+    - python -c "import importlib.metadata; print(importlib.metadata.version('multiqc-csgenetics'))"
+    # Verify entry points are registered
+    - python -c "import importlib.metadata; eps = importlib.metadata.entry_points(); print('Entry points registered:', 'unified_qc' in [ep.name for ep in eps.select(group='multiqc.modules.v1')])"
+
+about:
+  home: https://github.com/csgenetics/multiqc-plugins
+  license: Proprietary
+  summary: Custom MultiQC plugins for CS Genetics scRNA-seq QC reporting
+  description: |
+    This package provides custom MultiQC modules for CS Genetics single-cell
+    RNA-seq pipeline quality control reporting.
+
+    Included modules:
+    - unified_qc: Processes output from CS Genetics' unified QC Rust binary,
+      displaying barcode extraction statistics, read trimming metrics, and
+      quality score distributions before and after QC steps.
+
+    The plugins integrate seamlessly with MultiQC's standard reporting and
+    provide custom visualizations tailored to CS Genetics' scRNA-seq workflow.
+  dev_url: https://github.com/csgenetics/multiqc-plugins
+
+extra:
+  recipe-maintainers:
+    - csgenetics

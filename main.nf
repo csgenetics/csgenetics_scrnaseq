@@ -8,8 +8,7 @@
 nextflow.enable.dsl=2
 include {
   save_resolved_configuration; download_star_index; download_gtf; download_input_csv; download_barcode_list; download_barcode_correction_list; download_public_fastq;
-  features_file; merge_lanes; merged_fastp; io_extract; io_extract_fastp;
-  trim_extra_polya; post_polyA_fastp; star;
+  features_file; merge_lanes; qc; star;
   create_valid_empty_bam as create_valid_empty_bam_star;
   gtf2bed; run_rseqc as raw_rseqc; run_rseqc as annotated_rseqc;
   initial_feature_count; filter_for_UMRs_mismatch; umr_transcript_assignment; umr_exon_assignment;
@@ -18,8 +17,8 @@ include {
   merge_annotated_UMRs_with_annotated_multimappers; count_high_conf_annotated_umr_multimap;
   single_sample_multiqc;; multi_sample_multiqc;
   sort_index_bam; dedup; io_count; count_matrix;
-  filter_count_matrix; cell_caller; categorize_reads; summary_statistics; single_summary_report;
-  multi_sample_report
+  filter_count_matrix; cell_caller; categorize_reads; summary_statistics; qc_cascade_plot_single;
+  qc_cascade_plot_multi; single_summary_report; multi_sample_report
   } from './modules/processes.nf'
 
 def order_integer_first(it){
@@ -184,45 +183,30 @@ workflow {
   // Merge the merged and non-merged fastqs
   io_extract_in_ch = ch_merge_lanes_out_merged.mix(ch_input_split_single_lane_flattened)
 
-  // TODO run separate taks of merged_fastp for each of the R1 and R2 files
-  // to increase parallelization.
-  merged_fastp(io_extract_in_ch, params.barcode_pattern)
-  ch_merged_fastp_multiqc = merged_fastp.out.merged_fastp_multiqc
-
-  // Extract reads and correct barcodes from the fastqs
-  // using umitools and the pre-generated barcode correction list
-  io_extract(io_extract_in_ch, barcode_correction_list, params.barcode_pattern)
-  ch_io_extract_out = io_extract.out.io_extract_out
-
-  // Trim and remove low quality reads with fastp
-  io_extract_fastp(ch_io_extract_out)
-  ch_io_extract_fastp_out = io_extract_fastp.out.fastp_out
-  ch_io_extract_fastp_multiqc = io_extract_fastp.out.fastp_multiqc
-
-  // Trim extra polyA
-  trim_polyA_script = file("${baseDir}/bin/trim_poly_A.awk")
-  trim_extra_polya(ch_io_extract_fastp_out, trim_polyA_script)
-  ch_trim_extra_polya_out = trim_extra_polya.out.trim_extra_polya_out
-
-  // Send the polyA trimmed reads back through
-  // fastp to get total number post QC reads
-  // and Q30 percentages.
-  post_polyA_fastp(ch_trim_extra_polya_out)
-  ch_post_polyA_fastp_out = post_polyA_fastp.out.fastp_out
-  ch_post_polyA_fastp_multiqc = post_polyA_fastp.out.fastp_multiqc
+  // Run unified QC process (replaces io_extract + io_extract_fastp + trim_extra_polya + post_polyA_fastp + merged_fastp)
+  // This single process:
+  // 1. Extracts and corrects barcodes
+  // 2. Performs SSS trimming and polyX trimming
+  // 3. Trims internal polyA
+  // 4. Calculates Q30 metrics for R2 barcode and R1 output
+  // 5. Outputs JSON files for MultiQC
+  qc(io_extract_in_ch, barcode_correction_list)
+  ch_qc_out = qc.out.qc_out
+  ch_qc_log = qc.out.qc_log
+  ch_qc_multiqc = qc.out.qc_multiqc
 
   // Filter for empty fastq
   // Pipe good to STAR
   // Pipe empty to create_valid_empty_bam_star
-  trim_extra_polya.out.trim_extra_polya_out
-        .branch { 
+  qc.out.qc_out
+        .branch {
           good_fastq: it[1].countFastq() > 0
           empty_fastq: it[1].countFastq() == 0
           }
-        .set{polyA_out_ch}
+        .set{qc_out_filtered_ch}
 
   // Align the good fastqs with STAR
-  star(polyA_out_ch.good_fastq, star_index)
+  star(qc_out_filtered_ch.good_fastq, star_index)
 
   // Filter star outputs by unique alignment counts
   // If 0 unique alignments need to pass bam into
@@ -238,10 +222,10 @@ workflow {
   // by samtools. We only create this for those samples that
   // had 0 reads after QC (i.e. after trim_extra_polyA) or
   // after mapping i.e. after star.
-  create_valid_empty_bam_star(polyA_out_ch.empty_fastq.map({[it[0], "_Aligned.sortedByCoord.out"]}).mix(star_out_ch.bad_bam.map({[it[0], "_Aligned.sortedByCoord.out"]})))
+  create_valid_empty_bam_star(qc_out_filtered_ch.empty_fastq.map({[it[0], "_Aligned.sortedByCoord.out"]}).mix(star_out_ch.bad_bam.map({[it[0], "_Aligned.sortedByCoord.out"]})))
 
   // Process to convert input GTF to gene model bed for RSeQC
-  gtf2bed(gtf)
+  gtf2bed(gtf, file("${baseDir}/bin/gtf2bed"))
 
   // RSeQC read distribution on STAR output
   // The 1 and 0 being added in the map represent bams that contain (1)
@@ -300,14 +284,12 @@ workflow {
   annotated_rseqc(annotated_rseqc_in_ch, gtf2bed.out.bed, empty_rseqc_template, "annotated")
   ch_annotated_rseqc_multiqc = annotated_rseqc.out.rseqc_log
 
-  // Generate input channel containing all the files needed for multiqc per samples. 
+  // Generate input channel containing all the files needed for multiqc per samples.
   // The final channel structure is [sample, [file1, file2, file3, ...]]
-  ch_merged_fastp_multiqc
-    .mix(ch_post_polyA_fastp_multiqc)
-    .mix(ch_io_extract_fastp_multiqc)
+  ch_qc_multiqc
     .mix(ch_raw_rseqc_multiqc)
     .mix(ch_annotated_rseqc_multiqc)
-    .groupTuple(by:0, size: 5)
+    .groupTuple(by:0, size: 3)
     .map({it.flatten()}).map({[it[0], it.tail()]})
     .set { ch_ss_multiqc_in }
 
@@ -400,18 +382,18 @@ workflow {
   filter_count_matrix(ch_filter_count_matrix_in)
 
   // Create input channel for categorize_reads process
-  // Need to combine STAR BAM, raw count matrix H5AD, and fastp JSON (R1 only)
+  // Need to combine STAR BAM, raw count matrix H5AD, and qc JSON (main qc.json file)
   ch_categorize_reads_in = star_out_ch.good_bam
     .map({[it[0], it[1]]})  // [sample_id, star_bam]
     .join(filter_count_matrix.out.raw_count_matrix)  // [sample_id, star_bam, raw_h5ad]
-    .join(ch_merged_fastp_multiqc.map({[it[0], it[2][0]]}))  // [sample_id, star_bam, raw_h5ad, fastp_json_r1]
+    .join(ch_qc_multiqc.map({[it[0], it[1]]}))  // [sample_id, star_bam, raw_h5ad, qc_json]
 
   // Run categorize_reads to calculate read and count metrics
   categorize_reads(ch_categorize_reads_in)
 
   // structure of ch_summary_statistics_in is
   // [sample, min_nuc_gene_cutoff, raw_h5ad,
-  // antisense, dedup.log, multiqc_data, raw_seqc, annotated_rseqc, read_categorization_csv]
+  // antisense, dedup.log, multiqc_data, raw_seqc, annotated_rseqc, read_categorization_csv, qc_log]
   ch_cell_caller_out
   .join(filter_count_matrix.out.raw_count_matrix)
   .join(sort_index_bam.out.antisense_out)
@@ -420,17 +402,31 @@ workflow {
   .join(raw_rseqc.out.rseqc_log)
   .join(annotated_rseqc.out.rseqc_log)
   .join(categorize_reads.out.read_categories.map({[it[0], it[1]]}))
+  .join(ch_qc_log)
   .set({ch_summary_statistics_in})
 
   // Generate summary statistics
   summary_statistics(ch_summary_statistics_in)
 
-  ch_summary_metrics_and_plots = summary_statistics.out.metrics_csv.join(cell_caller.out.cell_caller_plots, by:0)
+  // Generate single-sample QC cascade plots
+  qc_cascade_plot_single(summary_statistics.out.metrics_csv)
+
+  // Join metrics CSV with cell caller plots and QC cascade plot
+  ch_summary_metrics_and_plots = summary_statistics.out.metrics_csv
+    .join(cell_caller.out.cell_caller_plots, by:0)
+    .join(qc_cascade_plot_single.out.qc_cascade_plot, by:0)
 
   // Generate single sample report
   single_summary_report(ch_summary_metrics_and_plots, single_sample_report_template)
 
+  // Generate multi-sample QC cascade plot
+  qc_cascade_plot_multi(single_summary_report.out.single_sample_metric_out.collect())
+
   // Generate multi sample report
-  multi_sample_report(single_summary_report.out.single_sample_metric_out.collect(), multi_sample_report_template)
+  multi_sample_report(
+    single_summary_report.out.single_sample_metric_out.collect(),
+    multi_sample_report_template,
+    qc_cascade_plot_multi.out.qc_cascade_plot
+  )
  
 }

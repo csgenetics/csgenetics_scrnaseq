@@ -189,11 +189,13 @@ class CellCaller:
       """
       open(f"{self.sample_name}_counts_pdf_with_threshold.html", "w").close()
       open(f"{self.sample_name}_barnyard_plot.html", "w").close()
-      open(f"{self.sample_name}_pdf_with_cutoff.png", "w").close()
 
       if self.single_species:
+         open(f"{self.sample_name}_pdf_with_cutoff.html", "w").close()
          print(int(self.minimum_count_threshold), end="")
       else:
+         open(f"{self.sample_name}_hsap_pdf_with_cutoff.html", "w").close()
+         open(f"{self.sample_name}_mmus_pdf_with_cutoff.html", "w").close()
          print(f"{int(self.minimum_count_threshold)}_{int(self.minimum_count_threshold)}", end="")
       sys.exit(0)
       
@@ -274,20 +276,28 @@ class CellCaller:
          total_counts_pdf_fig = self.pdf_plotter(self.pdf_df, self.log_cutoff, "total")
          output_plot_to_html({f"{self.sample_name}_cellcaller_plot":total_counts_pdf_fig}, pdf_html_filename)
 
-         # Save the figure as a PNG file
-         pdf_png_filename = f"{self.sample_name}_pdf_with_cutoff.png"
-         pio.write_image(total_counts_pdf_fig, pdf_png_filename)
+         # Save the figure as an HTML file
+         # We used to write this out as .png, but in some HPC systems that was
+         # causing issue when Kaleido was trying to access temp directories.
+         # Kaleido is only used by plotly when trying to write to .png.
+         # As such, we write as .html.
+         pdf_html_standalone_filename = f"{self.sample_name}_pdf_with_cutoff.html"
+         output_plot_to_html({f"{self.sample_name}_cellcaller_plot":total_counts_pdf_fig}, pdf_html_standalone_filename)
       else:
          human_counts_pdf_fig = self.pdf_plotter(self.hsap_pdf_df, self.hsap_log_cutoff, "human")
          mouse_counts_pdf_fig = self.pdf_plotter(self.mmus_pdf_df, self.mmus_log_cutoff, "mouse")
-         output_plot_to_html({f"{self.sample_name}_hsap_cellcaller_plot":human_counts_pdf_fig, f"{self.sample_name}_mmus_cellcaller_plot":mouse_counts_pdf_fig}, 
+         output_plot_to_html({f"{self.sample_name}_hsap_cellcaller_plot":human_counts_pdf_fig, f"{self.sample_name}_mmus_cellcaller_plot":mouse_counts_pdf_fig},
                               pdf_html_filename)
-         
-         # Save the figures as PNG files
-         human_pdf_png_filename = f"{self.sample_name}_hsap_pdf_with_cutoff.png"
-         pio.write_image(human_counts_pdf_fig, human_pdf_png_filename)
-         mouse_pdf_png_filename = f"{self.sample_name}_mmus_pdf_with_cutoff.png"
-         pio.write_image(mouse_counts_pdf_fig, mouse_pdf_png_filename)
+
+         # Save the figures as HTML files
+         # We used to write this out as .png, but in some HPC systems that was
+         # causing issue when Kaleido was trying to access temp directories.
+         # Kaleido is only used by plotly when trying to write to .png.
+         # As such, we write as .html.
+         human_pdf_html_filename = f"{self.sample_name}_hsap_pdf_with_cutoff.html"
+         output_plot_to_html({f"{self.sample_name}_hsap_cellcaller_plot":human_counts_pdf_fig}, human_pdf_html_filename)
+         mouse_pdf_html_filename = f"{self.sample_name}_mmus_pdf_with_cutoff.html"
+         output_plot_to_html({f"{self.sample_name}_mmus_cellcaller_plot":mouse_counts_pdf_fig}, mouse_pdf_html_filename)
 
    def pdf_plotter(self, input_pdf_df, input_log_cutoff, count_type_str):
       """

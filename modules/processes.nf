@@ -149,178 +149,40 @@ process merge_lanes {
   """
 }
 
-process merged_fastp{
-  tag "$sample_id"
-
-  publishDir "${params.outdir}/fastp", mode: 'copy'
-
-  input:
-  tuple val(sample_id), path("${sample_id}.R1.merged.fastq.gz"), path("${sample_id}.R2.merged.fastq.gz")
-  val(barcode_pattern)
-
-  output:
-  tuple val(sample_id), path("${sample_id}_R*.merged_fastp.html"), path("${sample_id}_R*.merged_fastp.json"), emit: merged_fastp_multiqc
-
-  shell:
-  barcode_length = barcode_pattern.size()
-  '''
-  # Get q30_rate for barcode present in fastq2 file 
-  # maximum length which be equal to barcode length 
-  barcode_length=$(echo !{barcode_pattern} | tr -cd 'C' | wc -c)
-
-  # R1 fastp
-  fastp -i !{sample_id}.R1.merged.fastq.gz \
-    -A -G \
-    -j !{sample_id}_R1.merged_fastp.json \
-    -h !{sample_id}_R1.merged_fastp.html
-
-  # R2 fastp
-  fastp -i !{sample_id}.R2.merged.fastq.gz \
-    -A -G \
-    -b !{barcode_length} \
-    -l 13 \
-    -j !{sample_id}_R2.merged_fastp.json \
-    -h !{sample_id}_R2.merged_fastp.html
-  '''
-}
-
-
 /*
-* Extract the 13bp barcode from the R2 read and append it to the header of the R1 read.
-* Keep reads where the barcode exactly matches a barcode in the barcode list
-* Correct the barcode for reads where the barcode doesn't exactly match the barcode list, but does match the corrected barcode list, append the corrected barcode to the read header
-* Discard any reads that don't match the barcode list or corrected barcode list
+* Unified QC process - replaces io_extract + io_extract_fastp + trim_extra_polya
+* This process combines:
+* 1. Barcode extraction and correction (io_extract functionality)
+* 2. SSS trimming and polyX trimming (io_extract_fastp functionality)
+* 3. Internal polyA trimming (trim_extra_polya functionality)
+* 4. Q30 calculation for both R2 barcode and R1 output
+* All in a single Rust binary for maximum performance
 */
-process io_extract {
+process qc {
   tag "$sample_id"
 
   input:
   tuple val(sample_id), path(r1), path(r2)
-  path(corrected_barcode_list)
-  val(barcode_pattern)
+  path(corrected_barcodelist)
 
   output:
-  tuple val(sample_id), path("${sample_id}.io_extract.R1.fastq.gz"), emit: io_extract_out
-  tuple val(sample_id), path("${sample_id}.io_extract.log"), emit: io_extract_log
+  tuple val(sample_id), path("${sample_id}.qc.R1.fastq.gz"), emit: qc_out
+  tuple val(sample_id), path("${sample_id}.qc.log"), emit: qc_log
+  tuple val(sample_id), path("${sample_id}.R1.preQC.fastp.json"), path("${sample_id}.R2.preQC.fastp.json"), path("${sample_id}.R1.postQC.fastp.json"), emit: qc_multiqc
 
   script:
   """
-  # UMI-tools expects the io to be the stdin, so we set this to r2, and read2-in to r1
-  # filtered-out and filtered-out2 will contain r2s r1s, respectively, that don't pass the filter
-  umi_tools extract --stdin=${r2} --read2-in=${r1} --whitelist=${corrected_barcode_list} -L ${sample_id}.log --bc-pattern="${barcode_pattern}" --error-correct-cell --stdout="${sample_id}.io_extract.R2.fastq.gz" --read2-out="${sample_id}.io_extract.R1.fastq.gz" --filtered-out="io_extract_${sample_id}_filteredOut_R2.fastq.gz" --filtered-out2="io_extract_${sample_id}_filteredOut_R1.fastq.gz"
-  
-  # Get number of reads passing filter from log and write to file
-  if [ -f "${sample_id}.log" ]; then
-    grep "Reads output:" ${sample_id}.log | cut -d' ' -f4- > ${sample_id}.io_extract.log
-  else
-    echo "Reads output: 0" > ${sample_id}.io_extract.log
+  # Run unified qc Rust binary (available in PATH from container)
+  qc \\
+    ${r1} ${r2} ${corrected_barcodelist} \\
+    --sample-id ${sample_id} \\
+    --output-dir . \\
+    --no-filtered
+
+  # Check if output exists, create empty file if not
+  if [ ! -f "${sample_id}.qc.R1.fastq.gz" ]; then
+    touch ${sample_id}.qc.R1.fastq && gzip ${sample_id}.qc.R1.fastq
   fi
-
-  # Check if the output file exists
-  # If it doesn't exist, create an empty file
-  if [ -f "${sample_id}.io_extract.R1.fastq.gz" ]; then
-    echo "${sample_id}.io_extract.R1.fastq.gz file exists"
-  else
-    touch ${sample_id}.io_extract.R1.fastq && gzip ${sample_id}.io_extract.R1.fastq
-  fi
-  output_count=\$(cat ${sample_id}.io_extract.log | cut -d ' ' -f3)
-  """
-}
-
-/*
-* Use fastp to trim reads and remove low quality reads
-* https://github.com/OpenGene/fastp
-* trim 5' sss_nmer
-* trim 3' polyA and polyG of length >=15
-* remove reads of length <=20
-* disable adapter trimming
-* disable polyG trimming 
-*/
-process io_extract_fastp {
-  tag "$sample_id"
-
-  publishDir "${params.outdir}/fastp", pattern: '*.{json,html}', mode: 'copy'
-
-  input:
-  tuple val(sample_id), path(r1)
-
-  output:
-  tuple val(sample_id), path("${sample_id}_R1.io_extract.fastp.fastq.gz"), emit: fastp_out
-  tuple val(sample_id), path("${sample_id}_R1.io_extract.fastp.html"), path("${sample_id}_R1.io_extract.fastp.json"), emit: fastp_multiqc
-
-  shell:
-  '''
-  # SSS trimming
-  # 3' polyX trimming with min length of 15 bases
-  # remove reads of length <= 20 bases
-  # disable adapter trimming
-  # disable polyG trimming 
-  
-  fastp -i !{r1} \
-    -f !{params.sss_nmer} \
-    -x --poly_x_min_len 15 \
-    -l 5 \
-    -A \
-    -G \
-    -j !{sample_id}_R1.io_extract.fastp.json \
-    -h !{sample_id}_R1.io_extract.fastp.html \
-    --stdout \
-     2> fastp.log | gzip > !{sample_id}_R1.io_extract.fastp.fastq.gz
-  '''     
-}
-
-/*
-* Trims reads from positions that match the regexs: A{15,} or A{13,}CG 
-* I.e. A homopolymers >= 15 bp or >=13bp + CG are identified and trimmed along with any following bps.
-* Only reads > 6bp in length (after trimming) are retained .
-*/
-process trim_extra_polya {
-  tag "$sample_id"
-
-  input:
-  tuple val(sample_id), path(fastq)
-  path(trim_polyA_script)
-
-  output:
-  tuple val(sample_id), path("${sample_id}.polyAtrimmed.fastq.gz"), emit: trim_extra_polya_out
-
-  script:
-  """
-  zcat $fastq | awk -f $trim_polyA_script -v sample_id=${sample_id}
-
-  # Check if the output file exists and rename it to the sample_id
-  # If it doesn't exist, create an empty file
-  if [ ! -f "${sample_id}.polyAtrimmed.fastq.gz" ]; then
-    touch ${sample_id}.polyAtrimmed.fastq && gzip ${sample_id}.polyAtrimmed.fastq
-  fi
-  """
-}
-
-process post_polyA_fastp{
-  tag "$sample_id"
-
-  publishDir "${params.outdir}/fastp", pattern: '*.{json,html}', mode: 'copy'
-
-  input: tuple val(sample_id), path(r1)
-
-  output:
-  tuple val(sample_id), path("${sample_id}_R1.post_polyA_fastp.fastq.gz"), emit: fastp_out
-  tuple val(sample_id), path("${sample_id}_R1.post_polyA_fastp.html"), path("${sample_id}_R1.post_polyA_fastp.json"), emit: fastp_multiqc
-
-  script:
-  """
-  # remove reads of length <= 20 bases
-  # disable adapter trimming
-  # disable polyG trimming 
-  
-  fastp -i $r1 \
-    -l 20 \
-    -A \
-    -G \
-    -j ${sample_id}_R1.post_polyA_fastp.json \
-    -h ${sample_id}_R1.post_polyA_fastp.html \
-    --stdout \
-     2> fastp.log | gzip > ${sample_id}_R1.post_polyA_fastp.fastq.gz
   """
 }
 
@@ -390,13 +252,14 @@ Process to convert the input GTF to a gene model bed file for rseqc read distrib
 process gtf2bed {
   input:
   path(gtf)
+  path(gtf2bed_script)
 
   output:
   path("gene_model.bed"), emit: bed
 
   shell:
   '''
-  gtf2bed !{gtf} > gene_model.bed
+  !{gtf2bed_script} !{gtf} > gene_model.bed
   '''
 }
 
@@ -689,7 +552,7 @@ process single_sample_multiqc {
     -f \
     --title "${sample_id} multiqc" \
     --filename "${sample_id}_multiqc.html" \
-    -m fastp \
+    -m unified_qc \
     -m rseqc
   """
 }
@@ -716,7 +579,7 @@ process multi_sample_multiqc {
     -f \
     --title "multisample multiqc" \
     --filename "multisample_multiqc.html" \
-    -m fastp \
+    -m unified_qc \
     -m rseqc
   """
 }
@@ -840,16 +703,16 @@ process count_matrix {
 /*
 * Run cell caller - this determines a threshold number of counts to call a cell.
 * The threshold is output to stdout and output as cell_caller_out
-* If the h5ad matrix is empty, an empty .png will be output and checked for
+* If the h5ad matrix is empty, an empty .html will be output and checked for
 * in the summary statistic script causing the Cell Caller plot to be hidden.
 */
 process cell_caller {
   tag "$sample_id"
 
   // Publish the plots; the glob pattern is used to collect the mixed species and single species plots
-  // Single species are named: {self.sample_name}_pdf_with_cutoff.png
-  // Mixed species are named: {self.sample_name}_hsap_pdf_with_cutoff.png and {self.sample_name}_mmus_pdf_with_cutoff.png
-  publishDir "${params.outdir}/plots", pattern: "${sample_id}*_pdf_with_cutoff.png", mode: 'copy'
+  // Single species are named: {self.sample_name}_pdf_with_cutoff.html
+  // Mixed species are named: {self.sample_name}_hsap_pdf_with_cutoff.html and {self.sample_name}_mmus_pdf_with_cutoff.html
+  publishDir "${params.outdir}/plots", pattern: "${sample_id}*_pdf_with_cutoff.html", mode: 'copy'
 
   input:
   tuple val(sample_id), path(count_matrix_h5ad), val(manual_threshold_str)
@@ -857,8 +720,8 @@ process cell_caller {
   output:
   tuple val(sample_id), stdout, emit: cell_caller_out
   tuple val(sample_id), path("${sample_id}_counts_pdf_with_threshold.html"), path("${sample_id}_barnyard_plot.html"), emit: cell_caller_plots
-  // publiDir statement only works on files output in the ouput directive
-  tuple val(sample_id), path("${sample_id}*_pdf_with_cutoff.png"), emit: cell_caller_png
+  // publishDir statement only works on files output in the output directive
+  tuple val(sample_id), path("${sample_id}*_pdf_with_cutoff.html"), emit: cell_caller_html
 
   script:
   """
@@ -934,7 +797,7 @@ process summary_statistics {
   publishDir "${params.outdir}/report/${sample_id}", mode: 'copy', pattern: "*.csv"
 
   input:
-  tuple val(sample_id), val(minimum_count_threshold), path(raw_h5ad), path(antisense), path(dedup), path("${sample_id}.multiqc.data.json"), path("${sample_id}_raw_rseqc_results.txt"), path("${sample_id}_annotated_rseqc_results.txt"), path(read_categorization_csv)
+  tuple val(sample_id), val(minimum_count_threshold), path(raw_h5ad), path(antisense), path(dedup), path("${sample_id}.multiqc.data.json"), path("${sample_id}_raw_rseqc_results.txt"), path("${sample_id}_annotated_rseqc_results.txt"), path(read_categorization_csv), path(qc_log)
   output:
   tuple val(sample_id), path("${sample_id}.metrics.csv"), emit: metrics_csv
 
@@ -950,20 +813,64 @@ process summary_statistics {
     --raw-rseqc ${sample_id}_raw_rseqc_results.txt \
     --annotated-rseqc ${sample_id}_annotated_rseqc_results.txt \
     --read-categorization ${read_categorization_csv} \
+    --qc-log ${qc_log} \
     ${mixed_flag}
   """
 }
 
 /*
-* Generate a per sample html report 
+* Generate QC cascade plot for single sample
+*/
+process qc_cascade_plot_single {
+  tag "$sample_id"
+
+  publishDir "${params.outdir}/report/${sample_id}", mode: 'copy'
+
+  input:
+  tuple val(sample_id), path(metrics_csv)
+
+  output:
+  tuple val(sample_id), path("${sample_id}.qc_cascade.html"), emit: qc_cascade_plot
+
+  script:
+  """
+  qc_cascade_plot.py \\
+    --mode single \\
+    --sample-id ${sample_id} \\
+    --metrics-csv ${metrics_csv}
+  """
+}
+
+/*
+* Generate QC cascade plot for all samples (multi-sample)
+*/
+process qc_cascade_plot_multi {
+  publishDir "${params.outdir}/report/", mode: 'copy'
+
+  input:
+  path(csvs)
+
+  output:
+  path("multisample_qc_cascade.html"), emit: qc_cascade_plot
+
+  script:
+  """
+  qc_cascade_plot.py \\
+    --mode multi \\
+    --csv-files ${csvs}
+  """
+}
+
+/*
+* Generate a per sample html report
 */
 process single_summary_report {
   tag "$sample_id"
 
   publishDir "${params.outdir}/report/${sample_id}", mode: 'copy'
-  
+
   input:
-  tuple val(sample_id), path(metrics_csv), path(pdf_plot_html), path(barnyard_plot_html)
+  tuple val(sample_id), path(metrics_csv), path(pdf_plot_html), path(barnyard_plot_html), path(qc_cascade_html)
   path(html_template)
 
   output:
@@ -972,7 +879,7 @@ process single_summary_report {
 
   script:
   """
-  create_single_sample_report.py $sample_id $pdf_plot_html $barnyard_plot_html $metrics_csv $html_template ${params.mixed_species}
+  create_single_sample_report.py $sample_id $pdf_plot_html $barnyard_plot_html $qc_cascade_html $metrics_csv $html_template ${params.mixed_species}
   """
 }
 
@@ -985,14 +892,17 @@ process multi_sample_report {
   input:
   path(csvs)
   path(template)
+  path(qc_cascade_html)
 
   output:
   path('multisample_report.html')
   path('multisample_out.csv')
+  path('multisample_summary_plots.html')
+  path('multisample_qc_cascade.html')
 
   script:
   """
-  create_multi_sample_report.py $template ${params.mixed_species}
+  create_multi_sample_report.py $template ${params.mixed_species} $qc_cascade_html
   """
 }
 

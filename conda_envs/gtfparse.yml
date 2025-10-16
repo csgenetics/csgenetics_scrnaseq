@@ -1,0 +1,8 @@
+name: gtfparse
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python >=3.7
+  - gtfparse =1.2.1
+  - pandas <2.0

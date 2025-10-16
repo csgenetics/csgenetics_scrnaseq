@@ -1,0 +1,8 @@
+name: multiqc
+channels:
+  - cs_genetics
+  - conda-forge
+  - bioconda
+dependencies:
+  - multiqc >=1.14
+  - multiqc-csgenetics =0.1.0

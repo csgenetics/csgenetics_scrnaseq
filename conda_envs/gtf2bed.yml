@@ -1,0 +1,8 @@
+name: gtf2bed
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - perl
+  - perl-data-dumper
+  - coreutils
