@@ -331,8 +331,9 @@ class QCCascadePlotter:
                     name=sample_id,
                     line=dict(color=colors[sample_idx % len(colors)], width=2),
                     marker=dict(size=8),
+                    customdata=steps,
                     hovertemplate=f'<b>{sample_id}</b><br>' +
-                                  '%{xaxis.ticktext[%{x}]}<br>' +
+                                  '%{customdata}<br>' +
                                   'Proportion: %{y:.2%}<extra></extra>',
                     showlegend=False,
                     visible=True
@@ -404,8 +405,9 @@ class QCCascadePlotter:
                     name=sample_id,
                     line=dict(color=colors[sample_idx % len(colors)], width=2),
                     marker=dict(size=8),
+                    customdata=steps,
                     hovertemplate=f'<b>{sample_id}</b><br>' +
-                                  '%{xaxis.ticktext[%{x}]}<br>' +
+                                  '%{customdata}<br>' +
                                   'Reads: %{y:,}<extra></extra>',
                     showlegend=False,
                     visible=False
@@ -482,13 +484,14 @@ class QCCascadePlotter:
         )
 
         # Update x-axes for both subplots
-        # Top subplot: no labels (bottom subplot labels apply to both)
+        # Top subplot: show labels (needed for hover text)
         fig.update_xaxes(
             tickmode='array',
             tickvals=list(range(len(steps))),
-            ticktext=[''] * len(steps),  # Empty labels
+            ticktext=steps,  # Show step names
+            tickangle=-90,
+            tickfont=dict(size=10),
             range=[-0.5, len(steps) - 0.5],
-            showticklabels=False,  # Hide tick labels
             row=1, col=1
         )
         # Bottom subplot: show labels
