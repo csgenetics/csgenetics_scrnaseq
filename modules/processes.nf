@@ -259,7 +259,7 @@ process gtf2bed {
 
   shell:
   '''
-  !{gtf2bed_script} !{gtf} > gene_model.bed
+  !{gtf2bed_script} < !{gtf} > gene_model.bed
   '''
 }
 
