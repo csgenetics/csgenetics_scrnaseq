@@ -3,4 +3,4 @@ channels:
   - cs_genetics
   - conda-forge
 dependencies:
-  - csgenetics-qc =0.3.4
+  - csgenetics-qc =0.1.0

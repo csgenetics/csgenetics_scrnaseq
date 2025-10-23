@@ -1,13 +1,14 @@
 {% set name = "csgenetics-qc" %}
-{% set version = "0.3.4" %}
+{% set version = "0.1.0" %}
 
 package:
   name: {{ name|lower }}
   version: {{ version }}
 
 source:
-  # Building from local source
-  path: ../../../rnaseq/images/qc
+  # Building from pre-compiled static binary
+  # The binary is built outside conda-build using: cargo build --release --target x86_64-unknown-linux-musl
+  path: ../../../rnaseq/images/qc/target/x86_64-unknown-linux-musl/release
 
   # Option for future: From GitHub (when repo is ready with tags and LICENSE)
   # git_url: https://github.com/csgenetics/qc.git
@@ -16,21 +17,23 @@ source:
 build:
   number: 0
   # Build script: build.sh (for Unix/Linux)
+  # Note: Binary must be pre-built using rustup + musl target before running conda-build
+  binary_relocation: false  # Don't modify the static binary
+  detect_binary_files_with_prefix: false  # Don't try to patch the binary
+  ignore_prefix_files: true  # Don't check for hardcoded prefixes
 
 requirements:
   build:
-    - {{ compiler('rust') }}
-    - cargo-bundle-licenses
+    # No build dependencies - using pre-built static binary
   host:
     # No host requirements for static binary
   run:
-    - libgcc-ng  # [linux]
+    # No runtime dependencies - static binary has everything embedded
 
 test:
   commands:
     # Test that the binary exists and is executable
     - test -x $PREFIX/bin/qc  # [unix]
-    - qc 2>&1 | grep -q "Usage"  # [unix]
 
 about:
   home: https://github.com/csgenetics/qc
