@@ -250,16 +250,17 @@ process create_valid_empty_bam{
 Process to convert the input GTF to a gene model bed file for rseqc read distribution
 */
 process gtf2bed {
+  conda "${baseDir}/conda_envs/gtf2bed.yml"
+
   input:
   path(gtf)
-  path(gtf2bed_script)
 
   output:
   path("gene_model.bed"), emit: bed
 
   shell:
   '''
-  !{gtf2bed_script} !{gtf} > gene_model.bed
+  gtf2bed !{gtf} > gene_model.bed
   '''
 }
 
