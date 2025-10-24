@@ -1,8 +1,7 @@
 name: gtf2bed
 channels:
+  - cs_genetics
   - conda-forge
   - bioconda
 dependencies:
-  - perl
-  - perl-data-dumper
-  - coreutils
+  - csgenetics-gtf2bed =0.1.0

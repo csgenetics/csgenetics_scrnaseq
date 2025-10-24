@@ -18,6 +18,9 @@ setup(
         'multiqc.modules.v1': [
             'unified_qc = unified_qc:MultiqcModule',
         ],
+        'multiqc.hooks.v1': [
+            'before_config = unified_qc:register_plugin_search_patterns',
+        ],
     },
     install_requires=[
         'multiqc>=1.14',

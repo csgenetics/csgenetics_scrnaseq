@@ -16,13 +16,14 @@ source:
 build:
   noarch: python
   number: 0
-  script: python -m pip install . --no-deps --no-build-isolation -vv
+  # Build script: build.sh
 
 requirements:
   host:
     - python >=3.7
     - pip
     - setuptools
+    - multiqc >=1.14
   run:
     - python >=3.7
     - multiqc >=1.14

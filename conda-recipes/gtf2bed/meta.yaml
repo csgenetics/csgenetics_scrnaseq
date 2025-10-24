@@ -1,0 +1,47 @@
+{% set name = "csgenetics-gtf2bed" %}
+{% set version = "0.1.0" %}
+
+package:
+  name: {{ name|lower }}
+  version: {{ version }}
+
+source:
+  # Building from pre-compiled static binary
+  # The binary is built outside conda-build using: cargo build --release --target x86_64-unknown-linux-musl
+  path: ../../images/gtf2bed/target/x86_64-unknown-linux-musl/release
+
+build:
+  number: 0
+  # Build script: build.sh (for Unix/Linux)
+  # Note: Binary must be pre-built using rustup + musl target before running conda-build
+  binary_relocation: false  # Don't modify the static binary
+  detect_binary_files_with_prefix: false  # Don't try to patch the binary
+  ignore_prefix_files: true  # Don't check for hardcoded prefixes
+
+requirements:
+  build:
+    # No build dependencies - using pre-built static binary
+  host:
+    # No host requirements for static binary
+  run:
+    # No runtime dependencies - static binary has everything embedded
+
+test:
+  commands:
+    # Test that the binary exists and is executable
+    - test -x $PREFIX/bin/gtf2bed  # [unix]
+
+about:
+  home: https://github.com/csgenetics/csgenetics_scrnaseq
+  license: Proprietary
+  summary: CS Genetics GTF to BED12 converter - Rust implementation
+  description: |
+    The CS Genetics gtf2bed tool is a high-performance Rust binary that converts
+    GTF format gene annotation files to BED12 format for use with RSeQC and other
+    genomic analysis tools. This is a statically-linked replacement for the original
+    Perl script that resolves compatibility issues on systems with limited dependencies.
+  dev_url: https://github.com/csgenetics/csgenetics_scrnaseq
+
+extra:
+  recipe-maintainers:
+    - csgenetics

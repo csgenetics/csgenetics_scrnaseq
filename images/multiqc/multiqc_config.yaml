@@ -1,0 +1,6 @@
+# MultiQC config for unified_qc module
+# This file registers the search patterns for the unified_qc plugin
+
+sp:
+  unified_qc:
+    fn_re: '.*\.(R[12]\.preQC|R1\.postQC)\.fastp\.json$'
