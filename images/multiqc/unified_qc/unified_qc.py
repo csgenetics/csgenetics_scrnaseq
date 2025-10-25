@@ -1,7 +1,10 @@
 import json
 import logging
-from multiqc.modules.base_module import BaseMultiqcModule
+import os
+import yaml
+from multiqc.base_module import BaseMultiqcModule
 from multiqc.plots import bargraph, linegraph
+from multiqc import config
 
 log = logging.getLogger(__name__)
 
@@ -11,6 +14,11 @@ class MultiqcModule(BaseMultiqcModule):
 
     def __init__(self):
         log.info("unified_qc module __init__ called")
+
+        # Register search patterns before calling super().__init__
+        # This ensures MultiQC knows how to find our files
+        self.register_search_patterns()
+
         super(MultiqcModule, self).__init__(
             name="QC",
             anchor="qc",
@@ -61,6 +69,26 @@ class MultiqcModule(BaseMultiqcModule):
             description="Distribution of read lengths (Pre-QC vs Post-QC)",
             plot=self.unified_qc_length_dist_plot(data_by_sample)
         )
+
+    def register_search_patterns(self):
+        """Register search patterns for this module.
+
+        This is necessary for MultiQC plugins to tell MultiQC how to find
+        the files it should process.
+        """
+        # Load search patterns from our local YAML file
+        search_patterns_file = os.path.join(os.path.dirname(__file__), 'search_patterns.yaml')
+        try:
+            with open(search_patterns_file, 'r') as f:
+                patterns = yaml.safe_load(f)
+                if patterns and 'unified_qc' in patterns:
+                    # Add our search pattern to MultiQC's global config
+                    if not hasattr(config, 'sp'):
+                        config.sp = {}
+                    config.sp['unified_qc'] = patterns['unified_qc']
+                    log.debug(f"Registered search pattern for unified_qc: {patterns['unified_qc']}")
+        except Exception as e:
+            log.warning(f"Could not load search patterns from {search_patterns_file}: {e}")
 
     def parse_unified_qc_files(self):
         """Find and group the 3 JSON files per sample into a nested dict.

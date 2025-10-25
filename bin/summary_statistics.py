@@ -64,7 +64,19 @@ class SummaryStatistics:
         """
         # Check if report_general_stats_data has any entries (for backward compatibility)
         if self.multiqc_json_dict["report_general_stats_data"]:
-            self.multiqc_general_stats_dict = self.multiqc_json_dict["report_general_stats_data"][0]
+            # Handle both old format (list) and new format (dict with module keys)
+            general_stats = self.multiqc_json_dict["report_general_stats_data"]
+            if isinstance(general_stats, list):
+                # Old format: list with single dict element
+                self.multiqc_general_stats_dict = general_stats[0]
+            elif isinstance(general_stats, dict):
+                # New format: dict with module names as keys (e.g., 'qc', 'rseqc')
+                # Flatten all module stats into a single dict
+                self.multiqc_general_stats_dict = {}
+                for module_name, module_stats in general_stats.items():
+                    self.multiqc_general_stats_dict.update(module_stats)
+            else:
+                self.multiqc_general_stats_dict = {}
         else:
             # For unified QC pipeline, MultiQC may not have general stats (we use qc.log instead)
             self.multiqc_general_stats_dict = {}
