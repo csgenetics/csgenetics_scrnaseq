@@ -73,9 +73,6 @@ def get_cells_from_h5ad(adata, mixed_species=False):
         cell_mask = adata.obs['is_single_cell'].astype(bool)
         cells['total'] = set(adata.obs_names[cell_mask])
 
-    if not cells['total']:
-        raise ValueError("No cells found in H5AD file")
-
     return cells
 
 def get_counts_by_cell_status(adata, sample_id):
