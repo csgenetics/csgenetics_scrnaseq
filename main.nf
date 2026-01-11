@@ -55,7 +55,7 @@ include {
   filter_for_multimappers_mismatch; multimapper_transcript_assignment; multimapper_exon_assignment;
   merge_transcript_exon_umr_bams; merge_transcript_exon_multimapper_bams; 
   merge_annotated_UMRs_with_annotated_multimappers; count_high_conf_annotated_umr_multimap;
-  single_sample_multiqc;; multi_sample_multiqc;
+  single_sample_multiqc; multi_sample_multiqc;
   sort_index_bam; dedup; io_count; count_matrix;
   filter_count_matrix; cell_caller; categorize_reads; summary_statistics; qc_cascade_plot_single;
   qc_cascade_plot_multi; single_summary_report; multi_sample_report
