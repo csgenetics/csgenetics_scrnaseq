@@ -5,7 +5,47 @@
 * single-cell kit to produce a genes by barcode count table.
 */
 
-nextflow.enable.dsl=2
+/*
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    FUNCTIONS
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+*/
+
+//
+// Get attribute from genomes config e.g. gtf, star_index
+// Follows nf-core pattern from igenomes.config
+//
+def getGenomeAttribute(attribute) {
+    if (params.genomes && params.genome && params.genomes.containsKey(params.genome)) {
+        if (params.genomes[params.genome].containsKey(attribute)) {
+            return params.genomes[params.genome][attribute]
+        }
+    }
+    return null
+}
+
+/*
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    RESOLVE GENOME PARAMETERS
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+*/
+
+// Resolve genome attributes into params
+// These can be overridden by command-line parameters
+params.star_index                   = params.star_index ?: getGenomeAttribute('star_index')
+params.gtf                          = params.gtf ?: getGenomeAttribute('gtf')
+params.mitochondria_chromosome      = params.mitochondria_chromosome ?: getGenomeAttribute('mitochondria_chromosome')
+params.mixed_species                = params.mixed_species != null ? params.mixed_species : (getGenomeAttribute('mixed_species') ?: false)
+params.hsap_mitochondria_chromosome = params.hsap_mitochondria_chromosome ?: getGenomeAttribute('hsap_mitochondria_chromosome')
+params.mmus_mitochondria_chromosome = params.mmus_mitochondria_chromosome ?: getGenomeAttribute('mmus_mitochondria_chromosome')
+params.hsap_gene_prefix             = params.hsap_gene_prefix ?: getGenomeAttribute('hsap_gene_prefix')
+params.mmus_gene_prefix             = params.mmus_gene_prefix ?: getGenomeAttribute('mmus_gene_prefix')
+
+/*
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    INCLUDES
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+*/
 include {
   save_resolved_configuration; download_star_index; download_gtf; download_input_csv; download_barcode_list; download_barcode_correction_list; download_public_fastq;
   features_file; merge_lanes; qc; star;
@@ -26,7 +66,7 @@ def order_integer_first(it){
         // Will raise exception if not int
         it.isInteger()
         0
-      } catch(MissingMethodException e1){
+      } catch(MissingMethodException _e1){
         // path will end here and therefore return 1
         1
       }
@@ -74,7 +114,7 @@ workflow {
   if (params.input_csv.startsWith("s3://csgx.public.readonly")){
     input_csv = download_input_csv()
   } else {
-    input_csv = Channel.fromPath(params.input_csv)
+    input_csv = channel.fromPath(params.input_csv)
   }
   
   // Finally, we need to check the fastq files to see if they
@@ -96,19 +136,19 @@ workflow {
         def download = fastq_1.startsWith('s3://csgx.public.readonly') && fastq_2.startsWith('s3://csgx.public.readonly') ? 'download' : 'no_download'
         return [ rowList[0], fastq_1, fastq_2, download]
     }
-    .branch {
-        download: it[3] == 'download'
-        no_download: it[3] == 'no_download'
+    .branch { row ->
+        download: row[3] == 'download'
+        no_download: row[3] == 'no_download'
     }
     .set { split_ch }
 
   split_ch.download
-    .map { it[0..2] } // remove the 'download' string from the tuple
+    .map { row -> row[0..2] } // remove the 'download' string from the tuple
     .set { to_download_ch }
 
   split_ch.no_download
-    .map { it[0..2] } // remove the 'no_download' string from the tuple
-    .map { [it[0], file(it[1]), file(it[2])] } // convert the paths to File objects
+    .map { row -> row[0..2] } // remove the 'no_download' string from the tuple
+    .map { row -> [row[0], file(row[1]), file(row[2])] } // convert the paths to File objects
     .set { no_download_ch }
 
   // Download the fastq files from the s3://csgx.public.readonly bucket
@@ -124,7 +164,7 @@ workflow {
   if (params.barcode_list_path.startsWith("s3://csgx.public.readonly")) {
     barcode_list = download_barcode_list()
   } else {
-    barcode_list = file(params.barcode_list)
+    barcode_list = file(params.barcode_list_path)
   }
 
   // Check whether params.barcode_correction_list_path starts with s3://csgx.public.readonly
@@ -151,9 +191,9 @@ workflow {
   // of merge_lanes.
   
   // Split ch_input base on whether there are >1 R1 fastqs
-  ch_input.branch{
-    multiple_lanes: it[1].size() > 1
-    single_lane: it[1].size() == 1
+  ch_input.branch{ sample_data ->
+    multiple_lanes: sample_data[1].size() > 1
+    single_lane: sample_data[1].size() == 1
   }.set{
     ch_input_split
   }
@@ -165,7 +205,7 @@ workflow {
   // and it means we don't have to rely on R1 or R2 being in the file names.
   // E.g. some systems use names like *r_1* and *r_2*.
   merge_lanes_in = ch_input_split.multiple_lanes
-    .flatMap{[[it[0], "R1", it[1]], [it[0], "R2", it[2]]]}  
+    .flatMap{ sample_data -> [[sample_data[0], "R1", sample_data[1]], [sample_data[0], "R2", sample_data[2]]]}  
 
   // This process will merge fastqs split over multiple lanes 
   merge_lanes(merge_lanes_in)
@@ -173,12 +213,12 @@ workflow {
 
   // Combine the R1 and R2 reads per sample ensuring R1 comes first
   // --> [sample, *.merged.R1*, *.merged.R2*]
-  ch_merge_lanes_out_merged = ch_merge_lanes_out.groupTuple(by:0, size:2).map({it[1][0] == "R1" ? [it[0], it[2][0], it[2][1]] : [it[0], it[2][1], it[2][0]]})
+  ch_merge_lanes_out_merged = ch_merge_lanes_out.groupTuple(by:0, size:2).map({ grouped -> grouped[1][0] == "R1" ? [grouped[0], grouped[2][0], grouped[2][1]] : [grouped[0], grouped[2][1], grouped[2][0]]})
 
   // Flatten the R1 and R2 in the non-merged fastq pairs
   // [sample, [R1], [R2]] --> [sample, R1, R2]
   ch_input_split_single_lane_flattened = ch_input_split.single_lane
-    .map{[it[0], it[1][0], it[2][0]]}
+    .map{ sample_data -> [sample_data[0], sample_data[1][0], sample_data[2][0]]}
 
   // Merge the merged and non-merged fastqs
   io_extract_in_ch = ch_merge_lanes_out_merged.mix(ch_input_split_single_lane_flattened)
@@ -191,7 +231,6 @@ workflow {
   // 4. Calculates Q30 metrics for R2 barcode and R1 output
   // 5. Outputs JSON files for MultiQC
   qc(io_extract_in_ch, barcode_correction_list)
-  ch_qc_out = qc.out.qc_out
   ch_qc_log = qc.out.qc_log
   ch_qc_multiqc = qc.out.qc_multiqc
 
@@ -199,9 +238,9 @@ workflow {
   // Pipe good to STAR
   // Pipe empty to create_valid_empty_bam_star
   qc.out.qc_out
-        .branch {
-          good_fastq: it[1].countFastq() > 0
-          empty_fastq: it[1].countFastq() == 0
+        .branch { qc_result ->
+          good_fastq: qc_result[1].countFastq() > 0
+          empty_fastq: qc_result[1].countFastq() == 0
           }
         .set{qc_out_filtered_ch}
 
@@ -212,9 +251,9 @@ workflow {
   // If 0 unique alignments need to pass bam into
   // create_valid_empty_bam_star
   star.out.out_bam
-        .branch { 
-          good_bam: it[2].toInteger() > 0
-          bad_bam: it[2].toInteger() == 0
+        .branch { star_result ->
+          good_bam: star_result[2].toInteger() > 0
+          bad_bam: star_result[2].toInteger() == 0
           }
         .set{star_out_ch}
 
@@ -222,7 +261,7 @@ workflow {
   // by samtools. We only create this for those samples that
   // had 0 reads after QC (i.e. after trim_extra_polyA) or
   // after mapping i.e. after star.
-  create_valid_empty_bam_star(qc_out_filtered_ch.empty_fastq.map({[it[0], "_Aligned.sortedByCoord.out"]}).mix(star_out_ch.bad_bam.map({[it[0], "_Aligned.sortedByCoord.out"]})))
+  create_valid_empty_bam_star(qc_out_filtered_ch.empty_fastq.map({ qc_result -> [qc_result[0], "_Aligned.sortedByCoord.out"]}).mix(star_out_ch.bad_bam.map({ star_result -> [star_result[0], "_Aligned.sortedByCoord.out"]})))
 
   // Process to convert input GTF to gene model bed for RSeQC
   gtf2bed(gtf)
@@ -232,7 +271,7 @@ workflow {
   // or do not contain (0) alignments.
   // If alignments are present RSeQC is run,
   // else the empty RSeQC is populated in the process.
-  raw_rseqc(star_out_ch.good_bam.map({[it[0], it[1], 1]}).mix(create_valid_empty_bam_star.out.out_bam.map({[it[0], it[1], 0]})), gtf2bed.out.bed, empty_rseqc_template, "raw")
+  raw_rseqc(star_out_ch.good_bam.map({ star_result -> [star_result[0], star_result[1], 1]}).mix(create_valid_empty_bam_star.out.out_bam.map({ bam_result -> [bam_result[0], bam_result[1], 0]})), gtf2bed.out.bed, empty_rseqc_template, "raw")
   ch_raw_rseqc_multiqc = raw_rseqc.out.rseqc_log
 
   // Split feature counting into multiple processes to take advantage of parallel processing
@@ -241,12 +280,12 @@ workflow {
   // or do not contain (0) alignments.
   // If alignments are present, featureCounts is run,
   // else the empty bam is simply copied for collection from the process.
-  initial_feature_count(star_out_ch.good_bam.map({[it[0], it[1], 1]}).mix(create_valid_empty_bam_star.out.out_bam.map({[it[0], it[1], 0]})), gtf)
+  initial_feature_count(star_out_ch.good_bam.map({ star_result -> [star_result[0], star_result[1], 1]}).mix(create_valid_empty_bam_star.out.out_bam.map({ bam_result -> [bam_result[0], bam_result[1], 0]})), gtf)
 
-  // Make channel feature_count_bams that contain samples with alignments (1) 
+  // Make channel feature_count_bams that contain samples with alignments (1)
   // Using the sample names in star_out_ch.good_bam to filter
   // Essentially performs an inner join to limit input to only samples present in star_out_ch.good_bam
-  initial_feature_count_good_bam_out_ch = star_out_ch.good_bam.map({[it[0]]}).join(initial_feature_count.out.feature_count_bam)
+  initial_feature_count_good_bam_out_ch = star_out_ch.good_bam.map({ star_result -> [star_result[0]]}).join(initial_feature_count.out.feature_count_bam)
 
   // If alignments are present run UMR and multimapper processing
   // UMRs
@@ -290,7 +329,7 @@ workflow {
     .mix(ch_raw_rseqc_multiqc)
     .mix(ch_annotated_rseqc_multiqc)
     .groupTuple(by:0, size: 3)
-    .map({it.flatten()}).map({[it[0], it.tail()]})
+    .map({ grouped -> grouped.flatten()}).map({ flattened -> [flattened[0], flattened.tail()]})
     .set { ch_ss_multiqc_in }
 
   // Run single-sample multiqc  
@@ -298,7 +337,7 @@ workflow {
 
   // Collect all files from single sample multiqc input into a single list containing all samples
   // But removing the sample_id
-  ch_ms_multiqc_in = ch_ss_multiqc_in.map({ it[1] }).collect()
+  ch_ms_multiqc_in = ch_ss_multiqc_in.map({ sample_files -> sample_files[1] }).collect()
 
   // Run multi-sample multiqc
   multi_sample_multiqc(ch_ms_multiqc_in)
@@ -372,11 +411,11 @@ workflow {
 
   // Sort the groupTuple so that the int is always
   // first and then flatten the tuple list to return a 3mer
-  // N.B. We were originally sorting by class (sort:{it.getClass() == sun.nio.fs.UnixPath ? 1 : 0})
+  // N.B. We were originally sorting by class (sort:{ val -> val.getClass() == sun.nio.fs.UnixPath ? 1 : 0})
   // but for some reason this only worked locally and not on Seqera Platform
   ch_filter_count_matrix_in = ch_cell_caller_out.mix(ch_h5ad)
-  .groupTuple(by: 0, size:2, sort:{order_integer_first(it)})
-  .map{[it[0], it[1][0], it[1][1]]}
+  .groupTuple(by: 0, size:2, sort:{ val -> order_integer_first(val)})
+  .map{ grouped -> [grouped[0], grouped[1][0], grouped[1][1]]}
 
   // Output filtered (cells only) count tables
   filter_count_matrix(ch_filter_count_matrix_in)
@@ -384,9 +423,9 @@ workflow {
   // Create input channel for categorize_reads process
   // Need to combine STAR BAM, raw count matrix H5AD, and qc JSON (main qc.json file)
   ch_categorize_reads_in = star_out_ch.good_bam
-    .map({[it[0], it[1]]})  // [sample_id, star_bam]
+    .map({ star_result -> [star_result[0], star_result[1]]})  // [sample_id, star_bam]
     .join(filter_count_matrix.out.raw_count_matrix)  // [sample_id, star_bam, raw_h5ad]
-    .join(ch_qc_multiqc.map({[it[0], it[1]]}))  // [sample_id, star_bam, raw_h5ad, qc_json]
+    .join(ch_qc_multiqc.map({ qc_result -> [qc_result[0], qc_result[1]]}))  // [sample_id, star_bam, raw_h5ad, qc_json]
 
   // Run categorize_reads to calculate read and count metrics
   categorize_reads(ch_categorize_reads_in)
@@ -401,7 +440,7 @@ workflow {
   .join(single_sample_multiqc.out.multiqc_json)
   .join(raw_rseqc.out.rseqc_log)
   .join(annotated_rseqc.out.rseqc_log)
-  .join(categorize_reads.out.read_categories.map({[it[0], it[1]]}))
+  .join(categorize_reads.out.read_categories.map({ read_cat -> [read_cat[0], read_cat[1]]}))
   .join(ch_qc_log)
   .set({ch_summary_statistics_in})
 
