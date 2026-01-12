@@ -1,8 +1,5 @@
 #!/usr/bin/env nextflow
 
-nextflow.enable.dsl=2
-import groovy.json.JsonOutput
-
 process save_resolved_configuration{
   tag "Save resolved configuration"
   publishDir "${params.outdir}/pipeline_info/", mode: 'copy'
@@ -11,8 +8,8 @@ process save_resolved_configuration{
   path("resolved_configuration.txt")
 
   script:
-  json_str = JsonOutput.toJson(params)
-  json_indented = JsonOutput.prettyPrint(json_str)
+  json_str = groovy.json.JsonOutput.toJson(params)
+  json_indented = groovy.json.JsonOutput.prettyPrint(json_str)
   // NOTE: single quotes are critical here;
   """
   echo '${json_indented}' > resolved_configuration.txt
@@ -122,10 +119,10 @@ process features_file {
   output:
   path("${gtf.baseName}_features_names.tsv"), emit: modified_gtf
 
-  shell:
-  '''
-  features_names.py !{gtf} !{gtf.baseName}_features_names.tsv
-  '''
+  script:
+  """
+  features_names.py ${gtf} ${gtf.baseName}_features_names.tsv
+  """
 }
 
 /*
@@ -201,7 +198,7 @@ process star {
   path(index)
 
   output:
-  tuple val(sample_id), path("${sample_id}_Aligned.out.bam"), env(uniquely_mapped_reads), emit: out_bam
+  tuple val(sample_id), path("${sample_id}_Aligned.out.bam"), env('uniquely_mapped_reads'), emit: out_bam
 
   script:
   """
@@ -250,18 +247,16 @@ process create_valid_empty_bam{
 Process to convert the input GTF to a gene model bed file for rseqc read distribution
 */
 process gtf2bed {
-  conda "${baseDir}/conda_envs/gtf2bed.yml"
-
   input:
   path(gtf)
 
   output:
   path("gene_model.bed"), emit: bed
 
-  shell:
-  '''
-  gtf2bed !{gtf} > gene_model.bed
-  '''
+  script:
+  """
+  gtf2bed ${gtf} > gene_model.bed
+  """
 }
 
 /*
@@ -282,15 +277,15 @@ process run_rseqc {
   output:
   tuple val(sample_id), path("*_rseqc_results.txt"), emit: rseqc_log
 
-  shell:
-  '''
-  if [[ !{count} > 0 ]]
+  script:
+  """
+  if [[ ${count} > 0 ]]
     then
-      read_distribution.py  -i !{bam} -r !{bed} > !{sample_id}_!{prefix}_rseqc_results.txt
-    else      
-      cat !{empty_rseqc_template} | envsubst > !{sample_id}_!{prefix}_rseqc_results.txt
+      read_distribution.py  -i ${bam} -r ${bed} > ${sample_id}_${prefix}_rseqc_results.txt
+    else
+      cat ${empty_rseqc_template} | envsubst > ${sample_id}_${prefix}_rseqc_results.txt
   fi
-  '''
+  """
 }
 
 process initial_feature_count {
@@ -521,7 +516,7 @@ process count_high_conf_annotated_umr_multimap {
   tuple val(sample_id), path(umr_multimapper_annotated_bam)
 
   output:
-  tuple val(sample_id), env(alignment_count), emit: aligned_count
+  tuple val(sample_id), env('alignment_count'), emit: aligned_count
 
   script:
   """
@@ -653,18 +648,18 @@ process io_count {
   output:
   tuple val(sample_id), path('*_bcGeneSummary.txt'), emit: io_count_out
 
-  shell:
-  '''
+  script:
+  """
   ## 1. Generate file for count matrix
   # alternative to umi_tools count
   # command: View the input dedup.sam file, grep for reads with gene assignment (which have the 'XT:' tag)
   # then keep the 1st (read_ID) and 18th fields (gene name, should be the 'XT:' tag itself) only
   # then split the string by '_' (-d '_'), keep fields 2,3,4 which correspond to 'io_sequence', 'gene_name' (4th field is so that we don't lose gene_names containing one '_')
   # use sed to replace the first '_' in each line, and any 'XT:Z:' strings with empty string with sed
-  
+
   # output has 2 columns: io_sequence and gene_name for every deduplicated alignments with gene assignment
-  samtools view !{f} | awk '/XT:/ {match($1, /_[A-Z]+_$/); printf substr($0,RSTART+1,RLENGTH-2); match($0, /XT:Z:[A-Za-z0-9_]+/); print "\t" substr($0,RSTART+5,RLENGTH-5)}' > !{sample_id}_bcGeneSummary.txt
-  '''
+  samtools view ${f} | awk '/XT:/ {match(\$1, /_[A-Z]+_\$/); printf substr(\$0,RSTART+1,RLENGTH-2); match(\$0, /XT:Z:[A-Za-z0-9_]+/); print "\\t" substr(\$0,RSTART+5,RLENGTH-5)}' > ${sample_id}_bcGeneSummary.txt
+  """
 
 }
 
