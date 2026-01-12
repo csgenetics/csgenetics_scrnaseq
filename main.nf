@@ -32,14 +32,14 @@ def getGenomeAttribute(attribute) {
 
 // Resolve genome attributes into params
 // These can be overridden by command-line parameters
-params.star_index                   = params.star_index ?: getGenomeAttribute('star_index')
-params.gtf                          = params.gtf ?: getGenomeAttribute('gtf')
-params.mitochondria_chromosome      = params.mitochondria_chromosome ?: getGenomeAttribute('mitochondria_chromosome')
-params.mixed_species                = params.mixed_species != null ? params.mixed_species : (getGenomeAttribute('mixed_species') ?: false)
-params.hsap_mitochondria_chromosome = params.hsap_mitochondria_chromosome ?: getGenomeAttribute('hsap_mitochondria_chromosome')
-params.mmus_mitochondria_chromosome = params.mmus_mitochondria_chromosome ?: getGenomeAttribute('mmus_mitochondria_chromosome')
-params.hsap_gene_prefix             = params.hsap_gene_prefix ?: getGenomeAttribute('hsap_gene_prefix')
-params.mmus_gene_prefix             = params.mmus_gene_prefix ?: getGenomeAttribute('mmus_gene_prefix')
+params.star_index                   = getGenomeAttribute('star_index')
+params.gtf                          = getGenomeAttribute('gtf')
+params.mitochondria_chromosome      = getGenomeAttribute('mitochondria_chromosome')
+params.mixed_species                = getGenomeAttribute('mixed_species')
+params.hsap_mitochondria_chromosome = getGenomeAttribute('hsap_mitochondria_chromosome')
+params.mmus_mitochondria_chromosome = getGenomeAttribute('mmus_mitochondria_chromosome')
+params.hsap_gene_prefix             = getGenomeAttribute('hsap_gene_prefix')
+params.mmus_gene_prefix             = getGenomeAttribute('mmus_gene_prefix')
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -79,14 +79,14 @@ workflow {
   // One workaround is to use anonymous access to the S3 resources
   // using aws.client.anonymous = true configuration.
   // However, this may then prevent the users from accessing their own S3 resources.
-  // To solve this issue, to access public S3 resources, we will run a process that 
+  // To solve this issue, to access public S3 resources, we will run a process that
   // uses the AWS CLI but with no user configuration using the --no-sign-request flag.
   // We will perform this for all resources starting with 's3://csgx.public.readonly'
   // The following paths need to be checked:
   // params.star_index
   // params.gtf
   // params.input_csv
-  
+
   // Nextflow currently doesn't have functionality to output the resolved configuration
   // https://github.com/nextflow-io/nextflow/issues/1515
   // They may develop this functionality in the future, but for now we will use a process
