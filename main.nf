@@ -285,6 +285,7 @@ workflow {
   // Make channel feature_count_bams that contain samples with alignments (1)
   // Using the sample names in star_out_ch.good_bam to filter
   // Essentially performs an inner join to limit input to only samples present in star_out_ch.good_bam
+  // Using combine instead of join because strict mode has failOnMismatch:true by default
   initial_feature_count_good_bam_out_ch = star_out_ch.good_bam.map({ star_result -> [star_result[0]]}).combine(initial_feature_count.out.feature_count_bam, by: [0])
 
   // If alignments are present run UMR and multimapper processing
@@ -305,12 +306,12 @@ workflow {
   multimapper_exon_assignment(multimapper_transcript_assignment.out.unassigned_bam, gtf, file("${baseDir}/bin/assign_multi_mappers.gawk"))
 
   // Merge the transcript- and exon-based gene assignments for the umrs
-  merge_transcript_exon_umr_bams(umr_transcript_assignment.out.umr_transcript_assigned_bam.join(umr_exon_assignment.out.umr_exon_assigned_bam))
+  merge_transcript_exon_umr_bams(umr_transcript_assignment.out.umr_transcript_assigned_bam.combine(umr_exon_assignment.out.umr_exon_assigned_bam, by: 0))
   // Merge the transcript- and exon-based gene assignments for the multimappers
-  merge_transcript_exon_multimapper_bams(multimapper_transcript_assignment.out.assigned_bam.join(multimapper_exon_assignment.out.assigned_bam))
+  merge_transcript_exon_multimapper_bams(multimapper_transcript_assignment.out.assigned_bam.combine(multimapper_exon_assignment.out.assigned_bam, by: 0))
 
   // Merge the multimapper and UMR bams
-  merge_annotated_UMRs_with_annotated_multimappers(merge_transcript_exon_umr_bams.out.high_conf_annotated_umr_bam.join(merge_transcript_exon_multimapper_bams.out.high_conf_annotated_multimapped_bam))
+  merge_annotated_UMRs_with_annotated_multimappers(merge_transcript_exon_umr_bams.out.high_conf_annotated_umr_bam.combine(merge_transcript_exon_multimapper_bams.out.high_conf_annotated_multimapped_bam, by: 0))
   
   // Re-merge channels for samples which had 0 or >0 alignments after STAR alignment
   umr_multimapper_annotated_bam_out_ch = merge_annotated_UMRs_with_annotated_multimappers.out.high_conf_annotated_bam.mix(create_valid_empty_bam_star.out.out_bam)
@@ -319,7 +320,7 @@ workflow {
   count_high_conf_annotated_umr_multimap(umr_multimapper_annotated_bam_out_ch)
 
   // Produce RSeQC output of the annotated bam for metrics
-  annotated_rseqc_in_ch = umr_multimapper_annotated_bam_out_ch.join(count_high_conf_annotated_umr_multimap.out.aligned_count)
+  annotated_rseqc_in_ch = umr_multimapper_annotated_bam_out_ch.combine(count_high_conf_annotated_umr_multimap.out.aligned_count, by: 0)
   annotated_rseqc(annotated_rseqc_in_ch, gtf2bed.out.bed, empty_rseqc_template, "annotated")
   ch_annotated_rseqc_multiqc = annotated_rseqc.out.rseqc_log
 
@@ -346,7 +347,7 @@ workflow {
   sort_index_bam(umr_multimapper_annotated_bam_out_ch)
 
   // Perform deduplication
-  dedup_in_ch = sort_index_bam.out.sort_index_bam_out.join(count_high_conf_annotated_umr_multimap.out.aligned_count)
+  dedup_in_ch = sort_index_bam.out.sort_index_bam_out.combine(count_high_conf_annotated_umr_multimap.out.aligned_count, by: 0)
   dedup(dedup_in_ch)
 
   // Generate file for count matrix
@@ -403,7 +404,8 @@ workflow {
     }
     .set { user_specified_cell_caller_thresholds_ch }
 
-  ch_cell_caller = ch_h5ad.join(user_specified_cell_caller_thresholds_ch)
+  
+  ch_cell_caller = ch_h5ad.combine(user_specified_cell_caller_thresholds_ch, by: 0)
 
   // Run cell caller
   cell_caller(ch_cell_caller)
@@ -424,8 +426,8 @@ workflow {
   // Need to combine STAR BAM, raw count matrix H5AD, and qc JSON (main qc.json file)
   ch_categorize_reads_in = star_out_ch.good_bam
     .map({ star_result -> [star_result[0], star_result[1]]})  // [sample_id, star_bam]
-    .join(filter_count_matrix.out.raw_count_matrix)  // [sample_id, star_bam, raw_h5ad]
-    .join(ch_qc_multiqc.map({ qc_result -> [qc_result[0], qc_result[1]]}))  // [sample_id, star_bam, raw_h5ad, qc_json]
+    .combine(filter_count_matrix.out.raw_count_matrix, by: [0])  // [sample_id, star_bam, raw_h5ad]
+    .combine(ch_qc_multiqc.map({ qc_result -> [qc_result[0], qc_result[1]]}), by: [0])  // [sample_id, star_bam, raw_h5ad, qc_json]
 
   // Run categorize_reads to calculate read and count metrics
   categorize_reads(ch_categorize_reads_in)
@@ -434,14 +436,14 @@ workflow {
   // [sample, min_nuc_gene_cutoff, raw_h5ad,
   // antisense, dedup.log, multiqc_data, raw_seqc, annotated_rseqc, read_categorization_csv, qc_log]
   ch_cell_caller_out
-  .join(filter_count_matrix.out.raw_count_matrix)
-  .join(sort_index_bam.out.antisense_out)
-  .join(dedup.out.io_dedup_log)
-  .join(single_sample_multiqc.out.multiqc_json)
-  .join(raw_rseqc.out.rseqc_log)
-  .join(annotated_rseqc.out.rseqc_log)
-  .join(categorize_reads.out.read_categories.map({ read_cat -> [read_cat[0], read_cat[1]]}))
-  .join(ch_qc_log)
+  .combine(filter_count_matrix.out.raw_count_matrix, by: 0)
+  .combine(sort_index_bam.out.antisense_out, by: 0)
+  .combine(dedup.out.io_dedup_log, by: 0)
+  .combine(single_sample_multiqc.out.multiqc_json, by: 0)
+  .combine(raw_rseqc.out.rseqc_log, by: 0)
+  .combine(annotated_rseqc.out.rseqc_log, by: 0)
+  .combine(categorize_reads.out.read_categories.map({ read_cat -> [read_cat[0], read_cat[1]]}), by: 0)
+  .combine(ch_qc_log, by: 0)
   .set({ch_summary_statistics_in})
 
   // Generate summary statistics
@@ -452,8 +454,8 @@ workflow {
 
   // Join metrics CSV with cell caller plots and QC cascade plot
   ch_summary_metrics_and_plots = summary_statistics.out.metrics_csv
-    .join(cell_caller.out.cell_caller_plots, by:0)
-    .join(qc_cascade_plot_single.out.qc_cascade_plot, by:0)
+    .combine(cell_caller.out.cell_caller_plots, by: 0)
+    .combine(qc_cascade_plot_single.out.qc_cascade_plot, by: 0)
 
   // Generate single sample report
   single_summary_report(ch_summary_metrics_and_plots, single_sample_report_template)
