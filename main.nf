@@ -285,7 +285,7 @@ workflow {
   // Make channel feature_count_bams that contain samples with alignments (1)
   // Using the sample names in star_out_ch.good_bam to filter
   // Essentially performs an inner join to limit input to only samples present in star_out_ch.good_bam
-  initial_feature_count_good_bam_out_ch = star_out_ch.good_bam.map({ star_result -> [star_result[0]]}).join(initial_feature_count.out.feature_count_bam)
+  initial_feature_count_good_bam_out_ch = star_out_ch.good_bam.map({ star_result -> [star_result[0]]}).combine(initial_feature_count.out.feature_count_bam, by: [0])
 
   // If alignments are present run UMR and multimapper processing
   // UMRs
