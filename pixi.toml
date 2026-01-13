@@ -1,0 +1,11 @@
+[workspace]
+authors = ["didillysquat <didillysquat@gmail.com>"]
+channels = ["conda-forge", "bioconda"]
+name = "csgenetics_scrnaseq"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+nf-core = ">=3.5.1,<4"
