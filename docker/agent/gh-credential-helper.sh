@@ -27,7 +27,7 @@ esac
 
 : "${GITHUB_APP_ID:?GITHUB_APP_ID is required}"
 : "${GITHUB_APP_INSTALLATION_ID:?GITHUB_APP_INSTALLATION_ID is required}"
-PEM="/run/secrets/github-app.pem"
+PEM="${GITHUB_APP_PEM:-/run/secrets/github-app.pem}"
 
 b64url() { openssl base64 -A | tr -d '=' | tr '/+' '_-'; }
 
