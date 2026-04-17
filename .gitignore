@@ -12,3 +12,15 @@ results_test_hsap_mmus_2_sample_full
 # pixi environments
 .pixi
 *.egg-info
+
+# Agent secrets and credentials (never commit)
+.env
+*.pem
+agent-secrets/
+.aws/
+.docker/config.json
+*.token
+
+# Claude worktrees and local settings
+.claude/worktrees/
+.claude/settings.local.json
