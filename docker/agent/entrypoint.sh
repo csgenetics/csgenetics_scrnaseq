@@ -3,6 +3,10 @@
 #
 # Required env vars (injected by docker run):
 #   CLAUDE_CODE_OAUTH_TOKEN      Claude Max subscription OAuth token
+#   GRATICULE_API_KEY            Per-repo bot key for `scrnaseq-agent` (GRT-385).
+#                                Consumed by the MCP config's `${GRATICULE_API_KEY}`
+#                                substitution in claude-state.json — every MCP
+#                                request to Graticule flows through this key.
 #   GITHUB_APP_ID                Numeric GitHub App ID
 #   GITHUB_APP_INSTALLATION_ID   Installation ID for csgenetics/csgenetics_scrnaseq
 #
@@ -16,6 +20,7 @@
 set -euo pipefail
 
 : "${CLAUDE_CODE_OAUTH_TOKEN:?CLAUDE_CODE_OAUTH_TOKEN is required}"
+: "${GRATICULE_API_KEY:?GRATICULE_API_KEY is required}"
 : "${GITHUB_APP_ID:?GITHUB_APP_ID is required}"
 : "${GITHUB_APP_INSTALLATION_ID:?GITHUB_APP_INSTALLATION_ID is required}"
 [ -r /run/secrets/github-app.pem ] || {
