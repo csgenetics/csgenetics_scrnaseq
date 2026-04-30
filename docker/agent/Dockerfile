@@ -63,6 +63,13 @@ RUN case "$(dpkg --print-architecture)" in \
 # TODO: pin to a specific version for reproducibility
 RUN npm install -g @anthropic-ai/claude-code && claude --version
 
+# Shorthand for `claude --dangerously-skip-permissions`. Safe inside this
+# container because the container is the blast-radius boundary (see
+# docs/agent-containerisation.md).
+RUN printf '#!/bin/sh\nexec claude --dangerously-skip-permissions "$@"\n' \
+      > /usr/local/bin/claude-yolo \
+ && chmod 0755 /usr/local/bin/claude-yolo
+
 # Entrypoint and helpers (owned by root, world-executable, read-only for agent)
 COPY docker/agent/entrypoint.sh           /usr/local/bin/entrypoint.sh
 COPY docker/agent/gh-credential-helper.sh /usr/local/bin/gh-credential-helper.sh
