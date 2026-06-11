@@ -602,7 +602,11 @@ process sort_index_bam {
   script:
   """
   samtools view -c -f 16 ${bam} > ${sample_id}.antisense.txt
-  samtools sort ${bam} -O BAM -o ${sample_id}_sorted.bam
+  # Name-sort before the coordinate sort so the dedup input is reproducible. The upstream
+  # merged BAM's record order is non-deterministic (STAR multithreaded emission), and umi_tools
+  # dedup picks its per-UMI-group representative by input order at each position; name-sorting
+  # first (unique query names at this stage) gives the coordinate sort a deterministic input.
+  samtools sort -n ${bam} | samtools sort -O BAM -o ${sample_id}_sorted.bam
   samtools index ${sample_id}_sorted.bam
   """
 }
