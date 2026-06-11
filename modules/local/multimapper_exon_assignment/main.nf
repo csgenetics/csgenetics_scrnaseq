@@ -15,7 +15,7 @@ process multimapper_exon_assignment{
   """
   # Run featureCounts using the exon feature to do tie-breaking and then run back through the gawk script to pull out those
   # reads that have a single Assigned alignment.
-  featureCounts -a $gtf -o ${sample_id}.multimapped.exon.assigned.txt -R BAM $multimapper_unassigned_bam -T 4 -t exon -g gene_id --fracOverlap 0.5 --extraAttributes gene_name -s 1 -M
+  featureCounts -a $gtf -o ${sample_id}.multimapped.exon.assigned.txt -R BAM $multimapper_unassigned_bam -T ${task.cpus} -t exon -g gene_id --fracOverlap 0.5 --extraAttributes gene_name -s 1 -M
   samtools sort -n ${sample_id}.multimapped.transcript.unassigned_ambiguity.no_xs_tag.bam.featureCounts.bam | samtools view | gawk -f $multi_mapper_script
 
   # If the assigned_reads.sam_body file exists then we were successfuly able to pull out further assigned reads

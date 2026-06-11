@@ -19,7 +19,7 @@ process star {
 
   script:
   """
-      STAR --runThreadN 8 \
+      STAR --runThreadN ${task.cpus} \
         --genomeDir ${index} \
         --readFilesIn ${r1} \
         --outFileNamePrefix ${sample_id}_ \

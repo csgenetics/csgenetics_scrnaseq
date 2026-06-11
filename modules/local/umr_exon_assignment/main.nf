@@ -21,7 +21,7 @@ process umr_exon_assignment {
   samtools view -h ${sample_id}.UMRs.transcript.unassigned_ambiguity.bam | sed 's/\\tXS\\:Z\\:[^\\t]*//' | samtools view -h -b > ${sample_id}.UMRs.transcript.unassigned_ambiguity.no_xs_tag.bam
 
   # Do exon tie-breaking and filter to those that are assigned.
-  featureCounts -a $gtf -o ${sample_id}.UMRs.exon.assigned.txt -R BAM ${sample_id}.UMRs.transcript.unassigned_ambiguity.no_xs_tag.bam -T 4 -t exon -g gene_id --fracOverlap 0.5 --extraAttributes gene_name -s 1
+  featureCounts -a $gtf -o ${sample_id}.UMRs.exon.assigned.txt -R BAM ${sample_id}.UMRs.transcript.unassigned_ambiguity.no_xs_tag.bam -T ${task.cpus} -t exon -g gene_id --fracOverlap 0.5 --extraAttributes gene_name -s 1
   samtools view -h -b -e '[XN]==1 && [XT] && [XS]=="Assigned"' -b ${sample_id}.UMRs.transcript.unassigned_ambiguity.no_xs_tag.bam.featureCounts.bam > ${sample_id}.UMRs.exon.assigned.bam
   """
 }
