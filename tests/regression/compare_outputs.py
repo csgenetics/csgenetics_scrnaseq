@@ -15,8 +15,19 @@ Design principles (see CLAUDE.md):
 
 Usage:
     python3 compare_outputs.py <dir_a> <dir_b> [--json OUT] [--max-diffs N]
+                               [--envelope-max-flips N]
 
 Stdlib only, plus an OPTIONAL guarded `anndata` import for .h5ad files.
+
+Envelope mode (--envelope-max-flips N): the pipeline has one irreducible
+non-determinism. A tiny number of multimapped reads are genuinely ambiguous
+between two genes, so a read can move between two genes for the SAME barcode
+run-to-run. This flips two count-matrix entries but leaves the per-barcode
+column total unchanged (net-preserving). Envelope mode PASSES a count-matrix
+(MTX/H5AD) difference -- with the distinct verdict ENVELOPE_OK -- IFF the
+per-column (per-barcode) sums are identical AND the number of differing entries
+is within N. Every other class stays strict byte-exact; envelope mode never
+relaxes them. A per-column-sum change is a real regression and always DIFFERs.
 """
 
 import argparse
@@ -34,10 +45,14 @@ import sys
 # ----------------------------------------------------------------------------
 
 EQUAL = "EQUAL"
+ENVELOPE_OK = "ENVELOPE_OK"  # passing: count-matrix diff inside the ambiguity envelope
 DIFFER = "DIFFER"
 SKIP = "SKIP"
 PRESENT = "PRESENT"
 MISSING = "MISSING"  # used only for FILE_SET_MISMATCH rows
+
+# Verdicts that pass (never drive a nonzero exit).
+PASSING_VERDICTS = {EQUAL, ENVELOPE_OK, SKIP, PRESENT}
 
 # Classes whose DIFFER verdict is a real failure (must drive nonzero exit).
 EXACT_CLASSES = {
@@ -283,7 +298,23 @@ def _parse_mtx(path):
     return dims, triplets
 
 
-def _compare_mtx(path_a, path_b, max_diffs):
+def _mtx_column_sums(triplets):
+    """Map column index -> summed value over all rows, from MatrixMarket triplets.
+
+    Each triplet is "row col value". In this pipeline's mtx the matrix is
+    genes-by-barcodes (rows=genes, cols=barcodes), so the per-COLUMN sum is the
+    per-barcode total -- the quantity the ambiguity envelope must preserve.
+    """
+    from collections import defaultdict
+
+    sums = defaultdict(float)
+    for line in triplets:
+        row, col, val = line.split()
+        sums[int(col)] += float(val)
+    return dict(sums)
+
+
+def _compare_mtx(path_a, path_b, max_diffs, envelope_max_flips=None):
     dims_a, trip_a = _parse_mtx(path_a)
     dims_b, trip_b = _parse_mtx(path_b)
 
@@ -301,6 +332,7 @@ def _compare_mtx(path_a, path_b, max_diffs):
     cb = Counter(trip_b)
     only_a = sorted((ca - cb).elements())
     only_b = sorted((cb - ca).elements())
+    n_diff_entries = max(len(only_a), len(only_b))
 
     diffs = []
     for line in only_a:
@@ -312,11 +344,36 @@ def _compare_mtx(path_a, path_b, max_diffs):
             diffs.append({"side": "b", "triplet": line})
             if len(diffs) >= max_diffs:
                 break
-    return DIFFER, {
+
+    detail = {
         "n_only_a": len(only_a),
         "n_only_b": len(only_b),
         "diffs": diffs,
     }
+
+    if envelope_max_flips is None:
+        return DIFFER, detail
+
+    # Envelope mode: a difference passes IFF per-column (per-barcode) sums are
+    # identical AND the differing-entry count is within the flip budget. A
+    # column-sum change is a real regression -> always DIFFER regardless of N.
+    sums_a = _mtx_column_sums(trip_a)
+    sums_b = _mtx_column_sums(trip_b)
+    diff_cols = sorted(
+        c for c in (set(sums_a) | set(sums_b))
+        if sums_a.get(c, 0.0) != sums_b.get(c, 0.0)
+    )
+    col_sums_preserved = not diff_cols
+    detail.update({
+        "n_diff_cols": len(diff_cols),
+        "n_diff_entries": n_diff_entries,
+        "col_sums_preserved": col_sums_preserved,
+        "envelope_max_flips": envelope_max_flips,
+    })
+
+    if col_sums_preserved and n_diff_entries <= envelope_max_flips:
+        return ENVELOPE_OK, detail
+    return DIFFER, detail
 
 
 # ----------------------------------------------------------------------------
@@ -353,7 +410,7 @@ def _h5ad_signature(path):
     }
 
 
-def _compare_h5ad(path_a, path_b, max_diffs):
+def _compare_h5ad(path_a, path_b, max_diffs, envelope_max_flips=None):
     if not _HAVE_ANNDATA:
         return SKIP, {"warn": "anndata not importable; .h5ad comparison skipped"}
     sig_a = _h5ad_signature(path_a)
@@ -382,7 +439,68 @@ def _compare_h5ad(path_a, path_b, max_diffs):
 
     if not mismatches:
         return EQUAL, {"shape": list(sig_a["shape"]), "nnz": sig_a["nnz"]}
-    return DIFFER, {"mismatches": mismatches}
+
+    if envelope_max_flips is None:
+        return DIFFER, {"mismatches": mismatches}
+
+    # Envelope mode. adata.X is obs(barcodes)-by-var(genes) -- the TRANSPOSE of
+    # the mtx (genes-by-barcodes). So the per-barcode total == the per-OBS sum
+    # (sum over var, axis=1); that is the "column sum" / per-barcode invariant
+    # the ambiguity envelope must preserve. The envelope only applies when the
+    # difference is confined to X entries: any shape / name-axis mismatch is a
+    # structural regression that always DIFFERs.
+    structural = {k: v for k, v in mismatches.items() if k != "X_entries"}
+    if structural:
+        return DIFFER, {"mismatches": mismatches}
+
+    ok, env_detail = _h5ad_envelope_check(
+        path_a, path_b, sig_a, sig_b, envelope_max_flips
+    )
+    detail = {"mismatches": mismatches}
+    detail.update(env_detail)
+    return (ENVELOPE_OK if ok else DIFFER), detail
+
+
+def _h5ad_envelope_check(path_a, path_b, sig_a, sig_b, envelope_max_flips):
+    """Decide whether the X difference is inside the ambiguity envelope.
+
+    Returns (passes, detail). Passes IFF per-barcode (per-obs) sums are identical
+    AND the differing-entry count is within the flip budget.
+    """
+    import numpy as np
+
+    # Differing X entries: symmetric difference of the (i,j,value) multisets,
+    # counted as max(only_in_a, only_in_b). Entries are already sorted tuples.
+    from collections import Counter
+
+    ca = Counter(sig_a["entries"])
+    cb = Counter(sig_b["entries"])
+    n_only_a = sum((ca - cb).values())
+    n_only_b = sum((cb - ca).values())
+    n_diff_entries = max(n_only_a, n_only_b)
+
+    # Per-obs (per-barcode) sums = sum over var (axis=1).
+    adata_a = _anndata.read_h5ad(path_a)
+    adata_b = _anndata.read_h5ad(path_b)
+    sums_a = np.asarray(adata_a.X.sum(axis=1)).ravel()
+    sums_b = np.asarray(adata_b.X.sum(axis=1)).ravel()
+    col_sums_preserved = (
+        sums_a.shape == sums_b.shape and np.array_equal(sums_a, sums_b)
+    )
+    n_diff_cols = (
+        int(np.count_nonzero(sums_a != sums_b))
+        if sums_a.shape == sums_b.shape
+        else max(len(sums_a), len(sums_b))
+    )
+
+    detail = {
+        "n_diff_cols": n_diff_cols,
+        "n_diff_entries": n_diff_entries,
+        "col_sums_preserved": col_sums_preserved,
+        "envelope_max_flips": envelope_max_flips,
+    }
+    passes = col_sums_preserved and n_diff_entries <= envelope_max_flips
+    return passes, detail
 
 
 # ----------------------------------------------------------------------------
@@ -449,7 +567,14 @@ _COMPARATORS = {
 }
 
 
-def compare_file(cls, path_a, path_b, max_diffs):
+# Classes whose comparator accepts the envelope flip budget. Every other class
+# stays strict byte-exact; the envelope must NOT relax them.
+_ENVELOPE_CLASSES = {"MTX", "H5AD"}
+
+
+def compare_file(cls, path_a, path_b, max_diffs, envelope_max_flips=None):
+    if cls in _ENVELOPE_CLASSES:
+        return _COMPARATORS[cls](path_a, path_b, max_diffs, envelope_max_flips)
     return _COMPARATORS[cls](path_a, path_b, max_diffs)
 
 
@@ -470,7 +595,7 @@ def list_relfiles(root):
 # Driver
 # ----------------------------------------------------------------------------
 
-def run(dir_a, dir_b, max_diffs):
+def run(dir_a, dir_b, max_diffs, envelope_max_flips=None):
     files_a = list_relfiles(dir_a)
     files_b = list_relfiles(dir_b)
 
@@ -495,7 +620,8 @@ def run(dir_a, dir_b, max_diffs):
     for rel in paired:
         cls = classify(rel)
         verdict, detail = compare_file(
-            cls, os.path.join(dir_a, rel), os.path.join(dir_b, rel), max_diffs
+            cls, os.path.join(dir_a, rel), os.path.join(dir_b, rel),
+            max_diffs, envelope_max_flips,
         )
         results.append({
             "path": rel, "class": cls, "verdict": verdict, "detail": detail,
@@ -503,7 +629,9 @@ def run(dir_a, dir_b, max_diffs):
 
     results.sort(key=lambda r: r["path"])
 
-    # Failure = any FILE_SET_MISMATCH or any DIFFER in an exact class.
+    # Failure = any FILE_SET_MISMATCH or any DIFFER in an exact class. A passing
+    # verdict (EQUAL/ENVELOPE_OK/SKIP/PRESENT) never fails; ENVELOPE_OK is the
+    # envelope mode's passing verdict for an in-envelope count-matrix diff.
     failed = file_set_mismatch
     for r in results:
         if r["verdict"] == DIFFER and r["class"] in EXACT_CLASSES:
@@ -514,6 +642,7 @@ def run(dir_a, dir_b, max_diffs):
         "dir_b": os.path.abspath(dir_b),
         "anndata_available": _HAVE_ANNDATA,
         "samtools_available": _HAVE_SAMTOOLS,
+        "envelope_max_flips": envelope_max_flips,
         "file_set_mismatch": file_set_mismatch,
         "counts": _count_verdicts(results),
         "n_files_a": len(files_a),
@@ -534,10 +663,25 @@ def _count_verdicts(results):
 # Reporting
 # ----------------------------------------------------------------------------
 
+def _format_envelope(detail):
+    """One-line envelope summary, shared by MTX and H5AD."""
+    return (
+        f"      envelope: {detail['n_diff_entries']} differing entry(ies), "
+        f"{detail['n_diff_cols']} differing column-sum(s), "
+        f"column sums preserved={detail['col_sums_preserved']}, "
+        f"max-flips={detail['envelope_max_flips']}"
+    )
+
+
 def _format_detail(r, max_diffs):
     cls = r["class"]
     detail = r["detail"]
     lines = []
+    if r["verdict"] == ENVELOPE_OK and "col_sums_preserved" in detail:
+        lines.append(_format_envelope(detail))
+        return lines
+    if cls in ("MTX", "H5AD") and r["verdict"] == DIFFER and "col_sums_preserved" in detail:
+        lines.append(_format_envelope(detail))
     if cls == "MTX" and r["verdict"] == DIFFER:
         if "dims_a" in detail:
             lines.append(f"      dims differ: a={detail['dims_a']} b={detail['dims_b']}")
@@ -568,9 +712,12 @@ def _format_detail(r, max_diffs):
 
 def print_report(results, summary, max_diffs):
     print(f"Comparing:\n  A = {summary['dir_a']}\n  B = {summary['dir_b']}")
+    emf = summary.get("envelope_max_flips")
+    mode = "strict" if emf is None else f"envelope (max-flips={emf})"
     print(
         f"  anndata={'yes' if summary['anndata_available'] else 'no'}  "
-        f"samtools={'yes' if summary['samtools_available'] else 'no'}"
+        f"samtools={'yes' if summary['samtools_available'] else 'no'}  "
+        f"mode={mode}"
     )
     print("-" * 78)
     pathw = max((len(r["path"]) for r in results), default=4)
@@ -599,13 +746,24 @@ def main(argv=None):
                         help="write the full result set as JSON to this path")
     parser.add_argument("--max-diffs", type=int, default=10,
                         help="max differing lines/triplets to report per file")
+    parser.add_argument("--envelope-max-flips", type=int, default=None,
+                        help="enable count-matrix envelope mode: PASS (ENVELOPE_OK) "
+                             "an MTX/H5AD diff iff per-barcode column sums are "
+                             "identical and the differing-entry count is <= this "
+                             "budget. Default (unset) keeps strict byte-exact mode. "
+                             "All other classes stay strict regardless.")
     args = parser.parse_args(argv)
 
     for d in (args.dir_a, args.dir_b):
         if not os.path.isdir(d):
             parser.error(f"not a directory: {d}")
 
-    results, summary, failed = run(args.dir_a, args.dir_b, args.max_diffs)
+    if args.envelope_max_flips is not None and args.envelope_max_flips < 0:
+        parser.error("--envelope-max-flips must be >= 0")
+
+    results, summary, failed = run(
+        args.dir_a, args.dir_b, args.max_diffs, args.envelope_max_flips
+    )
     print_report(results, summary, args.max_diffs)
 
     if args.json_out:

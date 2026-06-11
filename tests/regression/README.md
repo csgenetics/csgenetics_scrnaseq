@@ -9,7 +9,8 @@ code.
 ## Usage
 
 ```bash
-python3 compare_outputs.py <dir_a> <dir_b> [--json OUT] [--max-diffs N]
+python3 compare_outputs.py <dir_a> <dir_b> [--json OUT] [--max-diffs N] \
+                           [--envelope-max-flips N]
 ```
 
 - `<dir_a>`, `<dir_b>` — the two output directories to compare.
@@ -17,6 +18,9 @@ python3 compare_outputs.py <dir_a> <dir_b> [--json OUT] [--max-diffs N]
   as JSON to `OUT`.
 - `--max-diffs N` — cap on the number of differing lines/triplets/keys reported
   per file (default 10). It only bounds the *report*, never the verdict.
+- `--envelope-max-flips N` — enable **envelope mode** for the count matrices
+  (`MTX`, `H5AD`). Unset (default) = strict byte-exact mode. See
+  [Envelope mode](#envelope-mode-the-count-matrix-ambiguity).
 
 Exit code is `0` when equivalent, `1` when any failure is detected.
 
@@ -64,11 +68,56 @@ normalised away; everything else is compared exactly.
 - **`HTML`** — Class D presentation artefacts; their content is not part of the
   numeric contract, so only presence and non-emptiness are checked.
 
+## Envelope mode (the count-matrix ambiguity)
+
+The pipeline has one irreducible non-determinism. A tiny number of multimapped
+reads are genuinely ambiguous between two genes, so a read can move between two
+genes **for the same barcode** from one run to the next. This flips two
+count-matrix entries but leaves the **per-barcode column total unchanged** — it
+is *net-preserving*. The customer metrics CSVs (`*.metrics.csv`,
+`multisample_out.csv`, RSeQC) stay byte-stable; only the raw count matrix
+(`matrix.mtx.gz` and its `.h5ad` twin) differs.
+
+`--envelope-max-flips N` turns on envelope mode for the `MTX` and `H5AD` classes
+**only**. A count-matrix difference then passes with the distinct verdict
+`ENVELOPE_OK` **iff all three** hold:
+
+1. the dims header / `X` shape is identical;
+2. **every per-column (per-barcode) sum is identical** between A and B; and
+3. the number of differing `(row,col,value)` entries — the symmetric difference
+   of the triplet multisets, counted as `max(only_in_a, only_in_b)` — is `<= N`.
+
+Otherwise the verdict is `DIFFER` (fail). In particular, **a per-column-sum
+change is always a `DIFFER`/FAIL regardless of `N`**: that is a real regression,
+not the ambiguity envelope, because it changes a per-barcode total.
+
+The **column-sum-preservation invariant** is the heart of the envelope: the
+envelope only ever forgives differences that move counts *between genes within a
+barcode*, never differences that change *how many counts a barcode has*.
+
+Scope of relaxation: envelope mode relaxes **nothing else**. `TEXT_EXACT`
+(metrics / multisample / RSeQC), `DEDUP_LOG`, `CONFIG`, `GZ_TEXT_EXACT`
+(barcodes / features), `BINARY_EXACT` and `BAM` all stay strict byte-exact.
+
+### Orientation: which axis is the barcode?
+
+In `matrix.mtx.gz` the matrix is **genes-by-barcodes** (rows = genes, columns =
+barcodes), so the per-column sum is the per-barcode total — summed over rows.
+
+In the `.h5ad`, `adata.X` is the **transpose**: `obs`-by-`var` =
+**barcodes-by-genes** (rows/`obs` = barcodes, columns/`var` = genes). To keep
+the same "per-barcode total" semantics, the h5ad envelope sums `X` over `var`
+(`axis=1`), i.e. per-`obs` sums. This is verified against the mtx dims so the
+two classes test the identical invariant.
+
 ## Verdicts
 
-`EQUAL`, `DIFFER`, `SKIP`, `PRESENT`, `MISSING` (the last only on
+`EQUAL`, `ENVELOPE_OK`, `DIFFER`, `SKIP`, `PRESENT`, `MISSING` (the last only on
 `FILE_SET_MISMATCH` rows). Only `DIFFER` in an exact class, or any
-`FILE_SET_MISMATCH`, causes a nonzero exit. `SKIP` and `PRESENT` never fail.
+`FILE_SET_MISMATCH`, causes a nonzero exit. `EQUAL`, `ENVELOPE_OK`, `SKIP` and
+`PRESENT` all pass. `ENVELOPE_OK` appears only when `--envelope-max-flips` is
+set and is distinct from `EQUAL`: it records that a count-matrix difference was
+*within* the characterised ambiguity envelope, not that the files were equal.
 
 ## Determinism probe
 
