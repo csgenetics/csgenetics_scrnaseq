@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1" name="viewport"/>
+  <title>CS Genetics scRNA-seq report</title>
+
+  <!-- Offline-safe: all assets are inlined from locally vendored files. -->
+  <style>{{ assets.bootstrap_css | safe }}</style>
+  <style>{{ assets.bootstrap_icons_css | safe }}</style>
+  <style>{{ assets.lexend_css | safe }}</style>
+
+  <style>
+    :root {
+      --cs-green: #36BA00;
+      --cs-green-dark: #2c9a00;
+      --cs-blue: #257FC1;
+      --cs-teal: #34BBCF;
+      --cs-ink: #1c2b22;
+      --cs-muted: #6b7d72;
+      --cs-bg: #f6f8f6;
+      --cs-card-border: #e6ece7;
+    }
+
+    body {
+      font-family: 'Lexend', system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: var(--cs-ink);
+      background-color: var(--cs-bg);
+      margin: 0;
+    }
+
+    /* ---- Sticky top navigation ---- */
+    .cs-navbar {
+      position: sticky;
+      top: 0;
+      z-index: 1030;
+      background: #ffffff;
+      border-bottom: 3px solid var(--cs-green);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .cs-navbar .navbar-brand img { height: 34px; }
+    .cs-navbar .nav-link {
+      color: var(--cs-ink);
+      font-weight: 500;
+      font-size: 0.95rem;
+    }
+    .cs-navbar .nav-link:hover { color: var(--cs-green-dark); }
+
+    /* ---- Section scaffolding ---- */
+    .cs-section { scroll-margin-top: 90px; padding-top: 0.5rem; }
+    .cs-section-title {
+      font-weight: 700;
+      font-size: 1.5rem;
+      color: var(--cs-ink);
+      border-left: 5px solid var(--cs-green);
+      padding-left: 0.75rem;
+      margin: 1.75rem 0 1rem 0;
+    }
+    .cs-group-title {
+      font-weight: 600;
+      font-size: 1.1rem;
+      color: var(--cs-ink);
+      margin-bottom: 0.75rem;
+    }
+
+    /* ---- Cards ---- */
+    .cs-card {
+      background: #ffffff;
+      border: 1px solid var(--cs-card-border);
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+      margin-bottom: 1.25rem;
+    }
+    .cs-card .card-body { padding: 1.25rem 1.5rem; }
+
+    /* ---- Headline metric cards ---- */
+    .cs-headline {
+      background: #ffffff;
+      border: 1px solid var(--cs-card-border);
+      border-top: 4px solid var(--cs-green);
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+      height: 100%;
+      padding: 1.1rem 1.25rem;
+    }
+    .cs-headline .value {
+      font-size: 1.9rem;
+      font-weight: 700;
+      color: var(--cs-green-dark);
+      line-height: 1.1;
+    }
+    .cs-headline .label {
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--cs-muted);
+      margin-top: 0.35rem;
+    }
+
+    /* ---- Metric tables ---- */
+    .cs-metric-table { width: 100%; font-size: 0.9rem; margin-bottom: 0; }
+    .cs-metric-table th {
+      font-weight: 500;
+      color: var(--cs-ink);
+      padding: 0.45rem 0.5rem;
+      border-bottom: 1px solid var(--cs-card-border);
+      text-align: left;
+    }
+    .cs-metric-table td {
+      color: var(--cs-ink);
+      font-weight: 600;
+      text-align: right;
+      padding: 0.45rem 0.5rem;
+      border-bottom: 1px solid var(--cs-card-border);
+      white-space: nowrap;
+    }
+    .cs-info { color: var(--cs-muted); font-size: 0.85rem; cursor: help; }
+
+    /* ---- Sample searchable dropdown ---- */
+    .cs-sample-picker {
+      position: relative;
+      max-width: 420px;
+      margin-bottom: 0.5rem;
+    }
+    .cs-sample-picker-input {
+      width: 100%;
+      padding: 0.55rem 2.25rem 0.55rem 0.85rem;
+      font-family: inherit;
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: var(--cs-ink);
+      background: #ffffff;
+      border: 1px solid var(--cs-card-border);
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .cs-sample-picker-input:focus {
+      outline: none;
+      border-color: var(--cs-green);
+      box-shadow: 0 0 0 0.15rem rgba(54,186,0,0.25);
+    }
+    .cs-sample-picker::after {
+      content: "";
+      position: absolute;
+      right: 0.9rem;
+      top: 50%;
+      width: 0.5rem;
+      height: 0.5rem;
+      border-right: 2px solid var(--cs-muted);
+      border-bottom: 2px solid var(--cs-muted);
+      transform: translateY(-70%) rotate(45deg);
+      pointer-events: none;
+    }
+    .cs-sample-menu {
+      position: absolute;
+      z-index: 1040;
+      left: 0;
+      right: 0;
+      margin-top: 0.25rem;
+      max-height: 280px;
+      overflow-y: auto;
+      background: #ffffff;
+      border: 1px solid var(--cs-card-border);
+      border-radius: 8px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+      display: none;
+    }
+    .cs-sample-menu.open { display: block; }
+    .cs-sample-option {
+      padding: 0.5rem 0.85rem;
+      font-size: 0.92rem;
+      color: var(--cs-ink);
+      cursor: pointer;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .cs-sample-option:hover,
+    .cs-sample-option.cs-active {
+      background: var(--cs-bg);
+      color: var(--cs-green-dark);
+      font-weight: 600;
+    }
+    .cs-sample-option.cs-hidden { display: none; }
+    .cs-sample-noresult {
+      padding: 0.5rem 0.85rem;
+      font-size: 0.9rem;
+      color: var(--cs-muted);
+      display: none;
+    }
+
+    /* Per-sample panes: exactly one visible at a time. */
+    .cs-sample-pane { display: none; }
+    .cs-sample-pane.cs-show { display: block; }
+
+    /* ---- Cross-sample table ---- */
+    .cs-xsample-wrap { overflow-x: auto; max-height: 75vh; overflow-y: auto; }
+    .cs-xsample-table { font-size: 0.85rem; border-collapse: separate; border-spacing: 0; }
+    .cs-xsample-table th, .cs-xsample-table td {
+      padding: 0.4rem 0.7rem;
+      border-bottom: 1px solid var(--cs-card-border);
+      white-space: nowrap;
+    }
+    .cs-xsample-table thead th {
+      position: sticky; top: 0;
+      background: var(--cs-ink);
+      color: #fff;
+      z-index: 2;
+    }
+    .cs-xsample-table thead th a { color: #cdeac0; text-decoration: none; }
+    .cs-xsample-table th:first-child, .cs-xsample-table td:first-child {
+      position: sticky; left: 0;
+      background: #ffffff;
+      z-index: 1;
+      text-align: left;
+    }
+    .cs-xsample-table thead th:first-child { background: var(--cs-ink); z-index: 3; }
+    .cs-xsample-table .group-row th {
+      background: var(--cs-bg);
+      color: var(--cs-green-dark);
+      font-weight: 700;
+      font-size: 0.95rem;
+    }
+    .cs-xsample-table td { text-align: right; }
+
+    .tooltip { font-size: 0.8rem; }
+    .accordion-button:not(.collapsed) { color: #000; background-color: #fff; }
+    .accordion-button:focus { box-shadow: 0 0 0 0.15rem rgba(54,186,0,0.25); }
+
+    .cs-footer { color: var(--cs-muted); font-size: 0.85rem; padding: 2rem 0 1rem; }
+    .plot-wrap { width: 100%; overflow-x: auto; }
+  </style>
+</head>
+<body>
+
+  <!-- ===================== STICKY TOP NAV ===================== -->
+  <nav class="cs-navbar navbar navbar-expand-lg">
+    <div class="container-fluid px-4">
+      <a class="navbar-brand" href="#overview">
+        <img alt="CS Genetics" src="{{ assets.logo_data_uri }}"/>
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#csNav"
+              aria-controls="csNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="csNav">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item"><a class="nav-link" href="#overview">Overview</a></li>
+          <li class="nav-item"><a class="nav-link" href="#per-sample">Per-sample</a></li>
+          <li class="nav-item"><a class="nav-link" href="#experiment">Experiment summary</a></li>
+          <li class="nav-item"><a class="nav-link" href="#cross-sample">Cross-sample table</a></li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container-xl px-4">
+
+    <!-- ===================== OVERVIEW ===================== -->
+    <section id="overview" class="cs-section">
+      <h1 class="cs-section-title">Experiment overview</h1>
+      <p class="text-muted mb-3">
+        Single-cell RNA-seq report for <strong>{{ overview.n_samples }}</strong>
+        sample{{ 's' if overview.n_samples != 1 else '' }}
+        ({{ 'mixed-species' if mixed else 'single-species' }}).
+      </p>
+
+      {% if samples|length == 1 %}
+        {% set s0 = samples[0] %}
+        <div class="row g-3">
+          {% for key, group in overview.headline_keys %}
+            {% set tup = s0.metrics_dict.get(group, {}).get(key) %}
+            {% if tup %}
+              <div class="col-12 col-md-4">
+                <div class="cs-headline">
+                  <div class="value">{{ tup[1] }}</div>
+                  <div class="label">
+                    {{ tup[0] }}
+                    <i class="bi bi-info-circle cs-info" data-bs-toggle="tooltip" data-bs-title="{{ tup[2] }}"></i>
+                  </div>
+                </div>
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="text-muted">
+          Select a sample below to view its headline metrics, or jump to the
+          <a href="#experiment">experiment summary</a> for cross-sample distributions.
+        </p>
+      {% endif %}
+    </section>
+
+    <!-- ===================== PER-SAMPLE ===================== -->
+    <section id="per-sample" class="cs-section">
+      <h1 class="cs-section-title">Per-sample metrics</h1>
+
+      <!-- Sample selector: offline, self-contained searchable dropdown. -->
+      <div class="cs-sample-picker" id="samplePicker">
+        <input type="text" class="cs-sample-picker-input" id="samplePickerInput"
+               autocomplete="off" spellcheck="false"
+               placeholder="Search samples..." aria-label="Search and select a sample"
+               aria-expanded="false" role="combobox" aria-controls="samplePickerMenu"/>
+        <div class="cs-sample-menu" id="samplePickerMenu" role="listbox">
+          {% for s in samples %}
+            <div class="cs-sample-option {{ 'cs-active' if loop.first else '' }}"
+                 role="option" data-sample-index="{{ loop.index }}"
+                 data-sample-id="{{ s.sample_id }}"
+                 aria-selected="{{ 'true' if loop.first else 'false' }}">{{ s.sample_id }}</div>
+          {% endfor %}
+          <div class="cs-sample-noresult" id="samplePickerNoResult">No matching samples</div>
+        </div>
+      </div>
+
+      <div class="pt-3" id="samplePanesContent">
+        {% for s in samples %}
+        <div class="cs-sample-pane {{ 'cs-show' if loop.first else '' }}"
+             id="sample-pane-{{ loop.index }}" data-sample-id="{{ s.sample_id }}">
+
+          <!-- Headline cards -->
+          <div class="row g-3 mb-2">
+            {% for key, group in overview.headline_keys %}
+              {% set tup = s.metrics_dict.get(group, {}).get(key) %}
+              {% if tup %}
+                <div class="col-12 col-md-4">
+                  <div class="cs-headline">
+                    <div class="value">{{ tup[1] }}</div>
+                    <div class="label">
+                      {{ tup[0] }}
+                      <i class="bi bi-info-circle cs-info" data-bs-toggle="tooltip" data-bs-title="{{ tup[2] }}"></i>
+                    </div>
+                  </div>
+                </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+
+          <div class="row">
+            <!-- Left column: Read QC, Deduplication, cell-caller, qc-cascade -->
+            <div class="col-12 col-lg-6">
+              {% for grp in ["Read QC", "Deduplication"] %}
+                {% if s.metrics_dict.get(grp) %}
+                <div class="cs-card">
+                  <div class="card-body">
+                    <div class="cs-group-title">{{ grp }}</div>
+                    <table class="cs-metric-table">
+                      <tbody>
+                        {% for var_name, tup in s.metrics_dict[grp].items() %}
+                          <tr>
+                            <th>{{ tup[0] }}
+                              <i class="bi bi-info-circle cs-info" data-bs-toggle="tooltip" data-bs-title="{{ tup[2] }}"></i>
+                            </th>
+                            <td>{{ tup[1] }}</td>
+                          </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                {% endif %}
+              {% endfor %}
+
+              {% if s.show_cell_plot %}
+              <div class="cs-card">
+                <div class="card-body">
+                  <div class="cs-group-title">Cell Caller</div>
+                  <div class="plot-wrap">{{ s.cell_plot | safe }}</div>
+                </div>
+              </div>
+              {% endif %}
+
+              {% if s.show_qc_cascade %}
+              <div class="cs-card">
+                <div class="card-body">
+                  <div class="cs-group-title">QC Cascade
+                    <i class="bi bi-info-circle cs-info" data-bs-toggle="tooltip"
+                       data-bs-title="Visualization showing read retention and loss at each QC processing step. Green bars show reads retained; gray bars show reads removed."></i>
+                  </div>
+                  <div class="plot-wrap">{{ s.qc_cascade | safe }}</div>
+                </div>
+              </div>
+              {% endif %}
+            </div>
+
+            <!-- Right column: Cell metrics (+ barnyard for mixed) -->
+            <div class="col-12 col-lg-6">
+              <div class="cs-card">
+                <div class="card-body">
+                  <div class="cs-group-title">Cell metrics</div>
+
+                  {% if mixed %}
+                    <div class="accordion accordion-flush" id="cellAccordion-{{ loop.index }}">
+                      {% for cell_stat_cat, tip_ids in cell_stat_cat_dict.items() %}
+                        {% set hdr_id = tip_ids[1] ~ "-" ~ loop.index %}
+                        {% set col_id = tip_ids[2] ~ "-" ~ loop.index %}
+                        {% if s.metrics_dict.get(cell_stat_cat) %}
+                        <div class="accordion-item">
+                          <h2 class="accordion-header" id="{{ hdr_id }}">
+                            <button class="accordion-button collapsed" type="button"
+                                    data-bs-toggle="collapse" data-bs-target="#{{ col_id }}"
+                                    aria-expanded="false" aria-controls="{{ col_id }}">
+                              {{ s.metrics_dict[cell_stat_cat].get(cell_stat_cat + "_total", ["", "", ""])[0] }}
+                              <i class="bi bi-info-circle cs-info ms-1" data-bs-toggle="tooltip" data-bs-title="{{ tip_ids[0] }}"></i>
+                            </button>
+                          </h2>
+                          <div id="{{ col_id }}" class="accordion-collapse collapse"
+                               aria-labelledby="{{ hdr_id }}" data-bs-parent="#cellAccordion-{{ loop.index }}">
+                            <div class="accordion-body">
+                              <table class="cs-metric-table">
+                                <tbody>
+                                  {% for var_name, tup in s.metrics_dict[cell_stat_cat].items() %}
+                                    <tr><th>{{ tup[0] }}</th><td>{{ tup[1] }}</td></tr>
+                                  {% endfor %}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        </div>
+                        {% endif %}
+                      {% endfor %}
+                    </div>
+                  {% else %}
+                    <table class="cs-metric-table">
+                      <tbody>
+                        {% for var_name, tup in s.metrics_dict.get("Cell metrics", {}).items() %}
+                          <tr>
+                            <th>{{ tup[0] }}
+                              <i class="bi bi-info-circle cs-info" data-bs-toggle="tooltip" data-bs-title="{{ tup[2] }}"></i>
+                            </th>
+                            <td>{{ tup[1] }}</td>
+                          </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  {% endif %}
+                </div>
+              </div>
+
+              {% if s.show_barnyard %}
+              <div class="cs-card">
+                <div class="card-body">
+                  <div class="cs-group-title">Barnyard plot</div>
+                  <div class="plot-wrap">{{ s.barnyard | safe }}</div>
+                </div>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <!-- ===================== EXPERIMENT SUMMARY ===================== -->
+    <section id="experiment" class="cs-section">
+      <h1 class="cs-section-title">Experiment summary</h1>
+
+      {% if summary_plot %}
+      <div class="cs-card">
+        <div class="card-body">
+          <div class="cs-group-title">Key metric distributions across samples</div>
+          <div class="plot-wrap">{{ summary_plot | safe }}</div>
+        </div>
+      </div>
+      {% endif %}
+
+      {% if multi_qc_cascade %}
+      <div class="cs-card">
+        <div class="card-body">
+          <div class="cs-group-title">QC Cascade across samples
+            <i class="bi bi-info-circle cs-info" data-bs-toggle="tooltip"
+               data-bs-title="Box plots showing distribution of reads retained at each QC step across all samples. Helps identify samples with unusual QC patterns."></i>
+          </div>
+          <div class="plot-wrap">{{ multi_qc_cascade | safe }}</div>
+        </div>
+      </div>
+      {% endif %}
+    </section>
+
+    <!-- ===================== CROSS-SAMPLE TABLE ===================== -->
+    <section id="cross-sample" class="cs-section">
+      <h1 class="cs-section-title">Cross-sample metrics table</h1>
+      <div class="cs-card">
+        <div class="card-body">
+          <div class="cs-xsample-wrap">
+            <table class="cs-xsample-table">
+              <thead>
+                <tr>
+                  <th></th>
+                  {% for sample in sample_name_list %}
+                    <th><a href="#per-sample" onclick="csActivateSample('{{ sample }}'); return true;">{{ sample }}</a></th>
+                  {% endfor %}
+                </tr>
+              </thead>
+              <tbody>
+                {% if mixed %}
+                  {% set ordered_groups = ["Read QC", "Cell metrics", "Deduplication"] %}
+                {% else %}
+                  {% set ordered_groups = ["Read QC", "Cell metrics", "Deduplication"] %}
+                {% endif %}
+                {% for classification in ordered_groups %}
+                  {% if multi_metrics_dict.get(classification) %}
+                    <tr class="group-row">
+                      <th colspan="{{ sample_name_list|length + 1 }}">{{ classification }}</th>
+                    </tr>
+                    {% for metric, metric_val_list in multi_metrics_dict[classification].items() %}
+                      <tr>
+                        <th>{{ metric[1] }}
+                          <i class="bi bi-info-circle cs-info" data-bs-toggle="tooltip" data-bs-title="{{ metric[2] }}"></i>
+                        </th>
+                        {% for metric_val in metric_val_list %}
+                          <td>{{ metric_val }}</td>
+                        {% endfor %}
+                      </tr>
+                    {% endfor %}
+                  {% endif %}
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="cs-footer text-center">
+      CS Genetics single-cell RNA-seq pipeline &middot; consolidated report
+    </div>
+  </div>
+
+  <!-- Offline-safe: Plotly.js and Bootstrap JS embedded inline (no CDN). -->
+  <script>{{ assets.plotly_js | safe }}</script>
+  <script>{{ assets.bootstrap_js | safe }}</script>
+  <script>
+    // Activate Bootstrap tooltips.
+    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+    [...tooltipTriggerList].map(el => new bootstrap.Tooltip(el));
+
+    // ---- Offline, self-contained searchable sample dropdown ----
+    // A text input filters a vanilla-JS option list; selecting an option shows
+    // that sample's pane and hides all others. No external dependency.
+    (function () {
+      const picker = document.getElementById('samplePicker');
+      const input = document.getElementById('samplePickerInput');
+      const menu = document.getElementById('samplePickerMenu');
+      const noResult = document.getElementById('samplePickerNoResult');
+      if (!picker || !input || !menu) return;
+
+      const options = Array.from(menu.querySelectorAll('.cs-sample-option'));
+
+      function showPaneForIndex(index) {
+        document.querySelectorAll('.cs-sample-pane').forEach(pane => {
+          const show = pane.id === 'sample-pane-' + index;
+          pane.classList.toggle('cs-show', show);
+          // Plotly plots laid out while hidden need a resize once visible.
+          if (show && window.Plotly) {
+            pane.querySelectorAll('.js-plotly-plot').forEach(p => window.Plotly.Plots.resize(p));
+          }
+        });
+      }
+
+      function selectOption(opt) {
+        if (!opt) return;
+        options.forEach(o => {
+          const active = o === opt;
+          o.classList.toggle('cs-active', active);
+          o.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+        input.value = opt.dataset.sampleId;
+        showPaneForIndex(opt.dataset.sampleIndex);
+        closeMenu();
+      }
+
+      function openMenu() {
+        menu.classList.add('open');
+        input.setAttribute('aria-expanded', 'true');
+      }
+      function closeMenu() {
+        menu.classList.remove('open');
+        input.setAttribute('aria-expanded', 'false');
+      }
+
+      function filterOptions() {
+        const q = input.value.trim().toLowerCase();
+        let visible = 0;
+        options.forEach(o => {
+          const match = o.dataset.sampleId.toLowerCase().includes(q);
+          o.classList.toggle('cs-hidden', !match);
+          if (match) visible++;
+        });
+        if (noResult) noResult.style.display = visible === 0 ? 'block' : 'none';
+      }
+
+      // Initialise the input with the currently-selected (first) sample.
+      const initial = options.find(o => o.classList.contains('cs-active')) || options[0];
+      if (initial) input.value = initial.dataset.sampleId;
+
+      input.addEventListener('focus', () => { input.select(); openMenu(); });
+      input.addEventListener('click', () => { openMenu(); });
+      input.addEventListener('input', () => { openMenu(); filterOptions(); });
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Escape') { closeMenu(); input.blur(); }
+        else if (e.key === 'Enter') {
+          const firstVisible = options.find(o => !o.classList.contains('cs-hidden'));
+          if (firstVisible) selectOption(firstVisible);
+          e.preventDefault();
+        }
+      });
+
+      options.forEach(o => {
+        o.addEventListener('mousedown', e => { e.preventDefault(); selectOption(o); });
+      });
+
+      document.addEventListener('click', e => {
+        if (!picker.contains(e.target)) {
+          closeMenu();
+          // Restore the input text to the active selection if left mid-search.
+          const active = options.find(o => o.classList.contains('cs-active'));
+          if (active) { input.value = active.dataset.sampleId; }
+          filterOptions();
+        }
+      });
+
+      // Cross-sample table column headers select that sample in the dropdown.
+      window.csActivateSample = function (sampleId) {
+        const opt = options.find(o => o.dataset.sampleId === sampleId);
+        if (opt) selectOption(opt);
+      };
+    })();
+  </script>
+</body>
+</html>

@@ -10,8 +10,28 @@ Multi-sample mode: Box plots showing distribution of reads retained across sampl
 import argparse
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.io as pio
 from plotly.subplots import make_subplots
 import sys
+
+
+def write_plotly_fragment(fig, html_filename):
+    """
+    Write a Plotly figure as a bare HTML fragment with NO Plotly.js bundled.
+
+    These fragments are embedded into the consolidated report, which loads a
+    single inline copy of Plotly.js once. Keeping Plotly.js out of each
+    fragment keeps the consolidated report offline-safe and avoids loading
+    Plotly.js once per plot.
+    """
+    fragment = pio.to_html(
+        fig,
+        full_html=False,
+        include_plotlyjs=False,
+        config={"responsive": True, "displaylogo": False},
+    )
+    with open(html_filename, "w") as f:
+        f.write(fragment)
 
 class QCCascadePlotter:
     def __init__(self, mode, sample_id=None):
@@ -212,8 +232,8 @@ class QCCascadePlotter:
             margin=dict(l=80, r=40, t=80, b=80)
         )
 
-        # Save as HTML
-        fig.write_html(f"{self.sample_id}.qc_cascade.html", include_plotlyjs='cdn')
+        # Save as a Plotly-free fragment for embedding into the consolidated report.
+        write_plotly_fragment(fig, f"{self.sample_id}.qc_cascade.html")
         print(f"Created single-sample QC cascade plot: {self.sample_id}.qc_cascade.html")
 
     def create_multi_sample_plot(self, csv_files):
@@ -518,8 +538,8 @@ class QCCascadePlotter:
             row=2, col=1
         )
 
-        # Save as HTML
-        fig.write_html("multisample_qc_cascade.html", include_plotlyjs='cdn')
+        # Save as a Plotly-free fragment for embedding into the consolidated report.
+        write_plotly_fragment(fig, "multisample_qc_cascade.html")
         print(f"Created multi-sample QC cascade plot: multisample_qc_cascade.html")
 
 

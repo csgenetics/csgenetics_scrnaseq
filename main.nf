@@ -84,8 +84,7 @@ include { categorize_reads } from './modules/local/categorize_reads/main.nf'
 include { summary_statistics } from './modules/local/summary_statistics/main.nf'
 include { qc_cascade_plot_single } from './modules/local/qc_cascade_plot_single/main.nf'
 include { qc_cascade_plot_multi } from './modules/local/qc_cascade_plot_multi/main.nf'
-include { single_summary_report } from './modules/local/single_summary_report/main.nf'
-include { multi_sample_report } from './modules/local/multi_sample_report/main.nf'
+include { consolidated_report } from './modules/local/consolidated_report/main.nf'
 
 def order_integer_first(it){
   try{
@@ -201,9 +200,9 @@ workflow {
     barcode_correction_list = file(params.barcode_correction_list_path)
   }
 
-  // Create path objects to HTML report templates
-  single_sample_report_template = file("${baseDir}/templates/single_sample_report_template.html.jinja2")
-  multi_sample_report_template = file("${baseDir}/templates/multi_sample_report_template.html.jinja2")
+  // Create path objects to HTML report template + vendored (offline-safe) assets
+  consolidated_report_template = file("${baseDir}/templates/consolidated_report_template.html.jinja2")
+  report_vendor_dir = file("${baseDir}/assets/vendor")
   // Create empty rseqc output template path object
   empty_rseqc_template = file("${baseDir}/templates/rseqc_empty_template.txt")
   // Create feature file for count_matrix from GTF
@@ -475,25 +474,29 @@ workflow {
   // Generate summary statistics
   summary_statistics(ch_summary_statistics_in)
 
-  // Generate single-sample QC cascade plots
+  // Generate single-sample QC cascade plots (Plotly-free fragments)
   qc_cascade_plot_single(summary_statistics.out.metrics_csv)
 
-  // Join metrics CSV with cell caller plots and QC cascade plot
-  ch_summary_metrics_and_plots = summary_statistics.out.metrics_csv
-    .combine(cell_caller.out.cell_caller_plots, by: 0)
-    .combine(qc_cascade_plot_single.out.qc_cascade_plot, by: 0)
+  // Generate multi-sample QC cascade plot (Plotly-free fragment)
+  qc_cascade_plot_multi(summary_statistics.out.metrics_csv.map { it[1] }.collect())
 
-  // Generate single sample report
-  single_summary_report(ch_summary_metrics_and_plots, single_sample_report_template)
+  // Collect, flat, all per-sample inputs for the single consolidated report.
+  // Metrics csvs are also published per-sample by summary_statistics.
+  ch_all_metrics_csvs = summary_statistics.out.metrics_csv.map { it[1] }.collect()
+  // cell_caller_plots = tuple(sample_id, counts_pdf_html, barnyard_html); keep the file paths.
+  ch_all_cell_caller_plots = cell_caller.out.cell_caller_plots
+    .flatMap { sample_id, counts_pdf, barnyard -> [counts_pdf, barnyard] }
+    .collect()
+  ch_all_qc_cascade_single = qc_cascade_plot_single.out.qc_cascade_plot.map { it[1] }.collect()
 
-  // Generate multi-sample QC cascade plot
-  qc_cascade_plot_multi(single_summary_report.out.single_sample_metric_out.collect())
-
-  // Generate multi sample report
-  multi_sample_report(
-    single_summary_report.out.single_sample_metric_out.collect(),
-    multi_sample_report_template,
-    qc_cascade_plot_multi.out.qc_cascade_plot
+  // Generate the single consolidated, self-contained experiment report.
+  consolidated_report(
+    ch_all_metrics_csvs,
+    ch_all_cell_caller_plots,
+    ch_all_qc_cascade_single,
+    qc_cascade_plot_multi.out.qc_cascade_plot,
+    consolidated_report_template,
+    report_vendor_dir
   )
- 
+
 }
