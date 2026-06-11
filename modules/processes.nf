@@ -495,7 +495,7 @@ process merge_transcript_exon_multimapper_bams {
 process merge_annotated_UMRs_with_annotated_multimappers {
   tag "$sample_id"
 
-  publishDir "${params.outdir}/featureCounts", mode: 'copy', pattern: "${sample_id}.annotated.bam"
+  publishDir "${params.outdir}/featureCounts", mode: 'copy', pattern: { "${sample_id}.annotated.bam" }
 
   input:
   tuple val(sample_id), path(umr_annotated_bam), path(multimapper_annotated_bam)
@@ -530,9 +530,9 @@ process count_high_conf_annotated_umr_multimap {
 // TODO Pick up the multiqc_data.json directly and rename it in summary_statistics
 // NOTE I am going to see if we can pick this up without a double star glob.
 process single_sample_multiqc {
-  publishDir "${params.outdir}/multiqc/single_sample_multiqc/${sample_id}", mode: 'copy', pattern: "*_data"
-  publishDir "${params.outdir}/multiqc/single_sample_multiqc/${sample_id}", mode: 'copy', pattern: "*_multiqc.html"
-  publishDir "${params.outdir}/multiqc/single_sample_multiqc/${sample_id}", mode: 'copy', pattern: "**/multiqc_data.json", saveAs: {"${sample_id}.multiqc.data.json"}
+  publishDir { "${params.outdir}/multiqc/single_sample_multiqc/${sample_id}" }, mode: 'copy', pattern: "*_data"
+  publishDir { "${params.outdir}/multiqc/single_sample_multiqc/${sample_id}" }, mode: 'copy', pattern: "*_multiqc.html"
+  publishDir { "${params.outdir}/multiqc/single_sample_multiqc/${sample_id}" }, mode: 'copy', pattern: "**/multiqc_data.json", saveAs: {"${sample_id}.multiqc.data.json"}
 
   input:
   tuple val(sample_id), path(multiqc_in_files)
@@ -674,9 +674,9 @@ process io_count {
 process count_matrix {
   tag "$sample_id"
 
-  publishDir "${params.outdir}/count_matrix/raw_feature_bc_matrix/${sample_id}/", mode: 'copy', pattern: "matrix.mtx.gz"
-  publishDir "${params.outdir}/count_matrix/raw_feature_bc_matrix/${sample_id}/", mode: 'copy', pattern: "barcodes.tsv.gz"
-  publishDir "${params.outdir}/count_matrix/raw_feature_bc_matrix/${sample_id}/", mode: 'copy', pattern: "features.tsv.gz"
+  publishDir { "${params.outdir}/count_matrix/raw_feature_bc_matrix/${sample_id}/" }, mode: 'copy', pattern: "matrix.mtx.gz"
+  publishDir { "${params.outdir}/count_matrix/raw_feature_bc_matrix/${sample_id}/" }, mode: 'copy', pattern: "barcodes.tsv.gz"
+  publishDir { "${params.outdir}/count_matrix/raw_feature_bc_matrix/${sample_id}/" }, mode: 'copy', pattern: "features.tsv.gz"
 
   input:
   tuple val(sample_id), path(input_file)
@@ -708,7 +708,7 @@ process cell_caller {
   // Publish the plots; the glob pattern is used to collect the mixed species and single species plots
   // Single species are named: {self.sample_name}_pdf_with_cutoff.html
   // Mixed species are named: {self.sample_name}_hsap_pdf_with_cutoff.html and {self.sample_name}_mmus_pdf_with_cutoff.html
-  publishDir "${params.outdir}/plots", pattern: "${sample_id}*_pdf_with_cutoff.html", mode: 'copy'
+  publishDir "${params.outdir}/plots", pattern: { "${sample_id}*_pdf_with_cutoff.html" }, mode: 'copy'
 
   input:
   tuple val(sample_id), path(count_matrix_h5ad), val(manual_threshold_str)
@@ -733,11 +733,11 @@ process cell_caller {
 process filter_count_matrix{
   tag "$sample_id"
 
-  publishDir "${params.outdir}/count_matrix/filtered_feature_bc_matrix/${sample_id}/", mode: 'copy', pattern: "*.filtered_feature_bc_matrix.h5ad"
-  publishDir "${params.outdir}/count_matrix/filtered_feature_bc_matrix/${sample_id}/", mode: 'copy', pattern: "matrix.mtx.gz"
-  publishDir "${params.outdir}/count_matrix/filtered_feature_bc_matrix/${sample_id}/", mode: 'copy', pattern: "barcodes.tsv.gz"
-  publishDir "${params.outdir}/count_matrix/filtered_feature_bc_matrix/${sample_id}/", mode: 'copy', pattern: "features.tsv.gz"
-  publishDir "${params.outdir}/count_matrix/raw_feature_bc_matrix/${sample_id}/", mode: 'copy', pattern: "*.raw_feature_bc_matrix.h5ad"
+  publishDir { "${params.outdir}/count_matrix/filtered_feature_bc_matrix/${sample_id}/" }, mode: 'copy', pattern: "*.filtered_feature_bc_matrix.h5ad"
+  publishDir { "${params.outdir}/count_matrix/filtered_feature_bc_matrix/${sample_id}/" }, mode: 'copy', pattern: "matrix.mtx.gz"
+  publishDir { "${params.outdir}/count_matrix/filtered_feature_bc_matrix/${sample_id}/" }, mode: 'copy', pattern: "barcodes.tsv.gz"
+  publishDir { "${params.outdir}/count_matrix/filtered_feature_bc_matrix/${sample_id}/" }, mode: 'copy', pattern: "features.tsv.gz"
+  publishDir { "${params.outdir}/count_matrix/raw_feature_bc_matrix/${sample_id}/" }, mode: 'copy', pattern: "*.raw_feature_bc_matrix.h5ad"
 
   input:
   tuple val(sample_id), val(count_threshold), path(h5ad_raw_count_matrix)
@@ -790,7 +790,7 @@ process categorize_reads {
 process summary_statistics {
   tag "$sample_id"
 
-  publishDir "${params.outdir}/report/${sample_id}", mode: 'copy', pattern: "*.csv"
+  publishDir { "${params.outdir}/report/${sample_id}" }, mode: 'copy', pattern: "*.csv"
 
   input:
   tuple val(sample_id), val(minimum_count_threshold), path(raw_h5ad), path(antisense), path(dedup), path("${sample_id}.multiqc.data.json"), path("${sample_id}_raw_rseqc_results.txt"), path("${sample_id}_annotated_rseqc_results.txt"), path(read_categorization_csv), path(qc_log)
@@ -820,7 +820,7 @@ process summary_statistics {
 process qc_cascade_plot_single {
   tag "$sample_id"
 
-  publishDir "${params.outdir}/report/${sample_id}", mode: 'copy'
+  publishDir { "${params.outdir}/report/${sample_id}" }, mode: 'copy'
 
   input:
   tuple val(sample_id), path(metrics_csv)
@@ -863,7 +863,7 @@ process qc_cascade_plot_multi {
 process single_summary_report {
   tag "$sample_id"
 
-  publishDir "${params.outdir}/report/${sample_id}", mode: 'copy'
+  publishDir { "${params.outdir}/report/${sample_id}" }, mode: 'copy'
 
   input:
   tuple val(sample_id), path(metrics_csv), path(pdf_plot_html), path(barnyard_plot_html), path(qc_cascade_html)
