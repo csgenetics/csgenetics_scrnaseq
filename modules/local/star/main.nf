@@ -34,4 +34,10 @@ process star {
 
   """
 
+  stub:
+  """
+  touch ${sample_id}_Aligned.out.bam
+  uniquely_mapped_reads=1
+  """
+
 }

@@ -25,4 +25,9 @@ process io_count {
   samtools view -@ ${task.cpus} ${f} | awk '/XT:/ {match(\$1, /_[A-Z]+_\$/); printf substr(\$0,RSTART+1,RLENGTH-2); match(\$0, /XT:Z:[A-Za-z0-9_]+/); print "\\t" substr(\$0,RSTART+5,RLENGTH-5)}' > ${sample_id}_bcGeneSummary.txt
   """
 
+  stub:
+  """
+  touch ${sample_id}_bcGeneSummary.txt
+  """
+
 }

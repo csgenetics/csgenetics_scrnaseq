@@ -28,4 +28,9 @@ process summary_statistics {
     --qc-log ${qc_log} \
     ${mixed_flag}
   """
+
+  stub:
+  """
+  touch ${sample_id}.metrics.csv
+  """
 }

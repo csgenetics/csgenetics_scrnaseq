@@ -13,4 +13,9 @@ process merge_transcript_exon_multimapper_bams {
   """
   samtools merge -o ${sample_id}.multimapped.annotated.bam $multimapper_transcript_bam $multimapper_exon_bam
   """
+
+  stub:
+  """
+  touch ${sample_id}.multimapped.annotated.bam
+  """
 }

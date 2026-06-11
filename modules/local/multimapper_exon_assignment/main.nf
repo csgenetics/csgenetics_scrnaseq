@@ -28,4 +28,9 @@ process multimapper_exon_assignment{
     samtools view -H -b ${sample_id}.multimapped.transcript.unassigned_ambiguity.no_xs_tag.bam.featureCounts.bam > ${sample_id}.multimapped.exon.assigned.bam
   fi
   """
+
+  stub:
+  """
+  touch ${sample_id}.multimapped.exon.assigned.bam
+  """
 }

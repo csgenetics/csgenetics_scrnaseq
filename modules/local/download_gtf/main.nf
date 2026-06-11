@@ -11,4 +11,9 @@ process download_gtf {
   """
   aws s3 cp --no-sign-request ${params.gtf} .
   """
+
+  stub:
+  """
+  touch genes.gtf
+  """
 }

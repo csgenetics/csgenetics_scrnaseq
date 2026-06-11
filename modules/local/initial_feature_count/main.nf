@@ -25,4 +25,9 @@ process initial_feature_count {
     cp $bam ${sample_id}_Aligned.sortedByCoord.out.bam.featureCounts.bam
   fi
   """
+
+  stub:
+  """
+  touch ${sample_id}_Aligned.sortedByCoord.out.bam.featureCounts.bam
+  """
 }

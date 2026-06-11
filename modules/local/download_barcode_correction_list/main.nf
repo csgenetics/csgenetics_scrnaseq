@@ -13,4 +13,9 @@ process download_barcode_correction_list {
   """
   aws s3 cp --no-sign-request ${params.barcode_correction_list_path} .
   """
+
+  stub:
+  """
+  touch barcode_correction_list.tsv
+  """
 }

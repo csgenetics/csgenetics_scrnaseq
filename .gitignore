@@ -24,3 +24,7 @@ agent-secrets/
 # Claude worktrees and local settings
 .claude/worktrees/
 .claude/settings.local.json
+
+# nf-test
+.nf-test/
+.nf-test.log

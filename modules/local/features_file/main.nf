@@ -14,4 +14,9 @@ process features_file {
   """
   features_names.py ${gtf} ${gtf.baseName}_features_names.tsv
   """
+
+  stub:
+  """
+  touch ${gtf.baseName}_features_names.tsv
+  """
 }

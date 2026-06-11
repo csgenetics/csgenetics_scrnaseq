@@ -25,4 +25,9 @@ process categorize_reads {
     --barcode_length ${barcode_length} \
     ${mixed_flag}
   """
+
+  stub:
+  """
+  touch ${sample_id}.read_categorization.csv
+  """
 }

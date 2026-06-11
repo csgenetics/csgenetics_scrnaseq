@@ -20,4 +20,10 @@ process single_summary_report {
   """
   create_single_sample_report.py $sample_id $pdf_plot_html $barnyard_plot_html $qc_cascade_html $metrics_csv $html_template ${params.mixed_species}
   """
+
+  stub:
+  """
+  touch ${sample_id}_report.html
+  touch ${sample_id}.metrics.csv
+  """
 }

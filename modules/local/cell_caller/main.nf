@@ -27,4 +27,12 @@ process cell_caller {
   """
   cell_caller.py --sample_name ${sample_id} --minimum_count_threshold ${params.minimum_count_threshold} --count_matrix ${count_matrix_h5ad} --single_species ${!params.mixed_species} --manual_threshold_str $manual_threshold_str
   """
+
+  stub:
+  """
+  touch ${sample_id}_counts_pdf_with_threshold.html
+  touch ${sample_id}_barnyard_plot.html
+  touch ${sample_id}_pdf_with_cutoff.html
+  echo "100"
+  """
 }

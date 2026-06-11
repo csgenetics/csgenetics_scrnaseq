@@ -14,4 +14,9 @@ process save_resolved_configuration{
   """
   echo '${json_indented}' > resolved_configuration.txt
   """
+
+  stub:
+  """
+  touch resolved_configuration.txt
+  """
 }

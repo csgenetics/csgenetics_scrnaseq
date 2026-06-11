@@ -14,4 +14,9 @@ process download_star_index {
   mkdir star
   aws s3 cp --no-sign-request ${params.star_index} ./star --recursive
   """
+
+  stub:
+  """
+  mkdir star
+  """
 }

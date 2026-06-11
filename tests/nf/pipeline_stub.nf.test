@@ -1,0 +1,24 @@
+nextflow_pipeline {
+
+    name "Pipeline stub (DAG) test"
+    script "main.nf"
+    tag "pipeline"
+    tag "stub"
+
+    test("whole-workflow wiring stub-succeeds with two samples") {
+
+        options "-stub -profile test"
+
+        when {
+            params {
+                input_csv = "${projectDir}/tests/nf/fixtures/test_stub.input_csv.csv"
+            }
+        }
+
+        then {
+            assert workflow.success
+            assert workflow.trace.succeeded().size() > 0
+            assert workflow.trace.failed().size() == 0
+        }
+    }
+}

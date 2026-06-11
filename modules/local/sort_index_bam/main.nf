@@ -19,4 +19,11 @@ process sort_index_bam {
   samtools sort ${bam} -O BAM -o ${sample_id}_sorted.bam
   samtools index ${sample_id}_sorted.bam
   """
+
+  stub:
+  """
+  touch ${sample_id}.antisense.txt
+  touch ${sample_id}_sorted.bam
+  touch ${sample_id}_sorted.bam.bai
+  """
 }

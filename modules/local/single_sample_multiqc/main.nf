@@ -24,4 +24,11 @@ process single_sample_multiqc {
     -m unified_qc \
     -m rseqc
   """
+
+  stub:
+  """
+  touch ${sample_id}_multiqc.html
+  mkdir -p ${sample_id}_multiqc_data
+  touch ${sample_id}_multiqc_data/multiqc_data.json
+  """
 }

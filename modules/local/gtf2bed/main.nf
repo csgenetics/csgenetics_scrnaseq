@@ -14,4 +14,9 @@ process gtf2bed {
   """
   gtf2bed ${gtf} > gene_model.bed
   """
+
+  stub:
+  """
+  touch gene_model.bed
+  """
 }

@@ -19,4 +19,9 @@ process merge_lanes {
   # Globs are ordered so lane merging will happen in same order for R1 and R2
   cat *.f*q.gz > ${sample_id}.merged.${read_num}.fastq.gz
   """
+
+  stub:
+  """
+  touch ${sample_id}.merged.${read_num}.fastq.gz
+  """
 }

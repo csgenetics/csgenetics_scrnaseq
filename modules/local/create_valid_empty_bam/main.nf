@@ -22,4 +22,9 @@ process create_valid_empty_bam{
   echo "@HD	VN:1.4	SO:coordinate" | samtools view -h -b > ${sample_id}${prefix}.bam
   """
 
+  stub:
+  """
+  touch ${sample_id}${prefix}.bam
+  """
+
 }

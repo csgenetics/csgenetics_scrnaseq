@@ -11,4 +11,9 @@ process download_input_csv {
   """
   aws s3 cp --no-sign-request ${params.input_csv} .
   """
+
+  stub:
+  """
+  touch input.csv
+  """
 }

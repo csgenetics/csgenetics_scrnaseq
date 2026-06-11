@@ -31,4 +31,10 @@ process count_matrix {
   """
   count_matrix.py --barcode_list ${barcode_list} --count_table ${input_file} --gene_list ${features_file} --sample ${sample_id} $mixed_args
   """
+
+  stub:
+  """
+  touch ${sample_id}.raw_feature_bc_matrix.h5ad
+  touch barcodes.tsv.gz features.tsv.gz matrix.mtx.gz
+  """
 }

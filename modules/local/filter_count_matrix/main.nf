@@ -30,4 +30,14 @@ process filter_count_matrix{
   """
   filter_count_matrix.py ${count_threshold} ${h5ad_raw_count_matrix} ${sample_id} $mixed_args
   """
+
+  stub:
+  // The raw h5ad is also an input (h5ad_raw_count_matrix) staged under the same
+  // base name; Nextflow excludes staged inputs from output matching, so the stub
+  // must emit a distinct, newly-created file that still matches the output glob.
+  """
+  touch barcodes.tsv.gz features.tsv.gz matrix.mtx.gz
+  touch ${sample_id}.filtered_feature_bc_matrix.h5ad
+  touch ${sample_id}.stub.raw_feature_bc_matrix.h5ad
+  """
 }

@@ -18,4 +18,9 @@ process qc_cascade_plot_multi {
     --mode multi \\
     --csv-files ${csvs}
   """
+
+  stub:
+  """
+  touch multisample_qc_cascade.html
+  """
 }

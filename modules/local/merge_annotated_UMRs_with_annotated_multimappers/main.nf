@@ -15,4 +15,9 @@ process merge_annotated_UMRs_with_annotated_multimappers {
   """
   samtools merge -o ${sample_id}.mapped.sorted.filtered.annotated.bam $umr_annotated_bam $multimapper_annotated_bam
   """
+
+  stub:
+  """
+  touch ${sample_id}.mapped.sorted.filtered.annotated.bam
+  """
 }

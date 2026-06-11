@@ -14,4 +14,9 @@ process filter_for_UMRs_mismatch {
   """
   samtools view -h -b -e '[NH]==1 && ([nM]==0 || [nM]==1 || [nM]==2 || [nM]==3)' -b ${featurecount_bam} > ${sample_id}.UMRs.bam.featureCounts.bam
   """
+
+  stub:
+  """
+  touch ${sample_id}.UMRs.bam.featureCounts.bam
+  """
 }

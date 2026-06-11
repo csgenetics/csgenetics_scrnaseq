@@ -13,4 +13,9 @@ process merge_transcript_exon_umr_bams {
   """
   samtools merge -o ${sample_id}.umr.annotated.bam $umr_transcript_bam $umr_exon_bam
   """
+
+  stub:
+  """
+  touch ${sample_id}.umr.annotated.bam
+  """
 }

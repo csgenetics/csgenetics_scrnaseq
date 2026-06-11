@@ -13,4 +13,9 @@ process count_high_conf_annotated_umr_multimap {
   """
   alignment_count=\$(samtools view -c ${umr_multimapper_annotated_bam})
   """
+
+  stub:
+  """
+  alignment_count=1
+  """
 }

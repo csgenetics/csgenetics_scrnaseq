@@ -23,4 +23,9 @@ process run_rseqc {
       cat ${empty_rseqc_template} | envsubst > ${sample_id}_${prefix}_rseqc_results.txt
   fi
   """
+
+  stub:
+  """
+  touch ${sample_id}_${prefix}_rseqc_results.txt
+  """
 }

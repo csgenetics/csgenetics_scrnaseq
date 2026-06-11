@@ -15,4 +15,9 @@ process umr_transcript_assignment {
   # Filter for the reads that were 'Assigned' a transcript target
   samtools view -h -b -e '[XN]==1 && [XT] && [XS]=="Assigned"' -b ${umr_mismatch_bam} > ${sample_id}.UMRs.transcript.assigned.bam
   """
+
+  stub:
+  """
+  touch ${sample_id}.UMRs.transcript.assigned.bam
+  """
 }

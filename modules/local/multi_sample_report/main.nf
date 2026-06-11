@@ -21,4 +21,12 @@ process multi_sample_report {
   """
   create_multi_sample_report.py $template ${params.mixed_species} $qc_cascade_html
   """
+
+  stub:
+  """
+  touch multisample_report.html
+  touch multisample_out.csv
+  touch multisample_summary_plots.html
+  touch multisample_qc_cascade.html
+  """
 }

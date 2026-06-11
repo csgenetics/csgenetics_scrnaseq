@@ -18,4 +18,12 @@ process download_public_fastq {
   aws s3 cp --no-sign-request $fastq_1 $fastq_1_name
   aws s3 cp --no-sign-request $fastq_2 $fastq_2_name
   """
+
+  stub:
+  def fastq_1_name = fastq_1.tokenize('/').last()
+  def fastq_2_name = fastq_2.tokenize('/').last()
+  """
+  touch $fastq_1_name
+  touch $fastq_2_name
+  """
 }

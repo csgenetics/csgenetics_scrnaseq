@@ -25,4 +25,11 @@ process multi_sample_multiqc {
     -m unified_qc \
     -m rseqc
   """
+
+  stub:
+  """
+  mkdir multisample_multiqc_data
+  touch multisample_multiqc_data/multiqc_data.json
+  touch multisample_multiqc.html
+  """
 }

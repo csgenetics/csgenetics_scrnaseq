@@ -41,4 +41,10 @@ process multimapper_transcript_assignment{
     samtools view -H -b $multimapper_mismatch_filtered_bam > ${sample_id}.multimapped.transcript.unassigned_ambiguity.no_xs_tag.bam
   fi
   """
+
+  stub:
+  """
+  touch ${sample_id}.multimapped.transcript.assigned.bam
+  touch ${sample_id}.multimapped.transcript.unassigned_ambiguity.no_xs_tag.bam
+  """
 }

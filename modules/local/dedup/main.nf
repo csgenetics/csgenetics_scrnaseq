@@ -33,4 +33,10 @@ process dedup{
       cp $bam ${sample_id}.dedup.bam
   fi
   """
+
+  stub:
+  """
+  touch ${sample_id}.dedup.log
+  touch ${sample_id}.dedup.bam
+  """
 }

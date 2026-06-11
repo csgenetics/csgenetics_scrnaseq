@@ -21,4 +21,9 @@ process qc_cascade_plot_single {
     --sample-id ${sample_id} \\
     --metrics-csv ${metrics_csv}
   """
+
+  stub:
+  """
+  touch ${sample_id}.qc_cascade.html
+  """
 }

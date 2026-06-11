@@ -13,4 +13,9 @@ process download_barcode_list {
   """
   aws s3 cp --no-sign-request ${params.barcode_list_path} .
   """
+
+  stub:
+  """
+  touch barcode_list.csv
+  """
 }
