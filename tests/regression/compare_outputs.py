@@ -539,10 +539,13 @@ def _format_detail(r, max_diffs):
     detail = r["detail"]
     lines = []
     if cls == "MTX" and r["verdict"] == DIFFER:
-        lines.append(
-            f"      {detail['n_only_a']} triplet(s) only in A, "
-            f"{detail['n_only_b']} only in B"
-        )
+        if "dims_a" in detail:
+            lines.append(f"      dims differ: a={detail['dims_a']} b={detail['dims_b']}")
+        if "n_only_a" in detail:
+            lines.append(
+                f"      {detail['n_only_a']} triplet(s) only in A, "
+                f"{detail.get('n_only_b', '?')} only in B"
+            )
         for d in detail.get("diffs", []):
             lines.append(f"      [{d['side']}] {d['triplet']}")
     elif cls == "DEDUP_LOG" and r["verdict"] == DIFFER:

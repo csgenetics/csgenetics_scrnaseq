@@ -210,9 +210,7 @@ process star {
         --outSAMtype BAM Unsorted \
         --readFilesCommand zcat \
         --outSAMattributes Standard \
-        --outFilterMultimapNmax 1000 \
-        --outMultimapperOrder Random \
-        --runRNGseed 42
+        --outFilterMultimapNmax 1000
 
       # Get number of uniquely aligned reads
       uniquely_mapped_reads=\$(grep "Uniquely mapped reads number" ${sample_id}_Log.final.out | cut -d "|" -f 2 | xargs)
