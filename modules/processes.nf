@@ -210,7 +210,9 @@ process star {
         --outSAMtype BAM Unsorted \
         --readFilesCommand zcat \
         --outSAMattributes Standard \
-        --outFilterMultimapNmax 1000
+        --outFilterMultimapNmax 1000 \
+        --outMultimapperOrder Random \
+        --runRNGseed 42
 
       # Get number of uniquely aligned reads
       uniquely_mapped_reads=\$(grep "Uniquely mapped reads number" ${sample_id}_Log.final.out | cut -d "|" -f 2 | xargs)
@@ -407,7 +409,10 @@ process multimapper_transcript_assignment{
   # out alignments that can be associated directly as 'Assigned' and alignments that are ambiguous and should be passed onto
   # exon tie breaking.
   # See the script's header for more information on how it works.
-  samtools sort -n $multimapper_mismatch_filtered_bam | samtools view | gawk -f $multi_mapper_script
+  # LC_ALL=C sort imposes a deterministic total order on the alignments before the gawk:
+  # the gawk assigns by gene tag with last-write-wins, so its output depends on input order,
+  # which STAR's multithreaded emission makes non-deterministic. The sort removes that.
+  samtools sort -n $multimapper_mismatch_filtered_bam | samtools view | LC_ALL=C sort | gawk -f $multi_mapper_script
 
   # multi_mapper_script produces assigned_reads.sam_body and ambiguous_reads.sam_body corresponding to the Assigned and still ambigous reads, respectively.
   # These files will only be produced if there were reads of the respective type identified.
@@ -448,7 +453,8 @@ process multimapper_exon_assignment{
   # Run featureCounts using the exon feature to do tie-breaking and then run back through the gawk script to pull out those
   # reads that have a single Assigned alignment.
   featureCounts -a $gtf -o ${sample_id}.multimapped.exon.assigned.txt -R BAM $multimapper_unassigned_bam -T 4 -t exon -g gene_id --fracOverlap 0.5 --extraAttributes gene_name -s 1 -M
-  samtools sort -n ${sample_id}.multimapped.transcript.unassigned_ambiguity.no_xs_tag.bam.featureCounts.bam | samtools view | gawk -f $multi_mapper_script
+  # Deterministic total order before the gawk (see multimapper_transcript_assignment).
+  samtools sort -n ${sample_id}.multimapped.transcript.unassigned_ambiguity.no_xs_tag.bam.featureCounts.bam | samtools view | LC_ALL=C sort | gawk -f $multi_mapper_script
 
   # If the assigned_reads.sam_body file exists then we were successfuly able to pull out further assigned reads
   if [ -f assigned_reads.sam_body ]; then
