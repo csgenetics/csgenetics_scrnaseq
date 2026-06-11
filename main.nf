@@ -46,20 +46,46 @@ params.mmus_gene_prefix             = getGenomeAttribute('mmus_gene_prefix')
     INCLUDES
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
-include {
-  save_resolved_configuration; download_star_index; download_gtf; download_input_csv; download_barcode_list; download_barcode_correction_list; download_public_fastq;
-  features_file; merge_lanes; qc; star;
-  create_valid_empty_bam as create_valid_empty_bam_star;
-  gtf2bed; run_rseqc as raw_rseqc; run_rseqc as annotated_rseqc;
-  initial_feature_count; filter_for_UMRs_mismatch; umr_transcript_assignment; umr_exon_assignment;
-  filter_for_multimappers_mismatch; multimapper_transcript_assignment; multimapper_exon_assignment;
-  merge_transcript_exon_umr_bams; merge_transcript_exon_multimapper_bams; 
-  merge_annotated_UMRs_with_annotated_multimappers; count_high_conf_annotated_umr_multimap;
-  single_sample_multiqc; multi_sample_multiqc;
-  sort_index_bam; dedup; io_count; count_matrix;
-  filter_count_matrix; cell_caller; categorize_reads; summary_statistics; qc_cascade_plot_single;
-  qc_cascade_plot_multi; single_summary_report; multi_sample_report
-  } from './modules/processes.nf'
+include { save_resolved_configuration } from './modules/local/save_resolved_configuration/main.nf'
+include { download_star_index } from './modules/local/download_star_index/main.nf'
+include { download_gtf } from './modules/local/download_gtf/main.nf'
+include { download_input_csv } from './modules/local/download_input_csv/main.nf'
+include { download_barcode_list } from './modules/local/download_barcode_list/main.nf'
+include { download_barcode_correction_list } from './modules/local/download_barcode_correction_list/main.nf'
+include { download_public_fastq } from './modules/local/download_public_fastq/main.nf'
+include { features_file } from './modules/local/features_file/main.nf'
+include { merge_lanes } from './modules/local/merge_lanes/main.nf'
+include { qc } from './modules/local/qc/main.nf'
+include { star } from './modules/local/star/main.nf'
+include { create_valid_empty_bam as create_valid_empty_bam_star } from './modules/local/create_valid_empty_bam/main.nf'
+include { gtf2bed } from './modules/local/gtf2bed/main.nf'
+include { run_rseqc as raw_rseqc } from './modules/local/run_rseqc/main.nf'
+include { run_rseqc as annotated_rseqc } from './modules/local/run_rseqc/main.nf'
+include { initial_feature_count } from './modules/local/initial_feature_count/main.nf'
+include { filter_for_UMRs_mismatch } from './modules/local/filter_for_UMRs_mismatch/main.nf'
+include { umr_transcript_assignment } from './modules/local/umr_transcript_assignment/main.nf'
+include { umr_exon_assignment } from './modules/local/umr_exon_assignment/main.nf'
+include { filter_for_multimappers_mismatch } from './modules/local/filter_for_multimappers_mismatch/main.nf'
+include { multimapper_transcript_assignment } from './modules/local/multimapper_transcript_assignment/main.nf'
+include { multimapper_exon_assignment } from './modules/local/multimapper_exon_assignment/main.nf'
+include { merge_transcript_exon_umr_bams } from './modules/local/merge_transcript_exon_umr_bams/main.nf'
+include { merge_transcript_exon_multimapper_bams } from './modules/local/merge_transcript_exon_multimapper_bams/main.nf'
+include { merge_annotated_UMRs_with_annotated_multimappers } from './modules/local/merge_annotated_UMRs_with_annotated_multimappers/main.nf'
+include { count_high_conf_annotated_umr_multimap } from './modules/local/count_high_conf_annotated_umr_multimap/main.nf'
+include { single_sample_multiqc } from './modules/local/single_sample_multiqc/main.nf'
+include { multi_sample_multiqc } from './modules/local/multi_sample_multiqc/main.nf'
+include { sort_index_bam } from './modules/local/sort_index_bam/main.nf'
+include { dedup } from './modules/local/dedup/main.nf'
+include { io_count } from './modules/local/io_count/main.nf'
+include { count_matrix } from './modules/local/count_matrix/main.nf'
+include { filter_count_matrix } from './modules/local/filter_count_matrix/main.nf'
+include { cell_caller } from './modules/local/cell_caller/main.nf'
+include { categorize_reads } from './modules/local/categorize_reads/main.nf'
+include { summary_statistics } from './modules/local/summary_statistics/main.nf'
+include { qc_cascade_plot_single } from './modules/local/qc_cascade_plot_single/main.nf'
+include { qc_cascade_plot_multi } from './modules/local/qc_cascade_plot_multi/main.nf'
+include { single_summary_report } from './modules/local/single_summary_report/main.nf'
+include { multi_sample_report } from './modules/local/multi_sample_report/main.nf'
 
 def order_integer_first(it){
   try{

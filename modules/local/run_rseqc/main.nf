@@ -1,0 +1,26 @@
+#!/usr/bin/env nextflow
+
+process run_rseqc {
+  tag "$sample_id"
+  
+  publishDir "${params.outdir}/RSeQC/read_distribution", mode: 'copy', pattern: "*_rseqc_results.txt", saveAs: {"${sample_id}.${prefix}_RSeQC.txt"}
+
+  input:
+  tuple val(sample_id), path(bam), val(count)
+  path(bed)
+  path(empty_rseqc_template)
+  val(prefix)
+
+  output:
+  tuple val(sample_id), path("*_rseqc_results.txt"), emit: rseqc_log
+
+  script:
+  """
+  if [[ ${count} > 0 ]]
+    then
+      read_distribution.py  -i ${bam} -r ${bed} > ${sample_id}_${prefix}_rseqc_results.txt
+    else
+      cat ${empty_rseqc_template} | envsubst > ${sample_id}_${prefix}_rseqc_results.txt
+  fi
+  """
+}
