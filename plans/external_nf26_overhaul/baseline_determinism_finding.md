@@ -46,3 +46,25 @@ Path B. Establish determinism as the first substantive change (a blessed re-base
 metrics already stable), then the entire optimization programme is verifiable byte-exact. Quantify the B-vs-current
 delta (expected tiny: a handful of net-preserving per-gene reassignments) and surface it for sign-off, same as
 the dedup re-baseline.
+
+## RESOLUTION (2026-06-11): Path A chosen after investigation
+
+Path B was attempted and proved invasive for an irreducible residual:
+- STAR `--outMultimapperOrder Random --runRNGseed` DID make the pipeline byte-deterministic (run-pair EQUAL),
+  but it replaces STAR's best-scoring primary multimapper alignment with a random (seeded) one, which
+  **corrupted the RSeQC read-distribution metrics** (e.g. Sample1 CDS 29.65%->25.73%, Intergenic 16.59%->20.22%) —
+  a real change to customer-reported numbers. Rejected.
+- Order-normalizing sorts alone (LC_ALL=C sort before the multimapper gawk; name-sort before the dedup
+  coordinate sort) did NOT achieve full determinism. A local test proved `samtools sort` is stable (preserves
+  input order for equal coordinates) and that name-sort-then-coordinate-sort yields a deterministic order — so
+  the dedup *input* is deterministic, yet ~2 count entries still flipped. The residual is therefore a
+  **genuinely ambiguous multimapper read** (a molecule mapping to two genes); the final gene attribution is
+  irreducibly arbitrary. Forcing it deterministic is itself an arbitrary re-baseline of a customer deliverable.
+
+Decision (user, 2026-06-11): **Path A.** Revert all Phase 1d determinism edits (commit `f251c59`); keep only the
+NF26 parse fix. Characterize the inherent non-determinism as a **micro-envelope** and gate future changes against it:
+- customer metrics CSVs: **byte-exact** (already stable run-to-run);
+- count matrix: **per-barcode column sums byte-exact** (net-preserving — confirmed: column sums identical, only
+  ~2 of 51k entries flip between two genes for one barcode), differing entries bounded by a measured N.
+Implemented in `tests/regression/compare_outputs.py --envelope-max-flips N` (commit `7afed86`). This gives high
+no-regression confidence with ZERO output change to the customer pipeline, and avoids re-baselining a deliverable.

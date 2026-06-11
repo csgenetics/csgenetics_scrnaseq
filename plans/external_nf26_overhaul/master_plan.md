@@ -71,7 +71,7 @@ review finding M6) runnable per-PR on Seqera. CE creds read `csg-reference` dire
 | 0a | **DONE 2026-06-11** — created external CE `ed0zjbIeIvKoUPuGsy8fA` (mirror internal primary, external `aws-tower` cred) | — | Seqera (have) |
 | 0 | Baseline (regression §1) **ON SEQERA**: tag `baseline-pre-nf26`; launch `test` + reduced-mixed + 2 degenerate fixtures on CURRENT `devel` with `NXF_VER=25.10.2`; run twice (determinism probe); pull S3 results; archive `manifest.sha256` + `trace` | 0a | Seqera+AWS (have) |
 | 1 | NF26 syntactic migration: publishDir/pattern closure-wrap (1 site inspect-confirmed @498, 15 by static audit — wrap + re-`inspect` iteratively until clean), remove `strict` flag, version flip, CI `NXF_VER`. Outputs: metrics EXACT, matrices within the **pre-determinism envelope** (see `baseline_determinism_finding.md`) | 0 | — |
-| 1d | **Determinism hardening (BLESSED re-baseline — decided path B)**: pin the order sources so count matrices are reproducible run-to-run — STAR `--outMultimapperOrder Random --runRNGseed <fixed>`, deterministic tie-break in `assign_multi_mappers.gawk` / the name-sorts feeding it, confirm `umi_tools` representative determinism. Verify run-to-run byte-identical matrices; re-cut the golden baseline (matrices shift slightly, metrics stable). **From here all equivalence is byte-exact.** | 1 | — |
+| 1d | **Determinism: Path A (decided 2026-06-11, after investigation).** The pipeline is non-deterministic only in an irreducible multimapper ambiguity (~2 of 51k count entries, net-preserving, customer metrics byte-stable; STAR-seed forcing corrupted RSeQC, so rejected). NO code change — characterize the micro-envelope and gate future changes via `compare_outputs.py --envelope-max-flips N`: **metrics byte-exact + count-matrix per-barcode column sums byte-exact**. See `baseline_determinism_finding.md` | 1 | — |
 | 2 | Module restructure (Decision 1): split `processes.nf` into per-process module files; shared scripts stay in `bin/`; inventory `${baseDir}` refs + intra-`bin/` imports first. Outputs == baseline | 1 | — |
 | 3 | Tier-1 performance ONLY: `samtools -@`/`--write-index`, `featureCounts -T`, right-size cpus. **STAR `--runThreadN` gated behind the order-perturbation test (R1)**. Outputs == baseline; measure speedup | 2 | — |
 | 3b | Tier-2 (consumer-audited R1) + gated Tier-3: Rust fusions (`bam-splitter`→`bam-assigner`) each behind an exact-equivalence nf-test; `umi_tools`→`count_table_builder` dedup swap = quantified + user-blessed re-baseline (regression §8). Sequenced AFTER Phase 5 freeze; re-cuts only dedup-downstream golden | 4, 5, sign-off | quay (have) |
@@ -100,3 +100,8 @@ output class (deterministic text / BAM / h5ad / plot-HTML), normalizing away vol
 normalized to the two integers `summary_statistics.py` consumes; a determinism probe that ALSO perturbs record
 order (not just fixed-thread reruns) to expose any order-sensitive count drift before trusting an R0 claim.
 Every later phase re-runs the covering profiles and diffs against this archive; any drift halts and is surfaced.
+
+**Equivalence bar (Path A):** customer metrics CSVs, RSeQC, dedup counts, and the per-barcode count-matrix
+column sums must be **byte-exact**; the count matrix's per-gene-per-barcode entries may differ only within the
+measured net-preserving multimapper-ambiguity envelope (`--envelope-max-flips N`). A change to metrics or to any
+column sum is a real regression. This holds high no-regression confidence without re-baselining any deliverable.
