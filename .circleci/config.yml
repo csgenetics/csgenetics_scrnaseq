@@ -30,7 +30,7 @@ jobs:
             -H "Accept: application/json" \
             -H "Authorization: Bearer $TOWER_AUTH_TOKEN" \
             -H "Content-Type: application/json" \
-            -d '{"name":"'"$NAME"'","source":"tower","launch":{"configProfiles":["test"], "computeEnvId":"'"$TOWER_COMPUTE_ENV_ID"'","pipeline":"https://github.com/csgenetics/csgenetics_scrnaseq","workDir":"s3://csg-tower-bucket","revision":"'"$(echo $CIRCLE_BRANCH)"'","pullLatest":true}}'`
+            -d '{"name":"'"$NAME"'","source":"tower","launch":{"configProfiles":["test"], "computeEnvId":"'"$TOWER_COMPUTE_ENV_ID"'","pipeline":"https://github.com/csgenetics/csgenetics_scrnaseq","workDir":"s3://csg-tower-bucket","revision":"'"$CIRCLE_SHA1"'","pullLatest":true,"preRunScript":"export NXF_VER=26.04.1"}}'`
             id=`echo $myvar | awk -F: {'print $2'} | sed 's/}//g'`
             echo "export ACTION_ID=$id" >> $BASH_ENV
             echo $id
@@ -83,10 +83,36 @@ jobs:
             -H "Authorization: Bearer $TOWER_AUTH_TOKEN" \
             -H "Accept: application/json"
 
+  # Fast structural test: runs the whole pipeline in -stub mode (no real data,
+  # no AWS credentials needed - the S3 download processes are stubbed), plus the
+  # per-process module tests. Catches wiring / output-declaration regressions.
+  nf-test:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large
+    steps:
+      - checkout
+      - run:
+          name: Install Java 17, Nextflow, nf-test
+          command: |
+            sudo apt-get update -y && sudo apt-get install -y openjdk-17-jre-headless
+            curl -s https://get.nextflow.io | bash && sudo mv nextflow /usr/local/bin/
+            curl -fsSL https://get.nf-test.com | bash && sudo mv nf-test /usr/local/bin/
+      - run:
+          name: nf-test (whole-pipeline -stub DAG test + module tests)
+          command: |
+            export NXF_VER=26.04.1
+            nf-test test tests/nf/pipeline_stub.nf.test modules/local/save_resolved_configuration/tests/main.nf.test --verbose
+
 
 # Invoke jobs via workflows
 # See: https://circleci.com/docs/2.0/configuration-reference/#workflows
+# NOTE: the run-current-branch (Seqera Tower) job requires these CircleCI project
+# environment variables to be set: TOWER_AUTH_TOKEN, TOWER_WORKSPACE_ID (the external
+# workspace 40027684065767), and TOWER_COMPUTE_ENV_ID (the external compute env
+# ed0zjbIeIvKoUPuGsy8fA). Update TOWER_COMPUTE_ENV_ID to the external CE.
 workflows:
-  nextflow-tower:
+  ci:
     jobs:
+      - nf-test
       - run-current-branch
