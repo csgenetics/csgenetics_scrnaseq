@@ -15,14 +15,14 @@ process io_count {
   script:
   """
   ## 1. Generate file for count matrix
-  # alternative to umi_tools count
-  # command: View the input dedup.sam file, grep for reads with gene assignment (which have the 'XT:' tag)
-  # then keep the 1st (read_ID) and 18th fields (gene name, should be the 'XT:' tag itself) only
-  # then split the string by '_' (-d '_'), keep fields 2,3,4 which correspond to 'io_sequence', 'gene_name' (4th field is so that we don't lose gene_names containing one '_')
-  # use sed to replace the first '_' in each line, and any 'XT:Z:' strings with empty string with sed
-
-  # output has 2 columns: io_sequence and gene_name for every deduplicated alignments with gene assignment
-  samtools view -@ ${task.cpus} ${f} | awk '/XT:/ {match(\$1, /_[A-Z]+_\$/); printf substr(\$0,RSTART+1,RLENGTH-2); match(\$0, /XT:Z:[A-Za-z0-9_]+/); print "\\t" substr(\$0,RSTART+5,RLENGTH-5)}' > ${sample_id}_bcGeneSummary.txt
+  # For every deduplicated alignment carrying a gene assignment (the featureCounts 'XT:Z:' tag),
+  # emit two columns: io_sequence (the barcode token at the end of the read name) and gene_name.
+  #
+  # io_count_extract is a static binary (tools/io_count_extract, on the pipeline bin/ PATH) that
+  # replaces the previous awk one-liner BYTE-FOR-BYTE. The production samtools container ships
+  # BusyBox awk, which is very slow (~409 s on a 1.4 GB BAM); the compiled, streaming replacement
+  # does the same transform in ~22 s. samtools still does the (fast, threaded) BAM decode.
+  samtools view -@ ${task.cpus} ${f} | io_count_extract > ${sample_id}_bcGeneSummary.txt
   """
 
   stub:
