@@ -24,6 +24,12 @@
 
 # We then run the ambigous_reads through this script again after having been through exon annotation using featureCounts.
 BEGIN {
+    # Iterate associative arrays in sorted key order so the output is deterministic, independent of
+    # gawk's internal hash order. Combined with the canonical representative selection below, this
+    # makes the multimapper assignment reproducible regardless of the order alignments arrive in,
+    # which is what lets the upstream `samtools sort -n` be threaded safely (its equal-name tie
+    # order no longer affects the result).
+    PROCINFO["sorted_in"] = "@ind_str_asc";
     current_query="";
     split("", assigned_array_corrected);
     split("", assigned_array_uncorrected);
@@ -69,7 +75,12 @@ BEGIN {
         # Key is the  XT target and value is the full alignment
         # E.g. key = XT:Z:ENSG00000150093
         # value = VH00671:444:AACCJYTHV:1:1101:5696:28489_AAGCACCTATCCG_	256	5	67803287	0	34M	*	0	0	TTATTCACTATCACAAGAATAACACGGGAAAGAC	CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC	NH:i:X  HI:i:X	AS:i:33	nM:i:0	XS:Z:Assigned	XN:i:1	XT:Z:ENSG00000249364
-        assigned_array_corrected[$18] = $1"\t"$2"\t"$3"\t"$4"\t"$5"\t"$6"\t"$7"\t"$8"\t"$9"\t"$10"\t"$11"\tNH:i:1\tHI:i:1\t"$14"\t"$15"\t"$16"\t"$17"\t"$18;
+        # Keep a CANONICAL representative per gene (the lexicographically-smallest corrected
+        # alignment) rather than last-write-wins, so the choice does not depend on input order.
+        corrected_alignment = $1"\t"$2"\t"$3"\t"$4"\t"$5"\t"$6"\t"$7"\t"$8"\t"$9"\t"$10"\t"$11"\tNH:i:1\tHI:i:1\t"$14"\t"$15"\t"$16"\t"$17"\t"$18;
+        if (!($18 in assigned_array_corrected) || corrected_alignment < assigned_array_corrected[$18]) {
+            assigned_array_corrected[$18] = corrected_alignment;
+        }
 
         # For the uncorrected array we output without the featureCount derived tags because these alignments
         # will be run through feature counts again.

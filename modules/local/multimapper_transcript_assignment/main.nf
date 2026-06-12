@@ -18,7 +18,10 @@ process multimapper_transcript_assignment{
   # out alignments that can be associated directly as 'Assigned' and alignments that are ambiguous and should be passed onto
   # exon tie breaking.
   # See the script's header for more information on how it works.
-  samtools sort -n $multimapper_mismatch_filtered_bam | samtools view | gawk -f $multi_mapper_script
+  # The name sort is threaded (-@). The gawk now selects a canonical representative and emits in a
+  # deterministic order (see assign_multi_mappers.gawk), so the result is independent of the sort's
+  # equal-name tie order -- threading is safe and the output stays reproducible.
+  samtools sort -n -@ ${task.cpus} -m 1G $multimapper_mismatch_filtered_bam | samtools view | gawk -f $multi_mapper_script
 
   # multi_mapper_script produces assigned_reads.sam_body and ambiguous_reads.sam_body corresponding to the Assigned and still ambigous reads, respectively.
   # These files will only be produced if there were reads of the respective type identified.
