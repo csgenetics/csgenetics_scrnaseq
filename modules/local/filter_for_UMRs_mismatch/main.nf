@@ -12,7 +12,8 @@ process filter_for_UMRs_mismatch {
 
   script:
   """
-  samtools view -h -b -e '[NH]==1 && ([nM]==0 || [nM]==1 || [nM]==2 || [nM]==3)' -b ${featurecount_bam} > ${sample_id}.UMRs.bam.featureCounts.bam
+  # -@ threads only the BGZF (de)compression; per-read filter and output order unchanged (byte-identical).
+  samtools view -@ ${task.cpus} -h -b -e '[NH]==1 && ([nM]==0 || [nM]==1 || [nM]==2 || [nM]==3)' -b ${featurecount_bam} > ${sample_id}.UMRs.bam.featureCounts.bam
   """
 
   stub:

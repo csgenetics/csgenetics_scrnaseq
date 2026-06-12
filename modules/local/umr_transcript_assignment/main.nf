@@ -13,7 +13,8 @@ process umr_transcript_assignment {
   script:
   """
   # Filter for the reads that were 'Assigned' a transcript target
-  samtools view -h -b -e '[XN]==1 && [XT] && [XS]=="Assigned"' -b ${umr_mismatch_bam} > ${sample_id}.UMRs.transcript.assigned.bam
+  # -@ threads only the BGZF (de)compression; per-read filter and output order unchanged (byte-identical).
+  samtools view -@ ${task.cpus} -h -b -e '[XN]==1 && [XT] && [XS]=="Assigned"' -b ${umr_mismatch_bam} > ${sample_id}.UMRs.transcript.assigned.bam
   """
 
   stub:
