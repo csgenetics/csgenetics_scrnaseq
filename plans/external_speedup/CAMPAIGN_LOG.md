@@ -58,6 +58,21 @@ byte-identical counts -- the result depends on the serial sort order. Options:
       unaffected). Would also let us make the gawk deterministic (fix the ambient RSeQC wobble).
 Awaiting user call. Until then, pursue only output-preserving strategies.
 
+## STRATEGY 4: dedup contig-split parallelism -- COUNT-PRESERVING (verified), flagged for user
+dedup = `umi_tools dedup --per-cell` (single-thread, ~80 min, #3 cost). Hypothesis: dedup is
+position-local so splitting by contig -> parallel dedup -> merge is equivalent. VERIFIED on real
+fixture (Sample2_sorted.bam, chr1+MT, 218,681 reads out): whole vs split-merge gave IDENTICAL
+read-count-out AND IDENTICAL (barcode,gene) multiset (md5 6257d01686...) => COUNT MATRIX UNCHANGED.
+Structural reason: a UMI group's reads are PCR dups of one molecule (same barcode/UMI/pos) -> same
+gene, so the representative choice can't change counts.
+CAVEAT: umi_tools representative selection is stateful (advances per group), so split keeps a
+DIFFERENT (but equivalent, same-molecule) representative read for ~19% of groups -> the published
+dedup.bam is NOT byte-identical, though every count/metric is. Same equivalence class as the ambient
+RSeQC wobble.
+=> FLAGGED option (c): ~Nx on the #3 bottleneck (limited by largest contig), counts identical,
+dedup.bam representatives differ. More attractive than option (b) (which changed counts).
+Build = split process + parallel dedup + merge + sum the dedup.log stats; gate on count-data.
+
 ## NEXT (output-preserving)
 3. Flow-level fusion of the UMR/multimapper filter->assign->merge chain (cut container-start + BAM
    stage I/O) -- does not change computation, byte-exact safe.
