@@ -189,3 +189,15 @@ pysam split by contig -> parallel read_distribution.py -> sum + reconstruct. Out
 read_distribution.py on the whole BAM (verified standalone). run_rseqc cpus 2->4. Gate RUNNING (bg bbxu2qh8m:
 local test-profile base 2b32df3 vs cand cb0348d; expect RSeQC outputs byte-identical + pipeline completes +
 MultiQC parses). When PASS: push to epic/PR#78. ~2-2.5x on the 96m RSeQC cost (capped by single-thread pysam split).
+
+### RSeQC contig-split LANDED (commit cb0348d + Tags/Kb fix dcef53a, pushed to PR #78)
+Gate confirmed: pipeline completes, MultiQC parses, metrics.csv IDENTICAL, all counts IDENTICAL; only
+Tags/Kb (a derived rate no metric uses) was off by 0.01 (rounding) -> fixed to match read_distribution.py's
+exact formula count*1000.0/(bases+1) -> byte-identical. ~2-2.5x on the 96m RSeQC cost.
+
+## CAMPAIGN COMPLETE (diminishing returns reached). All in PR #78 (epic dcef53a), validated on real data.
+Landed perf commits: io_count rust (154x), dedup contig-split (2.5x), multimapper deterministic+threaded
+(1.4x) + view threading, initial_feature_count sort thread, 3 filter view threads (2.6-5.2x), RSeQC
+contig-split (~2-2.5x, byte-identical), right-sizing. Real-data result: total compute 945->579 CPU-min
+(-39%, and RSeQC not yet in that run -> more now); CELL CALLS IDENTICAL all 8 samples; counts within 0.003%.
+Remaining bottleneck = multimapper sort (inherently sort-bound, can't beat much). STAR memory-bound.
