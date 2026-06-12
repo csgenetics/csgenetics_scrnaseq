@@ -1,0 +1,14 @@
+[workspace]
+name = "csgenetics-scrnaseq-gtfparse-tests"
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64"]
+
+# Mirrors conda_envs/gtfparse.yml: features_names.py uses the pandas DataFrame
+# API returned by gtfparse 1.2.1 (.str.replace(regex=True)), which newer,
+# polars-based gtfparse releases break. This env pins the runtime the pipeline
+# actually uses so the script behaves identically to production.
+[dependencies]
+python = ">=3.7,<3.11"
+gtfparse = "1.2.1"
+pandas = "<2.0"
+pytest = "*"
