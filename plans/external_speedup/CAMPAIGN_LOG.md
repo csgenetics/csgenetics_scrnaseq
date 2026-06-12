@@ -88,3 +88,15 @@ NOT landing without user OK on the dedup.bam representative caveat.
    write the 2 output BAMs, skipping the samtools view->gawk->samtools view SAM-text round-trip. Keeps
    the sort (output-preserving); modest gain since the sort is the floor.
 5. dedup (umi_tools single-thread) -- stretch, heavily gated.
+
+### Strategy 4 GATE RESULT (end-to-end, local test profile): PASS
+- COUNT-DATA: 16/16 files byte-identical (h5ad, mtx, barcodes, features) -> count matrices unchanged.
+- dedup metrics: reads_before/after_deduplication + sequencing_saturation IDENTICAL both samples.
+- Full metrics.csv: Sample1 fully identical; Sample2 differs ONLY by Total Tags/Introns +/-1 -- which
+  is the pre-existing AMBIENT annotated-RSeQC wobble (annotated_rseqc runs on the umr_multimapper
+  annotated bam, main.nf:348, UPSTREAM of dedup -> my change cannot affect it; same +/-1 seen in the
+  io_count gate where dedup was unchanged).
+- dedup.bam: md5 DIFFERS, read count SAME (the flagged representative-read caveat).
+CONCLUSION: dedup contig-split preserves all counts + all metrics. Only the intermediate dedup.bam's
+representative reads differ. Speedup ~Nx bounded by largest contig (precise number from next real run).
+Ready to land pending user OK on the dedup.bam caveat.
