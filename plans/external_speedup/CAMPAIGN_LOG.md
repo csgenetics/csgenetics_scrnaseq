@@ -166,3 +166,20 @@ to the now-deterministic canonical gawk -> NO count change), like io_count_extra
 annotated 32m = 96m combined, untouched -> contig-split (count-identical, needs DAG scatter for ~Nx).
 star 54m cand vs 33m base = instance noise (uses ~4-5 cores, cpus=8 fine).
 CHANGELOG perf section updated with confirmed round-2/3 numbers + equivalence.
+
+### ROUND 4: multimapper deep-dive -- Rust gawk = DEAD END; sort is the real cost
+- Built a static Rust replica of assign_multi_mappers.gawk (BYTE-IDENTICAL verified on 2 real multimapper
+  BAMs, assigned+ambiguous sam_body). BUT it is SLOWER than gawk (6.1s vs 2.9s on 2.4M records) -- gawk is
+  well-optimised C and the gawk is NOT the bottleneck (~3s). Discarded (kept in scratch only).
+- The samtools sort -n of the large multimapper BAM is the real cost. Tested: the multimapper BAM is NOT
+  pre-grouped (2437896 reads, 408529 names, 1945205 contiguous runs) and unsorted gawk output DIFFERS, so
+  the sort canNOT be dropped. It's inherently sort-bound (huge --outFilterMultimapNmax 1000 expansion).
+- DONE (byte-identical): threaded the middle samtools view + the 2 BAM-rebuild samtools view -b with -@
+  in both multimapper_{transcript,exon}_assignment (commit 54ce90c). Modest (rebuilds), kept cpus=4.
+LESSON: gawk text passes are fast; don't Rust-rewrite them. The wins are in samtools (de)compression
+threading + the genuinely single-thread python (umi_tools done via contig-split; RSeQC next).
+
+### REMAINING: RSeQC contig-split (raw 64m + annotated 32m = 96m, count-identical verified).
+Needs DAG scatter-gather (rseqc container has no samtools): a split process (samtools container) emits
+per-contig bams -> parallel run_rseqc per contig -> a merge process sums read_distribution + reconstructs
+the format. ~Nx (bounded by largest contig). This is the last clean meaningful win. Build next.
