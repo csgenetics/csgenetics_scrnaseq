@@ -16,7 +16,9 @@ process initial_feature_count {
   """
   if [[ $aligned_count > 0 ]] # If the bam is not empty
   then
-    samtools sort $bam -o ${sample_id}_Aligned.sortedByCoord.out.bam
+    # Threaded coordinate sort (-@). Order-neutral downstream: featureCounts assigns per-read, and
+    # every consumer re-sorts (name sort for assignment, coordinate sort in sort_index_bam for dedup).
+    samtools sort -@ ${task.cpus} $bam -o ${sample_id}_Aligned.sortedByCoord.out.bam
     # Start by running feature counts on the star output
     # including strandedness and annotation of multimappers
     featureCounts -a $gtf -o ${sample_id}.star.featureCounts.gene.txt -R BAM ${sample_id}_Aligned.sortedByCoord.out.bam -T ${task.cpus} -t transcript -g gene_id --fracOverlap 0.5 --extraAttributes gene_name -s 1 -M
