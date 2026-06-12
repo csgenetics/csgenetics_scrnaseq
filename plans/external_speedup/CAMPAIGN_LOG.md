@@ -140,3 +140,15 @@ LANDED: epic ff-merged to c44d418 + pushed. Round-2 = (b) + initial_feature_coun
 - RSeQC (raw_rseqc/annotated_rseqc, ~50-60min, single-thread python) likely the NEW top cost. read_distribution
   is position-based -> contig-splittable + summable (like dedup). Involved but ~Nx. Best remaining lever.
 - A fresh REAL-DATA Seqera run to confirm the speedups + reveal the new bottleneck profile + equivalence at scale.
+
+### ROUND 3: real-data validation launched + RSeQC analysis
+- LAUNCHED Seqera real-data run of epic 5c519368 on human_validation.csv (genome GRCh38, docker profile),
+  workflow 35pj7QevURScMM, outdir .../cand_human_round2. Purpose: confirm speedups REAL (trace vs old
+  base_human), cell-calls stable vs original base_human, reveal NEW top bottleneck. ~2-3h.
+- RSeQC contig-split: VERIFIED count-identical (per-contig read_distribution Tag_counts sum EXACTLY to
+  whole: Total Reads/Tags/Assigned + all 10 groups). read_distribution is read-processing-bound (whole
+  1.13s, bed-load floor 0.28s) so split helps. BUT: rseqc container (quay biocontainers rseqc:5.0.3) has
+  NO samtools, so split must be pysam (a single-threaded full read-pass) -> caps simple approach at ~2x.
+  A true ~Nx needs a DAG scatter-gather (split process in samtools container -> parallel rseqc -> merge).
+  Foundation ready (parse/sum logic proven). DECISION: wait for the validation trace to confirm RSeQC is
+  the new top cost before building (avoid the STAR mistake of optimizing a non-bottleneck).
