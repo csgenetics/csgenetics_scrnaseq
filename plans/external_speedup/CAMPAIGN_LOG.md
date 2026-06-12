@@ -71,7 +71,15 @@ dedup.bam is NOT byte-identical, though every count/metric is. Same equivalence 
 RSeQC wobble.
 => FLAGGED option (c): ~Nx on the #3 bottleneck (limited by largest contig), counts identical,
 dedup.bam representatives differ. More attractive than option (b) (which changed counts).
-Build = split process + parallel dedup + merge + sum the dedup.log stats; gate on count-data.
+
+BUILT on branch `speedup/dedup-contig-split` (commit a63b8ea off io_count tip 3995c26): the logic is
+in bin/dedup_by_contig.sh (split by contig via idxstats -> parallel umi_tools dedup via xargs -P
+${task.cpus} -> samtools cat merge -> sum the two parsed log fields). Module calls it for the
+non-empty case; empty branch unchanged; fails loud on unmapped reads. dedup cpus 1->8, mem 8->16 GB.
+Standalone-verified in the container: merged log correct (519415 in / 218681 out) AND (barcode,gene)
+multiset byte-identical to whole-dedup. END-TO-END count-data gate RUNNING (bg blltp6gtc: local
+test-profile whole-dedup 3995c26 vs contig-split a63b8ea; expect h5ad/mtx identical + dedup metrics OK).
+NOT landing without user OK on the dedup.bam representative caveat.
 
 ## NEXT (output-preserving)
 3. Flow-level fusion of the UMR/multimapper filter->assign->merge chain (cut container-start + BAM
