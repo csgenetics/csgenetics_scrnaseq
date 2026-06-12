@@ -183,3 +183,9 @@ threading + the genuinely single-thread python (umi_tools done via contig-split;
 Needs DAG scatter-gather (rseqc container has no samtools): a split process (samtools container) emits
 per-contig bams -> parallel run_rseqc per contig -> a merge process sums read_distribution + reconstructs
 the format. ~Nx (bounded by largest contig). This is the last clean meaningful win. Build next.
+
+### RSeQC contig-split BUILT (bin/rseqc_by_contig.py, commit cb0348d LOCAL on epic, not pushed)
+pysam split by contig -> parallel read_distribution.py -> sum + reconstruct. Output BYTE-IDENTICAL to
+read_distribution.py on the whole BAM (verified standalone). run_rseqc cpus 2->4. Gate RUNNING (bg bbxu2qh8m:
+local test-profile base 2b32df3 vs cand cb0348d; expect RSeQC outputs byte-identical + pipeline completes +
+MultiQC parses). When PASS: push to epic/PR#78. ~2-2.5x on the 96m RSeQC cost (capped by single-thread pysam split).
