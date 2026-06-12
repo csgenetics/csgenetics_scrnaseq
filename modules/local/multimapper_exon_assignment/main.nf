@@ -17,12 +17,12 @@ process multimapper_exon_assignment{
   # reads that have a single Assigned alignment.
   featureCounts -a $gtf -o ${sample_id}.multimapped.exon.assigned.txt -R BAM $multimapper_unassigned_bam -T ${task.cpus} -t exon -g gene_id --fracOverlap 0.5 --extraAttributes gene_name -s 1 -M
   # Threaded name sort (-@); the gawk is order-independent + deterministic (see assign_multi_mappers.gawk).
-  samtools sort -n -@ ${task.cpus} -m 1G ${sample_id}.multimapped.transcript.unassigned_ambiguity.no_xs_tag.bam.featureCounts.bam | samtools view | gawk -f $multi_mapper_script
+  samtools sort -n -@ ${task.cpus} -m 1G ${sample_id}.multimapped.transcript.unassigned_ambiguity.no_xs_tag.bam.featureCounts.bam | samtools view -@ ${task.cpus} | gawk -f $multi_mapper_script
 
   # If the assigned_reads.sam_body file exists then we were successfuly able to pull out further assigned reads
   if [ -f assigned_reads.sam_body ]; then
     # Cat with the headers of the featureCounts bam
-    cat <(samtools view -H ${sample_id}.multimapped.transcript.unassigned_ambiguity.no_xs_tag.bam.featureCounts.bam) assigned_reads.sam_body | samtools view -b -h > ${sample_id}.multimapped.exon.assigned.bam;
+    cat <(samtools view -H ${sample_id}.multimapped.transcript.unassigned_ambiguity.no_xs_tag.bam.featureCounts.bam) assigned_reads.sam_body | samtools view -@ ${task.cpus} -b -h > ${sample_id}.multimapped.exon.assigned.bam;
   else
     # There were no further reads successfuly annotated
     # Create a valid empty bam

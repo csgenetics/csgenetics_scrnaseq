@@ -21,7 +21,7 @@ process multimapper_transcript_assignment{
   # The name sort is threaded (-@). The gawk now selects a canonical representative and emits in a
   # deterministic order (see assign_multi_mappers.gawk), so the result is independent of the sort's
   # equal-name tie order -- threading is safe and the output stays reproducible.
-  samtools sort -n -@ ${task.cpus} -m 1G $multimapper_mismatch_filtered_bam | samtools view | gawk -f $multi_mapper_script
+  samtools sort -n -@ ${task.cpus} -m 1G $multimapper_mismatch_filtered_bam | samtools view -@ ${task.cpus} | gawk -f $multi_mapper_script
 
   # multi_mapper_script produces assigned_reads.sam_body and ambiguous_reads.sam_body corresponding to the Assigned and still ambigous reads, respectively.
   # These files will only be produced if there were reads of the respective type identified.
@@ -30,7 +30,7 @@ process multimapper_transcript_assignment{
 
   if [ -f assigned_reads.sam_body ]; then
     # Cat with the headers of the featureCounts bam
-    cat <(samtools view -H $multimapper_mismatch_filtered_bam) assigned_reads.sam_body | samtools view -b -h > ${sample_id}.multimapped.transcript.assigned.bam
+    cat <(samtools view -H $multimapper_mismatch_filtered_bam) assigned_reads.sam_body | samtools view -@ ${task.cpus} -b -h > ${sample_id}.multimapped.transcript.assigned.bam
   else
     samtools view -H -b $multimapper_mismatch_filtered_bam > ${sample_id}.multimapped.transcript.assigned.bam
   fi
@@ -39,7 +39,7 @@ process multimapper_transcript_assignment{
   if [ -f ambiguous_reads.sam_body ]; then
     # Cat with the headers of the featureCounts bam
     # before rerunning through featureCounts for exon tie-breaking
-    cat <(samtools view -H $multimapper_mismatch_filtered_bam) ambiguous_reads.sam_body | samtools view -h -b > ${sample_id}.multimapped.transcript.unassigned_ambiguity.no_xs_tag.bam
+    cat <(samtools view -H $multimapper_mismatch_filtered_bam) ambiguous_reads.sam_body | samtools view -@ ${task.cpus} -h -b > ${sample_id}.multimapped.transcript.unassigned_ambiguity.no_xs_tag.bam
   else
     samtools view -H -b $multimapper_mismatch_filtered_bam > ${sample_id}.multimapped.transcript.unassigned_ambiguity.no_xs_tag.bam
   fi
