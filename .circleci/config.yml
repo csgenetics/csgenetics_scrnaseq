@@ -11,6 +11,15 @@ jobs:
     docker:
       - image: cimg/base:stable
     resource_class: small
+    # Seqera workspace + compute environment are sourced from the CODEBASE (this file),
+    # per-branch, NOT from shared CircleCI project env vars. Each commit therefore launches
+    # on the compute environment that matches its own pipeline version, and a merge carries
+    # the right CE with it (no manual CircleCI env-var flip). Only the SECRET TOWER_AUTH_TOKEN
+    # remains a CircleCI project env var. The Nextflow version is likewise pinned in the launch
+    # JSON below (preRunScript), so version + CE + workspace all travel with the commit.
+    environment:
+      TOWER_WORKSPACE_ID: "40027684065767"
+      TOWER_COMPUTE_ENV_ID: "ed0zjbIeIvKoUPuGsy8fA"
     # Add steps to the job
     # See: https://circleci.com/docs/2.0/configuration-reference/#steps
     steps:
@@ -107,10 +116,10 @@ jobs:
 
 # Invoke jobs via workflows
 # See: https://circleci.com/docs/2.0/configuration-reference/#workflows
-# NOTE: the run-current-branch (Seqera Tower) job requires these CircleCI project
-# environment variables to be set: TOWER_AUTH_TOKEN, TOWER_WORKSPACE_ID (the external
-# workspace 40027684065767), and TOWER_COMPUTE_ENV_ID (the external compute env
-# ed0zjbIeIvKoUPuGsy8fA). Update TOWER_COMPUTE_ENV_ID to the external CE.
+# NOTE: the run-current-branch (Seqera Tower) job needs exactly ONE CircleCI project env
+# var: TOWER_AUTH_TOKEN (the Seqera access token - a secret). The workspace and compute-env
+# IDs are codebase-controlled in the job's `environment:` block above (per-branch), so no
+# CircleCI env var needs flipping when branches on different pipeline versions coexist.
 workflows:
   ci:
     jobs:
