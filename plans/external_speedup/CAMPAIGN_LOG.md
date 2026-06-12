@@ -100,3 +100,24 @@ NOT landing without user OK on the dedup.bam representative caveat.
 CONCLUSION: dedup contig-split preserves all counts + all metrics. Only the intermediate dedup.bam's
 representative reads differ. Speedup ~Nx bounded by largest contig (precise number from next real run).
 Ready to land pending user OK on the dedup.bam caveat.
+
+---
+## ROUND 2 (user greenlit small count changes + "land into the PR, go go go") 2026-06-12 eve
+LANDED into epic/external-nf26-overhaul (PR #78, pushed): io_count(20x) + dedup contig-split(~Nx) +
+right-sizing. epic now at 4d365f6.
+
+### OPTION (b) DONE RIGHT: deterministic multimapper assignment + threaded sort (branch speedup/multimapper-deterministic)
+Instead of naive threading (which made counts wobble every run), made the assignment ORDER-INDEPENDENT:
+- assign_multi_mappers.gawk: canonical representative per gene (lex-smallest corrected alignment, not
+  last-write-wins) + PROCINFO["sorted_in"] for deterministic output order.
+- threaded `samtools sort -n -@ ${task.cpus} -m 1G` in both multimapper_{transcript,exon}_assignment; cpus->4, mem->6GB.
+Unit-verified on real multimapper BAM: threaded run A == run B (reproducible) AND single==threaded
+(order-independent); ambiguous set unchanged; assigned set same reads, canonical representative ->
+one-time tiny count change (approved). Commit 1d124ff. Fixes the ambient annotated-RSeQC wobble too.
+GATE RUNNING bg bt51crqr4 (candA, candB, base): expect candA==candB (deterministic) + small delta vs base.
+
+### initial_feature_count: threaded the coordinate samtools sort (-@), cpus 2->4 (commit e289f92).
+Order-neutral (featureCounts per-read; downstream re-sorts). Left sort_index_bam single-threaded (it is
+the determinism anchor for the dedup input).
+TODO: combined gate for the full branch after bt51crqr4; then land into epic. More threading candidates
+scanned; sort_index_bam intentionally NOT threaded.
