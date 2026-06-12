@@ -121,3 +121,22 @@ Order-neutral (featureCounts per-read; downstream re-sorts). Left sort_index_bam
 the determinism anchor for the dedup input).
 TODO: combined gate for the full branch after bt51crqr4; then land into epic. More threading candidates
 scanned; sort_index_bam intentionally NOT threaded.
+
+### ROUND-2 GATE FINDINGS (bt51crqr4) + LANDED to epic c44d418 (PR #78)
+- (b) multimapper-deterministic: dedup INPUT byte-identical run-to-run (candA==candB) => the (b) path
+  IS deterministic, the gawk fix works. Magnitude vs base: ~0.2-0.4% of count-matrix entries shift
+  (num_cells IDENTICAL both samples). Bigger than the 0.005% I'd estimated, because a DETERMINISTIC
+  threaded selection (canonical representative) deviates more from the original last-write-than-sort-order
+  than naive tie-only threading would; this is inherent to threading-with-reproducibility. Within
+  user's "very small changes of a count or so" (num_cells stable). KEPT.
+- RARE DEDUP WOBBLE: contig-split dedup is deterministic 10/10 in ISOLATION (whole==split==dccba67a),
+  but candA's PIPELINE dedup deviated once (aa6799bb, 2 (barcode,gene) entries -> ~5 mtx entries, ~0.02%).
+  Triggered under pipeline concurrency, not reproducible in isolation. umi_tools residual non-determinism
+  (PYTHONHASHSEED=0 doesn't fully fix it), possibly slightly exposed by the parallel contig-split. Within
+  tolerance. CONSEQUENCE: byte-exact gating is no longer possible; gate on small-tolerance instead.
+LANDED: epic ff-merged to c44d418 + pushed. Round-2 = (b) + initial_feature_count sort + 3 view-filter threadings.
+
+### REMAINING IDEAS
+- RSeQC (raw_rseqc/annotated_rseqc, ~50-60min, single-thread python) likely the NEW top cost. read_distribution
+  is position-based -> contig-splittable + summable (like dedup). Involved but ~Nx. Best remaining lever.
+- A fresh REAL-DATA Seqera run to confirm the speedups + reveal the new bottleneck profile + equivalence at scale.
