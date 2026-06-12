@@ -38,9 +38,21 @@ Reproducibility).
   single-threaded). STAR's `--runThreadN` is kept at the original value of 8 and pinned (decoupled
   from the cpu reservation) because the thread count affects multimapper output order and therefore
   per-barcode counts; only the reservation changed. These are throughput/packing changes; pipeline
-  outputs are byte-unchanged (verified by the output-equivalence comparator). The dominant per-sample costs
-  (`io_count`, `multimapper_transcript_assignment`) remain single-threaded I/O-heavy shell/awk
-  passes and are the target of ongoing process-level optimization work.
+  outputs are byte-unchanged (verified by the output-equivalence comparator).
+- **Performance (process-level speedups).** Profiling real samples on Seqera identified the dominant
+  single-threaded steps and rewrote/parallelised them. Verified on 8 real human samples (cell calls
+  identical to before, read counts within ~0.003%); total compute dropped ~39% (945 -> 579 CPU-min):
+  - `io_count`: the awk pass ran on BusyBox awk (the production container's awk) and was the single
+    largest cost. Replaced with a static Rust binary (`bin/io_count_extract`, byte-identical) -> ~150x.
+  - `dedup`: `umi_tools dedup` is single-threaded but position-local, so it is now split by reference
+    contig and run in parallel (`bin/dedup_by_contig.sh`), counts identical -> ~2.5x.
+  - `multimapper_transcript_assignment`/`multimapper_exon_assignment`: the multimapper assignment is
+    made deterministic and order-independent (canonical representative per gene in
+    `bin/assign_multi_mappers.gawk`), which allows the previously single-threaded `samtools sort -n`
+    to be threaded. One-time effect: a few genuinely-ambiguous multimapped reads (~0.3% of count-matrix
+    entries; cell calls unchanged) resolve to a deterministic canonical alignment.
+  - `samtools sort`/`view` threading in `initial_feature_count` and the filter steps (byte-identical).
+  Remaining target: the multimapper assignment gawk and RSeQC `read_distribution` (both single-threaded).
 - **Report.** A single, offline-safe (no CDN) consolidated report with CS Genetics branding,
   a searchable per-sample selector, and a cross-sample metrics table.
 - **Structure.** The monolithic `modules/processes.nf` is split into per-process modules at

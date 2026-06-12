@@ -152,3 +152,17 @@ LANDED: epic ff-merged to c44d418 + pushed. Round-2 = (b) + initial_feature_coun
   A true ~Nx needs a DAG scatter-gather (split process in samtools container -> parallel rseqc -> merge).
   Foundation ready (parse/sum logic proven). DECISION: wait for the validation trace to confirm RSeQC is
   the new top cost before building (avoid the STAR mistake of optimizing a non-bottleneck).
+
+### ROUND-3 VALIDATION RESULT (real data, 8 human samples) -- CONFIRMED
+Run 35pj7QevURScMM SUCCEEDED. Per-process realtime cand(round2) vs base(original):
+- io_count 172.6m -> 1.1m (154x!), dedup 76m -> 30.6m (2.5x), umr_transcript_assignment 24.4->4.7 (5.2x),
+  filter_for_multimappers_mismatch 51.6->16.4 (3.1x), filter_for_UMRs_mismatch 41.9->16.1 (2.6x),
+  initial_feature_count 63.6->33.3 (1.9x), multimapper_transcript_assignment 201.9->141.3 (1.4x only).
+- TOTAL sum-of-realtime 945m -> 579m (-39%).
+- CELL CALLS IDENTICAL all 8 samples (num_cells); reads_after_dedup within 0.001-0.003%. Equivalence confirmed.
+NEW BOTTLENECKS: (1) multimapper_transcript_assignment 141m STILL #1 -- sort threaded but the gawk + SAM
+round-trip + 2 BAM rebuilds dominate now. NEXT: replace the gawk with a static Rust binary (BYTE-IDENTICAL
+to the now-deterministic canonical gawk -> NO count change), like io_count_extract. (2) RSeQC raw 64m +
+annotated 32m = 96m combined, untouched -> contig-split (count-identical, needs DAG scatter for ~Nx).
+star 54m cand vs 33m base = instance noise (uses ~4-5 cores, cpus=8 fine).
+CHANGELOG perf section updated with confirmed round-2/3 numbers + equivalence.
