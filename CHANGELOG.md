@@ -2,9 +2,11 @@
 
 ## 2.0.0
 
-Major overhaul: Nextflow 26 migration, performance, per-process module structure, and a
-consolidated report. Pipeline metric values and `.csv` outputs are unchanged; the changes
-below are runtime, structural, and presentational.
+Major overhaul: Nextflow 26 migration, performance, per-process module structure, a
+consolidated report, and run-to-run reproducibility. Summary metrics and per-barcode total
+counts are byte-identical to before; the changes below are runtime, structural, presentational,
+and a one-time deterministic resolution of a pre-existing count-matrix ambiguity (see
+Reproducibility).
 
 ### Breaking
 
@@ -43,10 +45,14 @@ below are runtime, structural, and presentational.
 - An output-equivalence regression comparator (`tests/regression/compare_outputs.py`) with a
   strict mode and an envelope mode (see note below).
 
-### Reproducibility note
+### Reproducibility
 
-The pipeline has a small, pre-existing, inherent run-to-run non-determinism in the count
-matrix: a few genuinely-ambiguous multimapped reads can be attributed to either of two genes.
-Each barcode's TOTAL counts and all summary metrics are unaffected (the difference is
-net-preserving). This behaviour is unchanged by this release; the regression comparator's
-envelope mode accounts for it while holding metrics and per-barcode totals byte-exact.
+This release makes the pipeline **run-to-run byte-reproducible** by pinning `PYTHONHASHSEED=0`.
+The prior non-determinism was `umi_tools` choosing between equally-ranked reads via Python's
+hash-seed-randomized set iteration; pinning the seed makes that choice deterministic.
+
+One-time consequence: a few genuinely-ambiguous multimapped reads (which previously landed on
+either of two genes at random, run-to-run) now resolve deterministically. **Summary metrics and
+per-barcode total counts are byte-identical to before**; only those few per-gene count-matrix
+entries change, once. From this release, count matrices are reproducible — the output-equivalence
+comparator (`tests/regression/compare_outputs.py`) can therefore gate future changes byte-exact.
