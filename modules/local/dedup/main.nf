@@ -21,10 +21,9 @@ process dedup{
   # barcode and SSS start site.
   if [[ $alignment_count > 0 ]]
     then
-      umi_tools dedup \
-        --per-cell \
-        --in-sam -I ${bam} \
-        --log=${sample_id}.dedup.log > ${sample_id}.dedup.bam
+      # umi_tools dedup is single-threaded and position-local. Split by reference contig, dedup
+      # each contig in parallel, and merge (count-identical to whole-BAM dedup; see the script).
+      dedup_by_contig.sh ${bam} ${sample_id} ${task.cpus}
     else
     
     # Then there were no alignments and we should output a dummy .dedup.log
