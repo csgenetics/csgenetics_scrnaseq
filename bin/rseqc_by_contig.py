@@ -97,7 +97,8 @@ def main():
         for g in GROUPS:
             b = bases.get(g, 0)
             cnt = sum_counts[g]
-            kb = (cnt / (b / 1000.0)) if b else 0.0
+            # Exactly read_distribution.py's formula (note the +1 on bases) for byte-identical Tags/Kb.
+            kb = cnt * 1000.0 / (b + 1)
             o.write("%-20s%-20d%-20d%-18.2f\n" % (g, b, cnt, kb))
         o.write(SEP + "\n")
     finally:
