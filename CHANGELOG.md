@@ -28,11 +28,19 @@ Reproducibility).
 
 - **Nextflow 26 migration.** `publishDir`/`pattern` directives that interpolate input
   variables are closure-wrapped; the redundant `nextflow.enable.strict` flag is removed.
-- **Performance.** STAR (`--runThreadN`) and featureCounts (`-T`) now use the cores allocated
-  to the task (`${task.cpus}`) instead of a hardcoded count; `dedup` is right-sized to 1 cpu
-  (`umi_tools` is single-threaded). This gives roughly 2x faster alignment on production-scale
-  samples (no measurable change on tiny, index-load-bound inputs). Pipeline outputs are
-  unchanged (verified by an output-equivalence comparator).
+- **Performance (cluster throughput, not single-task speed).** Per-process cpu reservations were
+  right-sized to *measured* core usage from profiling real CS Genetics samples on Seqera (human
+  GRCh38 and the 60 GB mouse_human_mix barnyard index). The finding: STAR (~3-7 cores, memory-bound),
+  featureCounts (~1 core), and the `io_count` awk pass (~0.4 cores, I/O-bound) do not saturate the
+  cores previously reserved for them, and adding threads gives no measurable speedup at our read
+  counts. Reservations were reduced accordingly (e.g. `star` 16->8, `io_count` 4->1, featureCounts
+  steps 4->2) so more samples pack onto each instance, and `dedup` is set to 1 cpu (`umi_tools` is
+  single-threaded). STAR's `--runThreadN` is kept at the original value of 8 and pinned (decoupled
+  from the cpu reservation) because the thread count affects multimapper output order and therefore
+  per-barcode counts; only the reservation changed. These are throughput/packing changes; pipeline
+  outputs are byte-unchanged (verified by the output-equivalence comparator). The dominant per-sample costs
+  (`io_count`, `multimapper_transcript_assignment`) remain single-threaded I/O-heavy shell/awk
+  passes and are the target of ongoing process-level optimization work.
 - **Report.** A single, offline-safe (no CDN) consolidated report with CS Genetics branding,
   a searchable per-sample selector, and a cross-sample metrics table.
 - **Structure.** The monolithic `modules/processes.nf` is split into per-process modules at

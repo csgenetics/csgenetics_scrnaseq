@@ -19,7 +19,14 @@ process star {
 
   script:
   """
-      STAR --runThreadN ${task.cpus} \
+      # runThreadN is PINNED at 8 (not tied to task.cpus) on purpose. With --outFilterMultimapNmax
+      # 1000 STAR's per-read multimapper output ORDER is thread-count-sensitive, so the thread count
+      # is part of the OUTPUT CONTRACT: changing it shifts which multimappers get assigned and hence
+      # per-barcode total counts. The original pipeline used `--runThreadN 8`; we keep 8 so alignment
+      # output is identical to the original (a prior change to \${task.cpus}=16 silently altered the
+      # counts). The cpu RESERVATION (conf/base.config) is right-sized independently for throughput.
+      # Do NOT couple this back to \${task.cpus} and do NOT change the value - it changes results.
+      STAR --runThreadN 8 \
         --genomeDir ${index} \
         --readFilesIn ${r1} \
         --outFileNamePrefix ${sample_id}_ \
