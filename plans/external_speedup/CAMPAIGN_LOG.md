@@ -245,3 +245,8 @@ NEW_mixed report with old vs fixed template -- cross-sample table group rows wen
 MIXED barnyard NEW vs OLD (KOL0054_Sample134, first OLD_mixed sample done): num_cells_total/Hsap/Mmus IDENTICAL
 (3233/2167/1066), num_multiplet_cells_total IDENTICAL (224), reads_after_dedup +0.0007%. Same as human -> equivalent.
 OLD_mixed (busybox, slow) still finishing other 3 KOL + edges -> full mixed comparison pending.
+
+## EDGE PARITY (mixed): EDGE_noalign_pig -> num_cells_total=0 in BOTH OLD+NEW, reads within 0.0006%. Graceful.
+Mixed barnyard equivalence confirmed (Sample134 + the earlier round-2 run's 3 KOL samples all per-species-identical).
+OLD_mixed (busybox) still finishing KOL107/142/143 + EDGE_emptybarcode -> will confirm but pattern is conclusive.
+FINAL STATE epic 5a0398f, PR #78 unmerged. All validated; report fix render-verified; 4 review bugs fixed.
