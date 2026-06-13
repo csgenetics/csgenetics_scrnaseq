@@ -236,3 +236,12 @@ HUMAN (base_human_final OLD/devel+fix vs cand_human_final NEW/epic, 8 real MOR03
 => Human: new code reproduces old code within the documented tiny envelope. CONFIRMED.
 MIXED: pending (NEW_mixed near done, OLD_mixed slow on busybox io_count). Then mixed comparison + the
 mixed consolidated-report template fix (verify against NEW_mixed rendered report).
+
+## MIXED VALIDATION (partial) + REPORT FIX VERIFIED (2026-06-13)
+MIXED-REPORT FIX render-verified (commits 3f30678 headline + 8bb6396 table + 91ea6b8 prettify): rendered the
+NEW_mixed report with old vs fixed template -- cross-sample table group rows went from ['Read QC','Cell metrics',
+'Deduplication'] (cell metrics MISSING) to ['Read QC','Num cells','Raw reads per cell',...16 cell-metric groups...,
+'Num multiplet cells','Deduplication']. Cell metrics now appear in mixed reports. DONE.
+MIXED barnyard NEW vs OLD (KOL0054_Sample134, first OLD_mixed sample done): num_cells_total/Hsap/Mmus IDENTICAL
+(3233/2167/1066), num_multiplet_cells_total IDENTICAL (224), reads_after_dedup +0.0007%. Same as human -> equivalent.
+OLD_mixed (busybox, slow) still finishing other 3 KOL + edges -> full mixed comparison pending.
