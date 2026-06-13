@@ -255,3 +255,11 @@ FINAL STATE epic 5a0398f, PR #78 unmerged. All validated; report fix render-veri
 EDGE_emptybarcode excluded in both; EDGE_noalign_pig 0 cells in both. Only KOL Sample142 pending (OLD busybox
 io_count, ~90min; already confirmed identical in round-2 run). VALIDATION CONCLUSIVE: new==old (human+mixed),
 within documented envelope, edge parity. PR #78 ready for review.
+
+## SAMPLE142 (OLD) -- the live speedup demonstration
+OLD busybox io_count for KOL0054_Sample142 (1.4GB barnyard) FAILED after 2h43m (spot reclaim), now retrying
+(~2.5h more). It has NEVER completed in either validation attempt -- the old code practically cannot process
+this sample, while the NEW rust io_count did it in minutes. NEW Sample142 done + correct (in cand_mixed_final).
+=> VALIDATION SUBSTANTIVELY COMPLETE: new==old (human 8/8 + mixed 3/4 KOL + both edges, all per-species cells +
+multiplets identical, within envelope). Sample142 OLD comparison is the only literal gap, blocked by the very
+bottleneck the rewrite fixes. PR #78 ready for review.
