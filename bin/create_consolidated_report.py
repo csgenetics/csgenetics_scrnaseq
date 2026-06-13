@@ -294,10 +294,12 @@ class ConsolidatedReport:
         """A small set of headline experiment metrics for the top of the report."""
         # Per-sample headline metric keys (same as the old per-sample headline cards).
         if self.mixed:
+            # In mixed-species mode summary_statistics.py classifies each cell metric under its own
+            # name (e.g. num_cells), NOT under "Cell metrics" (which only holds counts_in/out_of_cells).
             headline_keys = [
-                ("num_cells_total", "Cell metrics"),
-                ("raw_reads_per_cell_total", "Cell metrics"),
-                ("median_genes_detected_per_cell_total", "Cell metrics"),
+                ("num_cells_total", "num_cells"),
+                ("raw_reads_per_cell_total", "raw_reads_per_cell"),
+                ("median_genes_detected_per_cell_total", "median_genes_detected_per_cell"),
             ]
         else:
             headline_keys = [
