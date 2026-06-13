@@ -225,3 +225,14 @@ STILL TODO (from review):
    tests; compare_outputs.py comparator NOT wired into CI; pytest not run in CI. Add golden tests + wire CI.
  - DOCS: CHANGELOG perf-bullet cpu numbers stale (says io_count 4->1, dedup 1cpu; actually 2 and 8). io_count README
    says musl but binary is glibc static-pie. Low priority.
+
+## OLD-vs-NEW FRESH VALIDATION RESULT (2026-06-13)
+HUMAN (base_human_final OLD/devel+fix vs cand_human_final NEW/epic, 8 real MOR034/MOR036 samples + edges):
+- num_cells IDENTICAL all 8 samples. reads_after_dedup within 0.003%.
+- count matrices: ~0.1% of mtx entries differ (multimapper canonical-representative reassignments);
+  TOTAL counts within 0.002% (net-near-zero). num_cells unaffected.
+- EDGE PARITY: EDGE_emptybarcode -> both OLD+NEW exclude it (no metrics.csv, no crash); EDGE_intergenic
+  -> both num_cells=2. Identical edge behavior.
+=> Human: new code reproduces old code within the documented tiny envelope. CONFIRMED.
+MIXED: pending (NEW_mixed near done, OLD_mixed slow on busybox io_count). Then mixed comparison + the
+mixed consolidated-report template fix (verify against NEW_mixed rendered report).
