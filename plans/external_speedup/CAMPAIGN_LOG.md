@@ -201,3 +201,27 @@ Landed perf commits: io_count rust (154x), dedup contig-split (2.5x), multimappe
 contig-split (~2-2.5x, byte-identical), right-sizing. Real-data result: total compute 945->579 CPU-min
 (-39%, and RSeQC not yet in that run -> more now); CELL CALLS IDENTICAL all 8 samples; counts within 0.003%.
 Remaining bottleneck = multimapper sort (inherently sort-bound, can't beat much). STAR memory-bound.
+
+## PIPELINE REVIEW (2026-06-13, 3 parallel agents) + FIXES
+Launched 4 fresh old-vs-new validation runs (OLD baseline-validation fe80f36 vs NEW epic cceb134) on
+human + mixed validation CSVs (internal datasets MOR034/MOR036/KOL0054 + edge cases empty/noalign/intergenic):
+ OLD_human 5XPxbeh9OXUNlj, NEW_human 1j0koOt0d6Xzp2, OLD_mixed 2pyX0TTrRHGWbR, NEW_mixed 1a6Wzbuvqa9a8J.
+
+REVIEW FINDINGS:
+FIXED (commit 2ae5f33, silent failures per "fail loud"):
+ - rseqc_by_contig.py: per-contig read_distribution failures swallowed (no check) -> summed as zeros. Now check=True.
+ - cell_caller + merge_annotated: publishDir `pattern:{closure}` matches NOTHING on NF26 -> plots + final
+   annotated BAM never published. Changed to string globs; merge_annotated glob also didn't match its filename.
+ - dedup empty-sample log: echo "...\n..." = literal \n (1 line) -> reads_after_deduplication never recorded. printf.
+STILL TODO (from review):
+ - HIGH: consolidated report MIXED-species mode broken -- headline cards empty + cross-sample table drops cell
+   metrics (create_consolidated_report.py:296-308 + template:495-516 use group "Cell metrics" but mixed keys live
+   under num_cells/raw_reads_per_cell/median_genes_detected_per_cell classifications). FIX when NEW_mixed lands (test against real mixed metrics).
+ - PERF (not done, optional): sort_index_bam unthreaded coord sort (LEFT single-thread on purpose = dedup determinism
+   anchor; threading adds to ~0.02% wobble); categorize_reads.py single-thread pysam pass over raw BAM (io_count-style
+   rewrite possible); fuse UMR/multimapper filter->assign->merge chain (cut container starts + S3 stage); thread the
+   3 samtools merge (-@).
+ - TESTS: new bin/ tools (io_count_extract, dedup_by_contig.sh, rseqc_by_contig.py, assign_multi_mappers) have NO
+   tests; compare_outputs.py comparator NOT wired into CI; pytest not run in CI. Add golden tests + wire CI.
+ - DOCS: CHANGELOG perf-bullet cpu numbers stale (says io_count 4->1, dedup 1cpu; actually 2 and 8). io_count README
+   says musl but binary is glibc static-pie. Low priority.
