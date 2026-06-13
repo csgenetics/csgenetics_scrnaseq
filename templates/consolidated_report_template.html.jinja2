@@ -502,7 +502,7 @@
                 {% for classification in ordered_groups %}
                   {% if multi_metrics_dict.get(classification) %}
                     <tr class="group-row">
-                      <th colspan="{{ sample_name_list|length + 1 }}">{{ classification }}</th>
+                      <th colspan="{{ sample_name_list|length + 1 }}">{{ classification if classification in ["Read QC", "Deduplication", "Cell metrics"] else (classification | replace("_", " ") | capitalize) }}</th>
                     </tr>
                     {% for metric, metric_val_list in multi_metrics_dict[classification].items() %}
                       <tr>
