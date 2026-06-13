@@ -493,7 +493,9 @@
               </thead>
               <tbody>
                 {% if mixed %}
-                  {% set ordered_groups = ["Read QC", "Cell metrics", "Deduplication"] %}
+                  {# In mixed mode the cell metrics are classified per-metric (num_cells, raw_reads_per_cell, ...),
+                     not under a single "Cell metrics" group, so iterate those classifications instead. #}
+                  {% set ordered_groups = ["Read QC"] + (cell_stat_cat_dict.keys() | list) + ["Deduplication"] %}
                 {% else %}
                   {% set ordered_groups = ["Read QC", "Cell metrics", "Deduplication"] %}
                 {% endif %}
