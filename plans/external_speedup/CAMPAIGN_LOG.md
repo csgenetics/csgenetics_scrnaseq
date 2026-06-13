@@ -263,3 +263,13 @@ this sample, while the NEW rust io_count did it in minutes. NEW Sample142 done +
 => VALIDATION SUBSTANTIVELY COMPLETE: new==old (human 8/8 + mixed 3/4 KOL + both edges, all per-species cells +
 multiplets identical, within envelope). Sample142 OLD comparison is the only literal gap, blocked by the very
 bottleneck the rewrite fixes. PR #78 ready for review.
+
+## VALIDATION 100% COMPLETE (OLD_mixed SUCCEEDED). HONEST FINAL RESULT:
+KOL0054_Sample142 (1.4GB, the long-pole): num_cells_total 4383(OLD) vs 4384(NEW) = +1 cell; Hsap 2756 vs 2757
+= +1; Mmus 1627 IDENTICAL; multiplets 705 IDENTICAL; reads_after_dedup +454 (0.0009%). So ONE borderline human
+cell (1/4384 = 0.02%) tipped across the cell-calling threshold due to the ~0.001% multimapper-reassignment read
+envelope. This is the ONLY non-identical cell-count across all 12 samples (human 8/8 + mixed KOL 134/107/143
+identical; 142 differs by 1 cell; both edges identical). Well within user's "small changes of a count or so".
+FINAL: overhaul is faster (-39% compute, io_count ~150x) and output-equivalent (11/12 samples bit-identical cell
+calls, 1 sample +/-1 borderline cell, all within documented envelope). Report fix verified, 4 review bugs fixed.
+PR #78 ready for review.
