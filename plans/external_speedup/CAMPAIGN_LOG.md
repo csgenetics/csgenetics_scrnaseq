@@ -250,3 +250,8 @@ OLD_mixed (busybox, slow) still finishing other 3 KOL + edges -> full mixed comp
 Mixed barnyard equivalence confirmed (Sample134 + the earlier round-2 run's 3 KOL samples all per-species-identical).
 OLD_mixed (busybox) still finishing KOL107/142/143 + EDGE_emptybarcode -> will confirm but pattern is conclusive.
 FINAL STATE epic 5a0398f, PR #78 unmerged. All validated; report fix render-verified; 4 review bugs fixed.
+
+## MIXED VALIDATION ~COMPLETE: KOL Sample134/107/143 ALL per-species-cells + multiplets IDENTICAL (reads <0.0007%).
+EDGE_emptybarcode excluded in both; EDGE_noalign_pig 0 cells in both. Only KOL Sample142 pending (OLD busybox
+io_count, ~90min; already confirmed identical in round-2 run). VALIDATION CONCLUSIVE: new==old (human+mixed),
+within documented envelope, edge parity. PR #78 ready for review.
