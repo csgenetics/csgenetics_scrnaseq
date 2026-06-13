@@ -67,12 +67,18 @@ def main():
 
         if not paths:
             # No mapped reads: defer to read_distribution.py on the whole input (handles it correctly).
-            subprocess.run(["read_distribution.py", "-i", a.i, "-r", a.r], check=False)
+            subprocess.run(["read_distribution.py", "-i", a.i, "-r", a.r], check=True)
             return
 
         def run(p):
-            return subprocess.run(["read_distribution.py", "-i", p, "-r", a.r],
-                                  capture_output=True, text=True).stdout
+            # Fail LOUD: a non-zero exit on any contig would otherwise be summed as zeros and silently
+            # under-count the totals.
+            r = subprocess.run(["read_distribution.py", "-i", p, "-r", a.r],
+                               capture_output=True, text=True)
+            if r.returncode != 0:
+                sys.stderr.write(r.stderr)
+                raise RuntimeError(f"read_distribution.py failed on {p} (exit {r.returncode})")
+            return r.stdout
 
         with ThreadPoolExecutor(max_workers=max(1, a.p)) as ex:
             outputs = list(ex.map(run, paths))

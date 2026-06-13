@@ -3,7 +3,9 @@
 process merge_annotated_UMRs_with_annotated_multimappers {
   tag "$sample_id"
 
-  publishDir "${params.outdir}/featureCounts", mode: 'copy', pattern: { "${sample_id}.annotated.bam" }
+  // pattern must be a string glob (a closure matches nothing on NF26) AND must match the actual output
+  // filename below (${sample_id}.mapped.sorted.filtered.annotated.bam) -- the old glob matched neither.
+  publishDir "${params.outdir}/featureCounts", mode: 'copy', pattern: "*.mapped.sorted.filtered.annotated.bam"
 
   input:
   tuple val(sample_id), path(umr_annotated_bam), path(multimapper_annotated_bam)

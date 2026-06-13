@@ -28,7 +28,9 @@ process dedup{
     
     # Then there were no alignments and we should output a dummy .dedup.log
     # and the original bam renamed
-      echo "INFO Reads: Input Reads: 0\nINFO Number of reads out: 0\n" > ${sample_id}.dedup.log
+      # printf (not echo) so the \\n actually produce two lines; otherwise summary_statistics.py
+      # matches "Input Reads:" first and (being an elif) never records reads_after_deduplication.
+      printf 'INFO Reads: Input Reads: 0\\nINFO Number of reads out: 0\\n' > ${sample_id}.dedup.log
       cp $bam ${sample_id}.dedup.bam
   fi
   """

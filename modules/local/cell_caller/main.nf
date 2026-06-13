@@ -12,7 +12,10 @@ process cell_caller {
   // Publish the plots; the glob pattern is used to collect the mixed species and single species plots
   // Single species are named: {self.sample_name}_pdf_with_cutoff.html
   // Mixed species are named: {self.sample_name}_hsap_pdf_with_cutoff.html and {self.sample_name}_mmus_pdf_with_cutoff.html
-  publishDir "${params.outdir}/plots", pattern: { "${sample_id}*_pdf_with_cutoff.html" }, mode: 'copy'
+  // pattern must be a string glob, not a closure (a closure stringifies and matches nothing on NF26).
+  // The task is per-sample so a wildcard is unambiguous; matches both single (_pdf_with_cutoff.html)
+  // and mixed (_hsap_/_mmus_pdf_with_cutoff.html) plots.
+  publishDir "${params.outdir}/plots", pattern: "*_pdf_with_cutoff.html", mode: 'copy'
 
   input:
   tuple val(sample_id), path(count_matrix_h5ad), val(manual_threshold_str)
