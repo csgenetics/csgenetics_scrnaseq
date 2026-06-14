@@ -286,3 +286,10 @@ a ~12-step serial chain each paying container-start + S3 stage + queue latency. 
 compute): (1) FLOW-FUSION of the UMR/multimapper filter->assign->merge chain (cut serial container-starts/staging/queue
 -- pure latency win); (2) the multimapper sort. NEXT: implement flow-fusion (gated re-validation). Optionally a solo
 NEW run for a clean wall-clock headline (no CE contention).
+
+## WALL-CLOCK round 2 (2026-06-14): contained wins + multimapper fusion
+- multimapper sort -@4 -> -@8 (cpus 8, mem 12GB) both multimapper processes (f5bbaf0); byte-identical.
+- FLOW-FUSION: fused multimapper branch (filter+transcript+exon+merge) into modules/local/multimapper_assignment
+  (a0ed5c6); cuts 3 serial container/staging/queue per sample. Byte-for-byte same commands; sam_body rm'd between
+  the 2 gawk passes. nextflow inspect clean. GATE RUNNING (bg bxvgmg0t8): test-profile fused vs unfused count-data
+  byte-identical. Old 4 multimapper modules unwired (delete later).
