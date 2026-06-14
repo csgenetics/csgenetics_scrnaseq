@@ -293,3 +293,7 @@ NEW run for a clean wall-clock headline (no CE contention).
   (a0ed5c6); cuts 3 serial container/staging/queue per sample. Byte-for-byte same commands; sam_body rm'd between
   the 2 gawk passes. nextflow inspect clean. GATE RUNNING (bg bxvgmg0t8): test-profile fused vs unfused count-data
   byte-identical. Old 4 multimapper modules unwired (delete later).
+
+## MULTIMAPPER FUSION VALIDATED (gate bxvgmg0t8): PASS. Count matrices 16/16 byte-identical, per-sample
+metrics identical, multisample_out.csv identical, same-sample annotated bam read-set identical. Fusion is
+byte-equivalent to the 4-process chain. Wall-clock branch solid (epic 75e813c+).
