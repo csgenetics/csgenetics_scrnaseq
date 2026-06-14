@@ -273,3 +273,16 @@ identical; 142 differs by 1 cell; both edges identical). Well within user's "sma
 FINAL: overhaul is faster (-39% compute, io_count ~150x) and output-equivalent (11/12 samples bit-identical cell
 calls, 1 sample +/-1 borderline cell, all within documented envelope). Report fix verified, 4 review bugs fixed.
 PR #78 ready for review.
+
+## WALL-CLOCK reframing (user, 2026-06-14): time-to-result is what matters, not CPU-min.
+WALL-CLOCK (launch->complete, same CE, simultaneous): HUMAN 155(OLD)->92(NEW) min = 1.7x; MIXED 675->202 = 3.3x.
+(Caveats: 4 runs shared CE = contention; OLD_mixed inflated by spot-reclaim retries on the long busybox io_count.)
+PER-SAMPLE WALL (median realtime) OLD vs NEW: io_count 19.7->0.1 (169x), dedup 7->2.6 (2.7x), filters ~3x,
+initial_feature_count 2.1x, multimapper_transcript 18.6->15.1 (1.2x, sort-bound). REGRESSION CAUGHT: rseqc
+contig-split made raw_rseqc 6.5->25.6 (4x SLOWER) + annotated 3.3->6.4 (2x) -- pysam single-thread split over the
+large raw BAM costs more than it saves. REVERTED (commit 5d2d396, back to direct read_distribution.py, byte-identical).
+CURRENT WALL-CLOCK CRITICAL PATH per sample: multimapper_transcript_assignment ~15m (sort-bound, #1) + STAR ~6m +
+a ~12-step serial chain each paying container-start + S3 stage + queue latency. WALL-CLOCK LEVERS (different from
+compute): (1) FLOW-FUSION of the UMR/multimapper filter->assign->merge chain (cut serial container-starts/staging/queue
+-- pure latency win); (2) the multimapper sort. NEXT: implement flow-fusion (gated re-validation). Optionally a solo
+NEW run for a clean wall-clock headline (no CE contention).
