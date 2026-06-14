@@ -18,10 +18,11 @@ process run_rseqc {
   """
   if [[ ${count} > 0 ]]
     then
-      # rseqc_by_contig.py splits the BAM by reference contig and runs read_distribution.py on each
-      # contig in parallel, then sums the per-feature counts (read_distribution is position-local, so
-      # the output is byte-identical to running it on the whole BAM). Parallelises a single-threaded step.
-      rseqc_by_contig.py -i ${bam} -r ${bed} -p ${task.cpus} > ${sample_id}_${prefix}_rseqc_results.txt
+      # NB: a contig-split parallel variant (bin/rseqc_by_contig.py) was tried but is SLOWER on real
+      # large BAMs -- the single-threaded pysam split (one full read pass) costs more than the
+      # per-contig parallelism saves (raw_rseqc 6.5 -> 25.6 min/sample). Reverted to the direct call.
+      # A future speedup would need a samtools-based scatter (the rseqc container has no samtools).
+      read_distribution.py -i ${bam} -r ${bed} > ${sample_id}_${prefix}_rseqc_results.txt
     else
       cat ${empty_rseqc_template} | envsubst > ${sample_id}_${prefix}_rseqc_results.txt
   fi
