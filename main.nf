@@ -65,11 +65,8 @@ include { initial_feature_count } from './modules/local/initial_feature_count/ma
 include { filter_for_UMRs_mismatch } from './modules/local/filter_for_UMRs_mismatch/main.nf'
 include { umr_transcript_assignment } from './modules/local/umr_transcript_assignment/main.nf'
 include { umr_exon_assignment } from './modules/local/umr_exon_assignment/main.nf'
-include { filter_for_multimappers_mismatch } from './modules/local/filter_for_multimappers_mismatch/main.nf'
-include { multimapper_transcript_assignment } from './modules/local/multimapper_transcript_assignment/main.nf'
-include { multimapper_exon_assignment } from './modules/local/multimapper_exon_assignment/main.nf'
+include { multimapper_assignment } from './modules/local/multimapper_assignment/main.nf'
 include { merge_transcript_exon_umr_bams } from './modules/local/merge_transcript_exon_umr_bams/main.nf'
-include { merge_transcript_exon_multimapper_bams } from './modules/local/merge_transcript_exon_multimapper_bams/main.nf'
 include { merge_annotated_UMRs_with_annotated_multimappers } from './modules/local/merge_annotated_UMRs_with_annotated_multimappers/main.nf'
 include { count_high_conf_annotated_umr_multimap } from './modules/local/count_high_conf_annotated_umr_multimap/main.nf'
 include { single_sample_multiqc } from './modules/local/single_sample_multiqc/main.nf'
@@ -322,21 +319,15 @@ workflow {
   // Get the second set of gene associations based on exon feature annotations (i.e. exon-tie breaking)
   umr_exon_assignment(filter_for_UMRs_mismatch.out.umr_mismatch_bam, gtf)
 
-  // Multimappers
-  // Generate a bam with only multimapping alignments, and up to 3 mismatches
-  filter_for_multimappers_mismatch(initial_feature_count_good_bam_out_ch)
-  // Generate assigned and unassigned bams from the multimapper bam
-  multimapper_transcript_assignment(filter_for_multimappers_mismatch.out.multimap_mismatch_bam, file("${baseDir}/bin/assign_multi_mappers.gawk"))
-  // Run exon tie breaking on the unassigned bam to get further gene associated reads
-  multimapper_exon_assignment(multimapper_transcript_assignment.out.unassigned_bam, gtf, file("${baseDir}/bin/assign_multi_mappers.gawk"))
+  // Multimappers: fused filter + transcript assignment + exon tie-break + merge (one task per sample
+  // to cut serial container-starts/staging on the critical path; output unchanged vs the old 4 processes)
+  multimapper_assignment(initial_feature_count_good_bam_out_ch, gtf, file("${baseDir}/bin/assign_multi_mappers.gawk"))
 
   // Merge the transcript- and exon-based gene assignments for the umrs
   merge_transcript_exon_umr_bams(umr_transcript_assignment.out.umr_transcript_assigned_bam.combine(umr_exon_assignment.out.umr_exon_assigned_bam, by: 0))
-  // Merge the transcript- and exon-based gene assignments for the multimappers
-  merge_transcript_exon_multimapper_bams(multimapper_transcript_assignment.out.assigned_bam.combine(multimapper_exon_assignment.out.assigned_bam, by: 0))
 
   // Merge the multimapper and UMR bams
-  merge_annotated_UMRs_with_annotated_multimappers(merge_transcript_exon_umr_bams.out.high_conf_annotated_umr_bam.combine(merge_transcript_exon_multimapper_bams.out.high_conf_annotated_multimapped_bam, by: 0))
+  merge_annotated_UMRs_with_annotated_multimappers(merge_transcript_exon_umr_bams.out.high_conf_annotated_umr_bam.combine(multimapper_assignment.out.high_conf_annotated_multimapped_bam, by: 0))
   
   // Re-merge channels for samples which had 0 or >0 alignments after STAR alignment
   umr_multimapper_annotated_bam_out_ch = merge_annotated_UMRs_with_annotated_multimappers.out.high_conf_annotated_bam.mix(create_valid_empty_bam_star.out.out_bam)
