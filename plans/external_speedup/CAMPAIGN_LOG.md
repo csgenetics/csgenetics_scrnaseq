@@ -349,3 +349,15 @@ warned the prior getClass()==UnixPath variant "only worked locally not on Seqera
 replaced with deterministic ch_cell_caller_out.join(ch_h5ad, by:0); removed order_integer_first. nextflow
 inspect parses clean. Both current heavy runs (pre-fix revisions) will still crash here; relaunch from f5083d0
 for clean end-to-end + heavy correctness once name-hash multimapper timing is harvested.
+
+### NAME-HASH multimapper = REGRESSION on heavy data -> REVERTED (commit 2cc858b)
+KEY MEASUREMENT (same sample HEAVY2_MOR036, cpus=8): name-hash multimapper = 4591s vs single-pass fused = 2029s.
+Name-hash is 2.3x SLOWER at heavy scale (was byte-identical but slower -- the RSeQC lesson again). Cause: single-pass
+ALREADY threads its two name sorts (samtools sort -n -@8), so the sort was never the unparallelized bottleneck; the
+name-hash split adds N single-threaded GNU sorts + N separate featureCounts (each re-parsing the GTF) + split/merge =
+pure overhead, no sort gain. Restored validated single-pass fused module (a0ed5c6), deleted bin/multimapper_assignment.sh.
+Lesson reinforced: parallel != faster; the only honest test is real heavy data.
+RELAUNCHED clean heavy run HEAVY_final 5xSDPMfKHBmx6l from epic tip 2cc858b (single-pass + join fix) -> outdir
+.../validation/heavy_final. WHEN DONE: confirm end-to-end completion at heavy scale (validates the filter_count_matrix
+join fix) + capture clean heavy wall-clock. Single-pass correctness already validated (8-human campaign cell-calls
+identical; light gate name-hash==single 16/16) so heavy run is a completion+timing check, not a fresh correctness gate.
