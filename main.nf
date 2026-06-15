@@ -83,17 +83,6 @@ include { qc_cascade_plot_single } from './modules/local/qc_cascade_plot_single/
 include { qc_cascade_plot_multi } from './modules/local/qc_cascade_plot_multi/main.nf'
 include { consolidated_report } from './modules/local/consolidated_report/main.nf'
 
-def order_integer_first(it){
-  try{
-        // Will raise exception if not int
-        it.isInteger()
-        0
-      } catch(MissingMethodException _e1){
-        // path will end here and therefore return 1
-        1
-      }
-}
-
 workflow {
 
   // Some users have issues accessing the S3 resources we have hosted publicly in our
@@ -427,13 +416,15 @@ workflow {
   cell_caller(ch_cell_caller)
   ch_cell_caller_out = cell_caller.out.cell_caller_out //[val(sample), int(cell_caller_nuc_gene_threshold)]
 
-  // Sort the groupTuple so that the int is always
-  // first and then flatten the tuple list to return a 3mer
-  // N.B. We were originally sorting by class (sort:{ val -> val.getClass() == sun.nio.fs.UnixPath ? 1 : 0})
-  // but for some reason this only worked locally and not on Seqera Platform
-  ch_filter_count_matrix_in = ch_cell_caller_out.mix(ch_h5ad)
-  .groupTuple(by: 0, size:2, sort:{ val -> order_integer_first(val)})
-  .map{ grouped -> [grouped[0], grouped[1][0], grouped[1][1]]}
+  // cell_caller_out is [sample_id, threshold] and ch_h5ad is [sample_id, raw_h5ad]; join by sample_id
+  // gives the [sample_id, threshold, raw_h5ad] tuple that filter_count_matrix expects, deterministically.
+  // (This previously used mix + groupTuple(size:2) with a sort closure that put the int threshold before
+  // the path. The sort relied on the path throwing MissingMethodException on .isInteger(); but on Seqera
+  // Platform / Fusion the path object responds to isInteger() without throwing, so both elements tied at
+  // sort key 0 and groupTuple fell back to arrival order -- a race between cell_caller and count_matrix
+  // that silently put the threshold in the path slot on heavy samples, crashing filter_count_matrix with
+  // "Not a valid path value: '<threshold>'". join keys on sample_id and is order-deterministic.)
+  ch_filter_count_matrix_in = ch_cell_caller_out.join(ch_h5ad, by: 0)
 
   // Output filtered (cells only) count tables
   filter_count_matrix(ch_filter_count_matrix_in)
