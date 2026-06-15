@@ -410,3 +410,18 @@ tradeoff): either (a) raise base memory on the memory-bound steps to right-size 
 costs packing), or (b) accept the retry mechanism as the heavy-sample safety net (zero config change, but wastes
 first-attempt wall-clock + compute on heavy runs). Recommend (a) for multimapper at least (its wasted attempt is
 20-28min). All output-neutral (pure scheduling).
+
+### THIRD bug found+fixed: multi-lane fan-out (qc_cascade_plot_multi collision). commit bfc864b
+HEAVY_final 5xSDPMfKHBmx6l ran all the science (filter_count_matrix 4/4, dedup, counts) then FAILED at
+qc_cascade_plot_multi: "input file name collision -- multiple input files for <sample>.metrics.csv".
+ROOT CAUSE (real multi-lane bug): the cell-caller threshold channel (main.nf ~367) does splitCsv+map ONE
+ENTRY PER ROW, but input_csv has one row PER LANE -> a 4-lane sample yields 4 identical [sample, threshold]
+tuples -> ch_h5ad.combine(thresholds, by:0) fans cell_caller out 4x -> propagates through the summary_statistics
+combine chain -> qc_cascade_plot_multi gets 4 copies of each metrics.csv -> collision. (Explains the 4 identical
+cell_caller work dirs seen at the very start + summary_statistics ok=16 for 4 samples.) Single-lane validation
+samples (1 row) never hit it. FIX: .unique() the threshold channel (thresholds are sample-level; no-op for
+single-lane). Only other per-row splitCsv (fastq channel) already collapsed by groupTuple(by:0) -> complete fix.
+nextflow inspect clean. RELAUNCHED HEAVY_final2 3BTp1Eo8yOgiJ6 from bfc864b (single-pass + join + unique fixes),
+outdir .../heavy_final2. Expect end-to-end SUCCESS this time (multimapper OOM still self-heals via 24GB retry).
+HEAVY-TESTING SCORECARD: found 3 real bugs (filter_count_matrix race f5083d0, multi-lane fan-out bfc864b, both
+pre-existing-class) + 1 perf regression reverted (name-hash) + 1 systemic OOM finding (flagged for user). Strong ROI.
