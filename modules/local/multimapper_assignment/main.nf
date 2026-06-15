@@ -28,34 +28,10 @@ process multimapper_assignment {
 
   script:
   """
-  # 1. filter_for_multimappers_mismatch: keep multimappers (NH>1) with <=3 mismatches
-  samtools view -@ ${task.cpus} -h -b -e '[NH]>1 && ([nM]==0 || [nM]==1 || [nM]==2 || [nM]==3)' -b ${feature_count_bam} > mm.featureCounts.bam
-
-  # 2. multimapper_transcript_assignment: name-sort, gawk-split into assigned/ambiguous, rebuild bams
-  samtools sort -n -@ ${task.cpus} -m 1G mm.featureCounts.bam | samtools view -@ ${task.cpus} | gawk -f ${multi_mapper_script}
-  if [ -f assigned_reads.sam_body ]; then
-    cat <(samtools view -H mm.featureCounts.bam) assigned_reads.sam_body | samtools view -@ ${task.cpus} -b -h > transcript.assigned.bam
-  else
-    samtools view -H -b mm.featureCounts.bam > transcript.assigned.bam
-  fi
-  if [ -f ambiguous_reads.sam_body ]; then
-    cat <(samtools view -H mm.featureCounts.bam) ambiguous_reads.sam_body | samtools view -@ ${task.cpus} -h -b > transcript.unassigned.bam
-  else
-    samtools view -H -b mm.featureCounts.bam > transcript.unassigned.bam
-  fi
-  rm -f assigned_reads.sam_body ambiguous_reads.sam_body
-
-  # 3. multimapper_exon_assignment: exon tie-break on the still-ambiguous reads, gawk-split again
-  featureCounts -a ${gtf} -o exon.txt -R BAM transcript.unassigned.bam -T ${task.cpus} -t exon -g gene_id --fracOverlap 0.5 --extraAttributes gene_name -s 1 -M
-  samtools sort -n -@ ${task.cpus} -m 1G transcript.unassigned.bam.featureCounts.bam | samtools view -@ ${task.cpus} | gawk -f ${multi_mapper_script}
-  if [ -f assigned_reads.sam_body ]; then
-    cat <(samtools view -H transcript.unassigned.bam.featureCounts.bam) assigned_reads.sam_body | samtools view -@ ${task.cpus} -b -h > exon.assigned.bam
-  else
-    samtools view -H -b transcript.unassigned.bam.featureCounts.bam > exon.assigned.bam
-  fi
-
-  # 4. merge the transcript- and exon-assigned bams
-  samtools merge -@ ${task.cpus} -o ${sample_id}.multimapped.annotated.bam transcript.assigned.bam exon.assigned.bam
+  # Name-hash-parallel: split the multimapper BAM by read-name hash, run the filter+transcript+exon+merge
+  # sub-pipeline on each chunk in parallel, and merge. Parallelises the two name sorts (the dominant cost)
+  # bounded by the largest chunk. Read-set identical to the single-pass (verified). See the script header.
+  multimapper_assignment.sh ${feature_count_bam} ${sample_id} ${gtf} ${multi_mapper_script} ${task.cpus}
   """
 
   stub:
