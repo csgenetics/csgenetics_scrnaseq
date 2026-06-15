@@ -332,3 +332,20 @@ fails (star a1, mm a1) -- work dir .command.err/.log/.out all 0 bytes, no .exitc
 NOT a name-hash bug (a script error/OOM writes stderr+exitcode). Same sig as star a1 which recovered.
 Nextflow retry (maxRetries=5) handling it; mm attempt=2 RUNNING. Both runs now in multimapper stage = the
 heavy wall-clock measurement. Grab multimapper_assignment realtime (nh vs sp) on completion.
+
+### Heavy results (13:02) + filter_count_matrix race fix
+MOR_nh (5ReG2sTw0yxi6d): SUCCEEDED end-to-end (name-hash works at MOR scale).
+HEAVY single-pass multimapper_assignment realtimes (cpus=8): HEAVY2_MOR036=2029s, HEAVY3_MIX=1984s,
+HEAVY4_MIX=2563s (~33-43 min/sample) -- multimapper IS the dominant heavy-scale per-sample cost, confirmed.
+HEAVY name-hash multimapper still RUNNING (no comparison numbers yet -- harvest next tick).
+
+BUG FOUND + FIXED (pre-existing, also on main): HEAVY_sp FAILED at filter_count_matrix(2) with
+"Not a valid path value: '1811'" (1811 = HEAVY2_MOR036 cell_caller threshold). Root cause: ch_cell_caller_out
+.mix(ch_h5ad).groupTuple(size:2, sort:order_integer_first). order_integer_first ordered int-before-path by
+relying on path.isInteger() THROWING MissingMethodException; on Seqera/Fusion the path responds to isInteger()
+without throwing -> both tie at key 0 -> groupTuple falls back to ARRIVAL ORDER -> race between cell_caller and
+count_matrix. Light/MOR won the race; heavy lost it -> threshold in path slot -> crash. Code comment already
+warned the prior getClass()==UnixPath variant "only worked locally not on Seqera". FIX (commit f5083d0):
+replaced with deterministic ch_cell_caller_out.join(ch_h5ad, by:0); removed order_integer_first. nextflow
+inspect parses clean. Both current heavy runs (pre-fix revisions) will still crash here; relaunch from f5083d0
+for clean end-to-end + heavy correctness once name-hash multimapper timing is harvested.
