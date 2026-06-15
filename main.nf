@@ -407,6 +407,13 @@ workflow {
           }
         }
     }
+    // Cell-caller thresholds are SAMPLE-level metadata, but input_csv has one ROW PER LANE, so a
+    // multi-lane sample yields N identical [sample_id, threshold] tuples. Dedup to one per sample:
+    // without this, ch_h5ad.combine(.., by:0) fans cell_caller out N-fold and that multiplicity
+    // propagates through the summary_statistics combine chain, making qc_cascade_plot_multi receive
+    // N copies of each <sample>.metrics.csv -> "input file name collision" crash on multi-lane input.
+    // (Single-lane samples have one row, so .unique() is a no-op for them.)
+    .unique()
     .set { user_specified_cell_caller_thresholds_ch }
 
   
