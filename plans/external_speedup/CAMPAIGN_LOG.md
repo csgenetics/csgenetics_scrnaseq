@@ -433,3 +433,24 @@ filter_count_matrix + summary_statistics also 1/sample now. Multi-lane fan-out e
 + consolidated_report to close out heavy validation. (Side note: this run's multimapper OOM was flakier -- MIX
 samples passed at 12GB attempt-1, MOR036 OOM'd -> 12GB is marginal/node-packing-dependent, strengthening the
 optional memory-bump recommendation, still a user decision.)
+
+## HEAVY-SAMPLE VALIDATION COMPLETE (2026-06-15 ~22:00) -- HEAVY_final2 3BTp1Eo8yOgiJ6 SUCCEEDED
+End-to-end SUCCESS on 4 heavy lane-merged human samples. Wall-clock 195 min. qc_cascade_plot_multi + consolidated_report
+both PASSED (the prior crash points). Report renders: all 4 samples present (HEAVY1_MOR034/HEAVY2_MOR036/HEAVY3_MIX/
+HEAVY4_MIX x30 each), Number-of-cells populated, multisample_out.csv full metric set, multisample_qc_cascade.html ok.
+
+HEAVY-SCALE CRITICAL PATH (max per-sample realtime): multimapper_assignment 72.5min (DOMINANT #1 by far), qc 22.6,
+raw_rseqc 21.6, star 19.2, initial_feature_count 16.8, dedup 16.5, annotated_rseqc 16.2, sort_index_bam 14.4.
+
+OUTCOME OF THE HEAVY TESTING THE USER REQUESTED -- found what single-lane validation missed:
+  FIXED (committed to epic, pushed, unmerged):
+    1. filter_count_matrix channel race (f5083d0) -- Seqera/Fusion path responds to .isInteger() -> groupTuple
+       arrival-order race put threshold in path slot; replaced with deterministic join(by:0). PRE-EXISTING (on main).
+    2. multi-lane fan-out (bfc864b) -- threshold channel parsed per-CSV-ROW, multi-lane = N rows = Nx cell_caller
+       fan-out -> qc_cascade_plot_multi collision; fixed with .unique(). PRE-EXISTING (real multi-lane customer bug).
+  REVERTED:
+    3. name-hash multimapper -- 2.3x SLOWER on heavy (4591 vs 2029s same sample); restored single-pass (2cc858b).
+  FLAGGED FOR USER (not acted on -- cost/packing tradeoff, NOT a blocker, retry self-heals):
+    4. multimapper base mem 12GB OOMs on big/MIX heavy samples (marginal/flaky -- self-heals at 24GB retry, wastes
+       ~20-28min first attempt). categorize_reads similarly 4->8GB. RECOMMEND bumping multimapper base 12->24GB.
+EPIC STATE: single-pass multimapper + join fix + multi-lane unique fix, all validated at heavy scale. PR #78, unmerged.
