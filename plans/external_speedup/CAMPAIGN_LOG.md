@@ -425,3 +425,11 @@ nextflow inspect clean. RELAUNCHED HEAVY_final2 3BTp1Eo8yOgiJ6 from bfc864b (sin
 outdir .../heavy_final2. Expect end-to-end SUCCESS this time (multimapper OOM still self-heals via 24GB retry).
 HEAVY-TESTING SCORECARD: found 3 real bugs (filter_count_matrix race f5083d0, multi-lane fan-out bfc864b, both
 pre-existing-class) + 1 perf regression reverted (name-hash) + 1 systemic OOM finding (flagged for user). Strong ROI.
+
+### UNIQUE FIX VALIDATED (HEAVY_final2 3BTp1Eo8yOgiJ6, 21:05)
+cell_caller now runs EXACTLY ONCE per sample (HEAVY3_MIX=1, HEAVY4_MIX=1) -- was 4x before the .unique() fix.
+filter_count_matrix + summary_statistics also 1/sample now. Multi-lane fan-out eliminated; qc_cascade_plot_multi
+(the prior crash point) will receive 4 distinct metrics.csv -> no collision expected. Awaiting end-to-end SUCCESS
++ consolidated_report to close out heavy validation. (Side note: this run's multimapper OOM was flakier -- MIX
+samples passed at 12GB attempt-1, MOR036 OOM'd -> 12GB is marginal/node-packing-dependent, strengthening the
+optional memory-bump recommendation, still a user decision.)
