@@ -361,3 +361,17 @@ RELAUNCHED clean heavy run HEAVY_final 5xSDPMfKHBmx6l from epic tip 2cc858b (sin
 .../validation/heavy_final. WHEN DONE: confirm end-to-end completion at heavy scale (validates the filter_count_matrix
 join fix) + capture clean heavy wall-clock. Single-pass correctness already validated (8-human campaign cell-calls
 identical; light gate name-hash==single 16/16) so heavy run is a completion+timing check, not a fresh correctness gate.
+
+### HEAVY_final (5xSDPMfKHBmx6l) -- multimapper MEMORY finding (heavy scale)
+Single-pass multimapper at 12GB: HEAVY2_MOR036 COMPLETED (1833s, ~30min) but the 3 bigger samples
+(HEAVY1_MOR034, HEAVY3_MIX, HEAVY4_MIX) FAILED attempt-1 at 12GB after 17-28min, retrying at 24GB.
+Evidence = OOM (not spot): failed work dir has NO .exitcode (404, container killed abruptly) and
+.command.err ends at "[bam_sort_core] merging from 3 files and 8 in-memory blocks..." = killed mid
+`samtools sort -n -@8 -m 1G`. That sort reserves 8GB buffers (1G x 8) inside the 12GB cap; on the bigger/
+MIX heavy samples (more multimappers) it tips over. Sample-size correlation (small MOR036 ok @12GB, 3 bigger
+die) corroborates OOM. errorStrategy retry doubles mem -> 24GB attempt-2 self-heals THIS run.
+NOT acting on config yet: confirm 24GB retries SUCCEED next tick (proves OOM vs spot) before any base-memory
+bump. If confirmed, multimapper_assignment base 12->~20-24GB would avoid ~20-28min wasted first-attempt OOM on
+heavy samples (a wall-clock cost the user cares about) -- but it is a cost/instance-packing tradeoff to surface
+to the user, not decide autonomously. Primary goal of this run still pending: filter_count_matrix join-fix
+validation at heavy scale (HEAVY2_MOR036 already at count_matrix).
