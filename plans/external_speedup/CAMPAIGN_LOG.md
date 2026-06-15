@@ -375,3 +375,9 @@ bump. If confirmed, multimapper_assignment base 12->~20-24GB would avoid ~20-28m
 heavy samples (a wall-clock cost the user cares about) -- but it is a cost/instance-packing tradeoff to surface
 to the user, not decide autonomously. Primary goal of this run still pending: filter_count_matrix join-fix
 validation at heavy scale (HEAVY2_MOR036 already at count_matrix).
+
+### JOIN FIX VALIDATED at heavy scale (15:55)
+HEAVY_final 5xSDPMfKHBmx6l: filter_count_matrix ok=1 fail=0 -- HEAVY2_MOR036 passed count_matrix ->
+filter_count_matrix -> categorize_reads cleanly (exactly where the pre-fix pipeline crashed "Not a valid
+path value"). The ch_cell_caller_out.join(ch_h5ad) fix (f5083d0) works on heavy data. The 3 bigger samples'
+24GB multimapper retries still RUNNING -- confirm OOM resolution + full end-to-end next tick.
