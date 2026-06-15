@@ -306,3 +306,11 @@ NEXT WALL-CLOCK LEVER (the only big one left): split the multimapper BAM by read
 per chunk -> merge (like dedup contig-split but name-hash; gawk groups by name so name-hash chunks keep groups whole).
 ~Nx on the 15.5m -> could push human well under 75min. Substantial build. STAR (4.6m, mem-bound) + index download
 (2.8m startup) are inherent. Caveat: 155(contended) vs 75(solo) conflates code + contention; per-step wins are real.
+
+## NAME-HASH-PARALLEL multimapper (epic ea666dd): attack the #1 wall-clock step (~15.5min)
+bin/multimapper_assignment.sh splits the multimapper BAM by read-name hash -> parallel filter+transcript+exon+merge
+per chunk -> merge. Read-set BYTE-IDENTICAL to single-pass (standalone md5 match, 249685 reads). Module now calls it.
+VALIDATING: (1) local correctness gate gate7 (namehash ea666dd vs single-pass a0ed5c6, count-data byte-identical),
+(2) real-data speed run 5ReG2sTw0yxi6d (outdir cand_human_namehash) -> check multimapper_assignment realtime vs 15.5min
++ total wall-clock vs 75min. PER RSEQC LESSON: only keep if measurably faster (split + featureCounts-per-chunk add
+overhead). If slower or no gain -> revert to single-pass fused (a0ed5c6). Both checks pending.
