@@ -381,3 +381,20 @@ HEAVY_final 5xSDPMfKHBmx6l: filter_count_matrix ok=1 fail=0 -- HEAVY2_MOR036 pas
 filter_count_matrix -> categorize_reads cleanly (exactly where the pre-fix pipeline crashed "Not a valid
 path value"). The ch_cell_caller_out.join(ch_h5ad) fix (f5083d0) works on heavy data. The 3 bigger samples'
 24GB multimapper retries still RUNNING -- confirm OOM resolution + full end-to-end next tick.
+
+### CONFIRMED OOM (16:31) + heavy MIX multimapper cost -- USER DECISIONS (not acted on autonomously)
+24GB retry SUCCEEDED: HEAVY3_MIX COMPLETED at 24GB attempt-2 (failed at 12GB attempt-1) => CONFIRMED OOM, not spot.
+The single-pass multimapper `samtools sort -n -@8 -m 1G` reserves 8GB buffers; 12GB base OOMs on the bigger heavy
+samples (esp. MIX). Run self-heals via retry->24GB so NOT blocking; left config unchanged deliberately.
+
+RECOMMENDATION 1 (memory, user to decide -- cost/packing tradeoff): bump multimapper_assignment base memory
+12GB->24GB in conf/base.config. PRO: avoids ~20-28min wasted doomed-first-attempt OOM per heavy sample (wall-clock
++ wasted compute the user cares about). CON: doubles the reservation -> fewer tasks pack per instance (modest;
+r5d.4xlarge=128GB, and STAR already reserves 40-60GB, dedup 16GB, so 24GB is in line). Output-neutral (pure scheduling).
+Likely cost-neutral-or-better since it removes the wasted failed attempt. Alternative: reduce `-m 1G`->512M to fit 12GB,
+but that risks slowing the dominant sort (more disk spills) -- NOT recommended.
+
+OBSERVATION 2 (heavy MIX bottleneck): HEAVY3_MIX multimapper = 5497s (~91min) even at 24GB. MIX/mixed-genome samples
+have far more multimappers -> multimapper is THE heavy-scale critical-path cost (~1.5h on MIX). Name-hash split already
+proven slower (reverted). A deeper rethink (e.g. partition the two name-sorts without per-chunk featureCounts GTF
+re-parse) MIGHT help but is speculative new work -- flag for user, do not chase autonomously.
