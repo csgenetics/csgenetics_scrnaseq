@@ -398,3 +398,15 @@ OBSERVATION 2 (heavy MIX bottleneck): HEAVY3_MIX multimapper = 5497s (~91min) ev
 have far more multimappers -> multimapper is THE heavy-scale critical-path cost (~1.5h on MIX). Name-hash split already
 proven slower (reverted). A deeper rethink (e.g. partition the two name-sorts without per-chunk featureCounts GTF
 re-parse) MIGHT help but is speculative new work -- flag for user, do not chase autonomously.
+
+### (17:59) SECOND heavy OOM = systemic memory-headroom theme. JOIN FIX 4/4.
+filter_count_matrix ok=4 fail=0 -- join fix validated across ALL 4 heavy samples.
+categorize_reads OOM'd at 4GB on HEAVY1_MOR034 (heaviest sample = all MOR034 lanes); other 3 ok at 4GB; retry
+at 8GB running (same OOM signature: exit=2147483647, biggest-sample-only). So the HEAVIEST sample now OOMs on TWO
+memory-bound steps at base reservation: multimapper (12->24GB) AND categorize_reads (4->8GB). This is SYSTEMIC:
+base.config memory is tuned for light/medium; heavy customer samples will repeatedly waste a doomed first attempt
+(~5-30min each) before the retry-doubling self-heals. USER DECISION (still not acting autonomously -- cost/packing
+tradeoff): either (a) raise base memory on the memory-bound steps to right-size for heavy samples (saves wall-clock,
+costs packing), or (b) accept the retry mechanism as the heavy-sample safety net (zero config change, but wastes
+first-attempt wall-clock + compute on heavy runs). Recommend (a) for multimapper at least (its wasted attempt is
+20-28min). All output-neutral (pure scheduling).
