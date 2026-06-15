@@ -314,3 +314,13 @@ VALIDATING: (1) local correctness gate gate7 (namehash ea666dd vs single-pass a0
 (2) real-data speed run 5ReG2sTw0yxi6d (outdir cand_human_namehash) -> check multimapper_assignment realtime vs 15.5min
 + total wall-clock vs 75min. PER RSEQC LESSON: only keep if measurably faster (split + featureCounts-per-chunk add
 overhead). If slower or no gain -> revert to single-pass fused (a0ed5c6). Both checks pending.
+
+## HEAVY-SAMPLE TESTING (user 2026-06-15: test with SEVERAL HEAVY samples, not light; concatenate internal samples)
+NOTE: correctness gates used the LIGHT test profile (2x 1M-read); validation used 8 real MOR samples. User wants HEAVY.
+Built heavy_human_validation.csv via LANE-MERGING (no data transfer -- pipeline groupTuple+merge_lanes concatenates):
+4 heavy samples: HEAVY1_MOR034 (4 MOR034 lanes ~5GB R1, ~4x reads), HEAVY2_MOR036 (4 lanes ~3GB), HEAVY3_MIX + HEAVY4_MIX
+(4 lanes each, MOR034+MOR036 ~3.5GB). Light name-hash correctness gate b8n9sbqzt PASSED (16/16 byte-identical).
+LAUNCHED 2 HEAVY runs: name-hash 4CXBevl8pT7lSw (cand_heavy_namehash) + single-pass 4t20WgHyjazOyq (cand_heavy_single).
+WHEN DONE: (1) CORRECTNESS at heavy scale: namehash vs single count-data byte-identical via compare_outputs.py;
+(2) WALL-CLOCK: multimapper_assignment realtime name-hash vs single-pass on the HEAVY multimapper BAMs = the real speedup
+test (light data hid it). Per RSeQC lesson keep name-hash only if measurably faster on heavy data.
