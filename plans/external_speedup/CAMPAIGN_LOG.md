@@ -324,3 +324,11 @@ LAUNCHED 2 HEAVY runs: name-hash 4CXBevl8pT7lSw (cand_heavy_namehash) + single-p
 WHEN DONE: (1) CORRECTNESS at heavy scale: namehash vs single count-data byte-identical via compare_outputs.py;
 (2) WALL-CLOCK: multimapper_assignment realtime name-hash vs single-pass on the HEAVY multimapper BAMs = the real speedup
 test (light data hid it). Per RSeQC lesson keep name-hash only if measurably faster on heavy data.
+
+### Heavy run progress (12:20)
+HEAVY_sp (4t20WgHyjazOyq): STAR 4/4 done, 4x multimapper_assignment (single-pass) RUNNING.
+HEAVY_nh (4CXBevl8pT7lSw): STAR 4/4 done, multimapper (name-hash) running; 2 transient SPOT-RECLAIM
+fails (star a1, mm a1) -- work dir .command.err/.log/.out all 0 bytes, no .exitcode = node death pre-script,
+NOT a name-hash bug (a script error/OOM writes stderr+exitcode). Same sig as star a1 which recovered.
+Nextflow retry (maxRetries=5) handling it; mm attempt=2 RUNNING. Both runs now in multimapper stage = the
+heavy wall-clock measurement. Grab multimapper_assignment realtime (nh vs sp) on completion.
