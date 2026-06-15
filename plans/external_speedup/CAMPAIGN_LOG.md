@@ -297,3 +297,12 @@ NEW run for a clean wall-clock headline (no CE contention).
 ## MULTIMAPPER FUSION VALIDATED (gate bxvgmg0t8): PASS. Count matrices 16/16 byte-identical, per-sample
 metrics identical, multisample_out.csv identical, same-sample annotated bam read-set identical. Fusion is
 byte-equivalent to the 4-process chain. Wall-clock branch solid (epic 75e813c+).
+
+## WALL-CLOCK MEASURED (solo NEW human run 4wvRVfvApHjIJL, epic 8fceaaa): 75 min time-to-result.
+OLD_human 155min (contended) -> NEW solo 75min = ~2x. Trace confirms: raw_rseqc 25.6->5.9m (revert worked),
+annotated_rseqc 6.4->2.9m, multimapper_assignment FUSED 15.5m (was ~23m as 4 tasks @-@4), io_count 0.1m, star 4.6m.
+CRITICAL PATH NOW dominated by multimapper_assignment ~15.5m (the 2 name sorts of the huge multimapper BAM).
+NEXT WALL-CLOCK LEVER (the only big one left): split the multimapper BAM by read-NAME-hash -> parallel sort+gawk
+per chunk -> merge (like dedup contig-split but name-hash; gawk groups by name so name-hash chunks keep groups whole).
+~Nx on the 15.5m -> could push human well under 75min. Substantial build. STAR (4.6m, mem-bound) + index download
+(2.8m startup) are inherent. Caveat: 155(contended) vs 75(solo) conflates code + contention; per-step wins are real.
