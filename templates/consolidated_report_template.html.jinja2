@@ -229,6 +229,12 @@
     .cs-footer { color: var(--cs-muted); font-size: 0.85rem; padding: 2rem 0 1rem; }
     .plot-wrap { width: 100%; overflow-x: auto; }
   </style>
+
+  <!-- Plotly.js MUST load here in <head>, before <body>. The per-sample plot fragments
+       embed inline Plotly.newPlot() calls that run in document order as the body is parsed;
+       if the library were placed after them (e.g. at the end of <body>) every plot would
+       throw "Plotly is not defined" and render blank. Inlined from the vendored copy (no CDN). -->
+  <script>{{ assets.plotly_js | safe }}</script>
 </head>
 <body>
 
@@ -528,8 +534,8 @@
     </div>
   </div>
 
-  <!-- Offline-safe: Plotly.js and Bootstrap JS embedded inline (no CDN). -->
-  <script>{{ assets.plotly_js | safe }}</script>
+  <!-- Offline-safe: Bootstrap JS embedded inline (no CDN). Plotly.js is loaded in <head>
+       (see the comment there) so it is defined before the inline per-sample newPlot() calls. -->
   <script>{{ assets.bootstrap_js | safe }}</script>
   <script>
     // Activate Bootstrap tooltips.
