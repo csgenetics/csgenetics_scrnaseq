@@ -88,6 +88,7 @@
       font-weight: 700;
       color: var(--cs-green-dark);
       line-height: 1.1;
+      font-variant-numeric: tabular-nums;
     }
     .cs-headline .label {
       font-size: 0.8rem;
@@ -111,6 +112,7 @@
       text-align: right;
       padding: 0.45rem 0.5rem;
       border-bottom: 1px solid var(--cs-card-border);
+      font-variant-numeric: tabular-nums;
       white-space: nowrap;
     }
     .cs-info { color: var(--cs-muted); font-size: 0.85rem; cursor: help; }
@@ -220,7 +222,7 @@
       font-weight: 700;
       font-size: 0.95rem;
     }
-    .cs-xsample-table td { text-align: right; }
+    .cs-xsample-table td { text-align: right; font-variant-numeric: tabular-nums; }
 
     .tooltip { font-size: 0.8rem; }
     .accordion-button:not(.collapsed) { color: #000; background-color: #fff; }
@@ -228,6 +230,37 @@
 
     .cs-footer { color: var(--cs-muted); font-size: 0.85rem; padding: 2rem 0 1rem; }
     .plot-wrap { width: 100%; overflow-x: auto; }
+
+    /* ---- Print / Save-to-PDF ----
+       On screen only the selected sample's pane is shown (via the dropdown);
+       print has no dropdown, so without these rules a printed/PDF'd report would
+       silently contain only the first sample and clip the cross-sample table to
+       its first column. Reveal every pane (one per page, each labelled), drop the
+       on-screen-only chrome, let the wide table print in full, and avoid splitting
+       cards/plots across page boundaries. */
+    @media print {
+      .cs-navbar { display: none !important; }                 /* sticky nav: useless on paper */
+      .cs-sample-picker { display: none !important; }          /* dropdown: useless on paper */
+      .modebar { display: none !important; }                   /* Plotly toolbar icons */
+
+      /* Show ALL per-sample panes, each starting on a new page and labelled. */
+      .cs-sample-pane { display: block !important; }
+      .cs-sample-pane + .cs-sample-pane { break-before: page; }
+      .cs-sample-pane::before {
+        content: "Sample: " attr(data-sample-id);
+        display: block; font-weight: 700; font-size: 1.1rem;
+        color: var(--cs-green-dark); margin: 0 0 0.5rem;
+      }
+
+      /* Print the full cross-sample matrix instead of clipping the scroll box. */
+      .cs-xsample-wrap { overflow: visible !important; max-height: none !important; }
+      .cs-xsample-table { width: 100% !important; font-size: 0.7rem; }
+      .cs-xsample-table thead { display: table-header-group; } /* repeat header across pages */
+
+      /* Keep cards/plots/tables intact across page breaks. */
+      .cs-card, .cs-headline, .plot-wrap, .cs-metric-table tr { break-inside: avoid; }
+      .cs-section-title { break-after: avoid; }
+    }
   </style>
 
   <!-- Plotly.js MUST load here in <head>, before <body>. The per-sample plot fragments
@@ -460,14 +493,10 @@
     <section id="experiment" class="cs-section">
       <h1 class="cs-section-title">Experiment summary</h1>
 
-      {% if summary_plot %}
-      <div class="cs-card">
-        <div class="card-body">
-          <div class="cs-group-title">Key metric distributions across samples</div>
-          <div class="plot-wrap">{{ summary_plot | safe }}</div>
-        </div>
-      </div>
-      {% endif %}
+      {# The across-sample "Key metric distributions" violin/box plot was removed by
+         decision (2026-06): a violin/KDE over the small sample counts these reports
+         carry implies a distribution that does not exist. See create_consolidated_report.py
+         _build_summary_plot_fragment (now returns None). #}
 
       {% if multi_qc_cascade %}
       <div class="cs-card">

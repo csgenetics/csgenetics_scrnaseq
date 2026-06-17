@@ -43,28 +43,42 @@ fragments are located by their conventional filenames in the same directory:
 import sys
 import os
 from pathlib import Path
-from collections import defaultdict, OrderedDict
+from collections import defaultdict
 
 from jinja2 import Template
-import pandas as pd
-import numpy as np
-import plotly.graph_objects as go
-import plotly.io as pio
 from plotly.offline import get_plotlyjs
-from plotly.subplots import make_subplots
 
 from create_single_sample_report import get_cell_stat_cat_dict_obj
-from create_multi_sample_report import MultipleSampleSummaries
 
 
 def format_number_to_string(number_str):
     """
     Format numbers exactly as the previous reports did:
     floats -> 2 d.p.; ints unchanged. Frozen formatting contract.
+    Used ONLY for the multisample_out.csv data file (must stay byte-identical;
+    thousands separators would corrupt the comma-delimited file).
     """
     if "." in number_str:
         return f"{float(number_str):.2f}"
     else:
+        return number_str
+
+
+def format_number_for_display(number_str):
+    """
+    Human-readable DISPLAY formatting for the on-screen tables and headline cards:
+    add thousands separators to the integer part and keep the existing decimals
+    (floats stay at 2 d.p., matching the value contract -- no rounding, so
+    percentages/rates/fractions are unchanged; e.g. 181004808 -> "181,004,808",
+    12106.54 -> "12,106.54", 94.30 -> "94.30"). DISPLAY ONLY -- never used for the
+    CSV. Non-numeric sentinels (e.g. "nan", "nan_nan") pass through unchanged.
+    """
+    s = number_str.strip()
+    try:
+        if "." in s:
+            return f"{float(s):,.2f}"
+        return f"{int(s):,}"
+    except ValueError:
         return number_str
 
 
@@ -132,7 +146,7 @@ class ConsolidatedReport:
             next(fh)  # header
             for line in fh:
                 var_name, var_value, human, tooltip, group = line.strip().split(",")
-                metrics_dict[group][var_name] = (human, format_number_to_string(var_value), tooltip)
+                metrics_dict[group][var_name] = (human, format_number_for_display(var_value), tooltip)
 
         cell_plot = read_fragment(os.path.join(self.work_dir, f"{sample_id}_counts_pdf_with_threshold.html"))
         qc_cascade = read_fragment(os.path.join(self.work_dir, f"{sample_id}.qc_cascade.html"))
@@ -158,14 +172,10 @@ class ConsolidatedReport:
     # ------------------------------------------------------------------ #
     def _build_multi_metrics_and_csv(self):
         """
-        Reuse MultipleSampleSummaries' exact CSV-building logic so that
-        multisample_out.csv values/schema are byte-identical to today, and so
-        the cross-sample table renders the same numbers.
-
-        We drive the shared code from the discovered metrics csvs by staging
-        them into the cwd (they already are, via Nextflow inputs) and calling
-        the same routine. To avoid re-implementing it, we replicate only the
-        parsing here (no recomputation) using the same formatting.
+        Parse the per-sample metrics csvs (no recomputation) to build both the
+        re-emitted multisample_out.csv (byte-identical schema/values) and the
+        cross-sample table. The CSV keeps the frozen format_number_to_string
+        contract; the table gets thousands separators (see the return).
         """
         # metrics_dict[classification][(variable_name, human, description, classification)]
         #   = [value_per_sample, ...] in sample order
@@ -174,118 +184,50 @@ class ConsolidatedReport:
         # Build from the SAME csvs, in the SAME sorted order as the table columns.
         csv_paths = [self._metrics_csv_for(sid) for sid in self.sample_ids]
 
-        # the plotting df source (key metrics across samples)
-        self.metrics_to_plot = self._metrics_to_plot()
-        data_for_plotting = defaultdict(list)
-
+        # Store the RAW per-sample values; format per-purpose below. The CSV keeps
+        # the frozen format_number_to_string contract; the on-screen table gets
+        # thousands separators. The two must not be conflated -- separators would
+        # corrupt the comma-delimited CSV.
         for csv_path in csv_paths:
             with open(csv_path) as fh:
                 next(fh)  # header
                 for line in fh:
                     variable_name, value, human, description, classification = line.strip().split(",")
-                    val = format_number_to_string(value)
-                    metrics_dict[classification][(variable_name, human, description, classification)].append(val)
-                    if variable_name in self.metrics_to_plot:
-                        data_for_plotting[variable_name].append(val)
+                    metrics_dict[classification][(variable_name, human, description, classification)].append(value)
 
-        # Re-emit multisample_out.csv with the unchanged schema and values.
+        # Re-emit multisample_out.csv with the unchanged schema and values
+        # (format_number_to_string: floats -> 2 d.p., ints unchanged; NO separators).
         with open("multisample_out.csv", "w") as csv_out:
             csv_out.write("variable_name,human_readable_name,description,classification,")
             csv_out.write(",".join(self.sample_ids) + "\n")
             for classification, subdict in metrics_dict.items():
                 for (variable_name, human, description, _cls), vals in subdict.items():
                     csv_out.write(f"{','.join([variable_name, human, description, classification])},")
-                    csv_out.write(",".join(vals) + "\n")
-
-        # Plotting df (floats) for the summary violin plots.
-        self.plotting_df = pd.DataFrame.from_dict(
-            {m: data_for_plotting[m] for m in self.metrics_to_plot if m in data_for_plotting}
-        )
-        if not self.plotting_df.empty:
-            self.plotting_df.set_index(pd.Index(self.sample_ids), inplace=True)
-            for metric in self.plotting_df.columns:
-                self.plotting_df[metric] = self.plotting_df[metric].astype(float)
+                    csv_out.write(",".join(format_number_to_string(v) for v in vals) + "\n")
 
         # Cell-metric tooltips for the cross-sample table (mixed only).
         cell_tooltip = get_cell_stat_cat_dict_obj(self.mixed)
         cell_tooltip = {k: v[0] for k, v in cell_tooltip.items()}
 
-        # plain dicts for Jinja
-        return {k: dict(v) for k, v in metrics_dict.items()}, cell_tooltip
-
-    def _metrics_to_plot(self):
-        if self.mixed:
-            return OrderedDict([
-                ("reads_pre_qc", "Number of reads pre-QC"),
-                ("num_cells_total", "Number of single-cells (Hsap and Mmus)"),
-                ("raw_reads_per_cell_total", "Raw reads per single-cell"),
-                ("median_genes_detected_per_cell_total", "Median genes detected per single-cell"),
-            ])
-        else:
-            return OrderedDict([
-                ("reads_pre_qc", "Number of reads pre-QC"),
-                ("num_cells", "Number of cells"),
-                ("raw_reads_per_cell", "Raw reads per cell"),
-                ("median_genes_detected_per_cell", "Median genes detected per cell"),
-            ])
+        # The cross-sample TABLE shows display-formatted values (thousands
+        # separators); the CSV above kept the raw frozen contract.
+        table_dict = {
+            cls: {key: [format_number_for_display(v) for v in vals] for key, vals in sub.items()}
+            for cls, sub in metrics_dict.items()
+        }
+        return table_dict, cell_tooltip
 
     def _build_summary_plot_fragment(self):
         """
-        Build the across-sample violin/box summary plots, identical to the old
-        multisample_summary_plots.html, but as a Plotly-free fragment for
-        embedding (no per-plot Plotly.js).
+        DISABLED (2026-06, by decision): the across-sample "Key metric distributions"
+        violin/box summary plot is intentionally not generated. A violin/KDE drawn
+        over the small number of samples these reports carry implies a continuous
+        distribution that does not exist. Returning None hides the section cleanly
+        via the template's `{% if summary_plot %}` guard (and the template block has
+        also been removed). Reinstate by restoring this method from git history if a
+        suitable small-N representation is ever chosen.
         """
-        if self.plotting_df.empty:
-            return None
-
-        # Reuse the frozen helpers from MultipleSampleSummaries unchanged.
-        helper = MultipleSampleSummaries.__new__(MultipleSampleSummaries)
-        helper.plotting_df = self.plotting_df
-        helper.metrics_to_plot = self.metrics_to_plot
-
-        y_ranges = helper.calculate_y_ranges()
-        subplot_titles = helper.generate_subplot_titles()
-
-        csgx_colors = [
-            "rgb(54,186,0)",   # CSG Green
-            "rgb(37,127,193)", # CSG Blue
-            "rgb(52,187,207)", # CSG Teal
-        ]
-        n_metrics = len(self.metrics_to_plot)
-        fig = make_subplots(rows=1, cols=n_metrics, subplot_titles=subplot_titles, horizontal_spacing=0.05)
-
-        for i, (metric, label) in enumerate(self.metrics_to_plot.items()):
-            if metric not in self.plotting_df.columns:
-                continue
-            fig.add_trace(
-                go.Violin(
-                    y=self.plotting_df[metric],
-                    name=label,
-                    box_visible=True,
-                    points="all",
-                    line_color=csgx_colors[i % 3],
-                    fillcolor=csgx_colors[i % 3],
-                    opacity=0.6,
-                    box=dict(visible=True, line_color="black"),
-                    customdata=self.plotting_df.index,
-                    hovertemplate=f"<b>%{{customdata}}</b><br>{label}: %{{text}}<extra></extra>",
-                    text=[helper.abbreviate_number(y) for y in self.plotting_df[metric]],
-                ),
-                row=1, col=i + 1,
-            )
-            fig.update_yaxes(title_text=label, range=y_ranges[metric], row=1, col=i + 1)
-            fig.update_xaxes(showticklabels=False, row=1, col=i + 1)
-
-        fig.update_layout(
-            font=dict(family="Lexend, sans-serif", color="black"),
-            autosize=True, showlegend=False, height=600, width=None,
-            margin=dict(l=30, r=30, t=100, b=30),
-        )
-
-        return pio.to_html(
-            fig, full_html=False, include_plotlyjs=False,
-            config={"responsive": True, "displaylogo": False},
-        )
+        return None
 
     # ------------------------------------------------------------------ #
     # Overview header
