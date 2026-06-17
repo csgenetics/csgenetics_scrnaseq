@@ -113,6 +113,29 @@ jobs:
             export NXF_VER=26.04.1
             nf-test test tests/nf/pipeline_stub.nf.test modules/local/save_resolved_configuration/tests/main.nf.test --verbose
 
+  # Headless-browser smoke test for the consolidated HTML report. Generates a
+  # report from a committed fixture and renders it in Chromium to assert it is
+  # FUNCTIONAL (no JS console errors, Plotly defined, every plot drew an SVG, the
+  # sample dropdown selects the right pane and does not collapse, print reveals all
+  # panes, the CSV stays separator-free). Catches the blank-plot / dropdown-collapse
+  # class of regression that file-level checks cannot see. Also runs the report
+  # number-formatting unit tests.
+  report-smoke:
+    docker:
+      - image: cimg/python:3.12
+    resource_class: medium
+    steps:
+      - checkout
+      - run:
+          name: Install report deps + headless Chromium
+          command: |
+            pip install --quiet jinja2 plotly pandas numpy pytest playwright
+            python -m playwright install --with-deps chromium
+      - run:
+          name: Report smoke + number-formatting tests
+          command: |
+            python -m pytest tests/python/test_report_smoke.py tests/python/test_number_formatting.py -v
+
 
 # Invoke jobs via workflows
 # See: https://circleci.com/docs/2.0/configuration-reference/#workflows
@@ -124,4 +147,5 @@ workflows:
   ci:
     jobs:
       - nf-test
+      - report-smoke
       - run-current-branch

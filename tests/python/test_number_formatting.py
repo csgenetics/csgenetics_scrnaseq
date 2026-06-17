@@ -56,3 +56,35 @@ def test_all_three_implementations_agree():
     for value, _ in CASES:
         results = {fn(value) for _, fn in IMPLEMENTATIONS}
         assert len(results) == 1, f"implementations disagree on {value!r}: {results}"
+
+
+# ---------------------------------------------------------------------------
+# Display formatting (HTML tables/cards only): thousands separators on the
+# integer part, decimals preserved, no rounding. Kept SEPARATE from the CSV
+# contract above (commas would corrupt the comma-delimited multisample_out.csv).
+# ---------------------------------------------------------------------------
+DISPLAY_CASES = [
+    ("181004808", "181,004,808"),   # large int gets separators
+    ("100", "100"),                 # small int unchanged
+    ("0", "0"),
+    ("-5000", "-5,000"),
+    ("12106.54", "12,106.54"),      # float: separators on integer part, decimals kept
+    ("94.30", "94.30"),             # percentage-like float: value unchanged, 2 d.p.
+    ("3.1", "3.10"),                # padded to 2 d.p. like the frozen contract
+    ("0.0", "0.00"),
+    ("nan", "nan"),                 # non-numeric sentinel passes through
+    ("nan_nan", "nan_nan"),         # mixed-species sentinel passes through
+]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("value,expected", DISPLAY_CASES, ids=[c[0] for c in DISPLAY_CASES])
+def test_format_number_for_display(value, expected):
+    assert ccr.format_number_for_display(value) == expected
+
+
+@pytest.mark.unit
+def test_display_and_csv_formatters_diverge_only_on_separators():
+    """The CSV must stay separator-free (machine-readable); the display adds commas."""
+    assert ccr.format_number_to_string("181004808") == "181004808"      # CSV: no separators
+    assert ccr.format_number_for_display("181004808") == "181,004,808"  # display: separators

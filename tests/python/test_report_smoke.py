@@ -1,0 +1,148 @@
+"""
+Headless-browser smoke test for the consolidated HTML report.
+
+Two real report bugs shipped that file-level / unit checks could not catch -- both
+only manifested when the report was actually RENDERED in a browser:
+
+  * Plotly.js was inlined AFTER the inline ``Plotly.newPlot()`` fragment calls, so
+    every plot threw "Plotly is not defined" and rendered blank (the metric tables,
+    which are plain HTML, still rendered, masking the failure).
+  * The sample dropdown's text input doubled as both the search box and the
+    selected-value display, so after selecting a sample the displayed sample id was
+    re-applied as a filter query and the option list collapsed to one entry.
+
+This test generates a report from a small committed fixture, opens it in headless
+Chromium via Playwright, and asserts the report is FUNCTIONAL, not merely present:
+no JS console errors, ``window.Plotly`` defined, every plot actually drew an SVG,
+the dropdown selects the right pane and keeps all samples on reopen, the print
+stylesheet reveals every per-sample pane, and the re-emitted ``multisample_out.csv``
+keeps raw (separator-free) numbers so it stays machine-readable.
+
+It is intentionally dependency-light: the report generator needs only jinja2 +
+plotly, so this runs in a small Playwright CI image without the heavy pipeline
+Python environment.
+"""
+
+import os
+import shutil
+import subprocess
+import sys
+
+import pytest
+
+# Skip cleanly where Playwright is not installed (e.g. a bare dev env); CI installs it.
+pytest.importorskip("playwright.sync_api")
+from playwright.sync_api import sync_playwright  # noqa: E402
+
+# Runs the report generator as a subprocess and renders it in a browser.
+pytestmark = pytest.mark.integration
+
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+GENERATOR = os.path.join(REPO_ROOT, "bin", "create_consolidated_report.py")
+TEMPLATE = os.path.join(REPO_ROOT, "templates", "consolidated_report_template.html.jinja2")
+VENDOR_DIR = os.path.join(REPO_ROOT, "assets", "vendor")
+FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures", "report")
+
+EXPECTED_SAMPLES = ["SAMPLE1", "SAMPLE2"]
+# fixture has, per sample: 1 cell-caller + 1 qc-cascade plot, plus 1 multi-sample
+# qc-cascade across all samples => 2*2 + 1 = 5 Plotly figures.
+EXPECTED_PLOTS = 5
+
+
+@pytest.fixture(scope="module")
+def report_html(tmp_path_factory):
+    """Generate the consolidated report from the fixture; return the .html path."""
+    work = tmp_path_factory.mktemp("report")
+    for name in os.listdir(FIXTURE_DIR):
+        shutil.copy(os.path.join(FIXTURE_DIR, name), work / name)
+
+    # Same invocation Nextflow uses: <template> <mixed_species> <vendor_dir> <multi_qc_cascade>
+    subprocess.run(
+        [sys.executable, GENERATOR, TEMPLATE, "FALSE", VENDOR_DIR,
+         str(work / "multisample_qc_cascade.html")],
+        cwd=work, check=True,
+    )
+    html = work / "consolidated_report.html"
+    assert html.exists(), "generator did not produce consolidated_report.html"
+    return html
+
+
+@pytest.fixture(scope="module")
+def browser():
+    with sync_playwright() as p:
+        b = p.chromium.launch()
+        yield b
+        b.close()
+
+
+@pytest.fixture
+def page(browser, report_html):
+    """A freshly-loaded page per test, with JS errors collected from load onward."""
+    pg = browser.new_page()
+    errors = []
+    pg.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
+    pg.on("pageerror", lambda e: errors.append(str(e)))
+    pg.goto(report_html.as_uri())
+    pg.wait_for_timeout(1200)  # let inline Plotly.newPlot() calls settle
+    pg._console_errors = errors
+    yield pg
+    pg.close()
+
+
+def test_no_js_console_errors(page):
+    assert page._console_errors == [], f"JS errors in rendered report: {page._console_errors}"
+
+
+def test_plotly_is_defined(page):
+    assert page.evaluate("typeof window.Plotly !== 'undefined'"), \
+        "window.Plotly is undefined (script-ordering / missing-library regression)"
+
+
+def test_every_plot_drew_an_svg(page):
+    n_divs = page.eval_on_selector_all(".js-plotly-plot", "els => els.length")
+    n_with_svg = page.eval_on_selector_all(
+        ".js-plotly-plot", "els => els.filter(e => e.querySelector('.main-svg')).length")
+    assert n_divs >= EXPECTED_PLOTS, f"expected >= {EXPECTED_PLOTS} plot divs, got {n_divs}"
+    assert n_with_svg == n_divs, \
+        f"{n_divs - n_with_svg} of {n_divs} plots drew no SVG (blank-plot regression)"
+
+
+def test_dropdown_selects_the_correct_pane(page):
+    page.click("#samplePickerInput")
+    page.click(".cs-sample-option >> nth=1")  # select the 2nd sample
+    shown = page.eval_on_selector_all(".cs-sample-pane.cs-show", "els => els.map(e => e.id)")
+    assert shown == ["sample-pane-2"], f"expected only sample-pane-2 shown, got {shown}"
+
+
+def test_dropdown_keeps_all_samples_after_select_and_reopen(page):
+    page.click("#samplePickerInput")
+    page.click(".cs-sample-option >> nth=1")  # select
+    page.click("#samplePickerInput")          # reopen
+    visible = page.eval_on_selector_all(
+        ".cs-sample-option", "els => els.filter(e => !e.classList.contains('cs-hidden')).length")
+    assert visible == len(EXPECTED_SAMPLES), \
+        f"dropdown collapsed to {visible} option(s) after select+reopen (collapse regression)"
+
+
+def test_print_media_reveals_all_panes(page):
+    page.emulate_media(media="print")
+    visible = page.eval_on_selector_all(
+        ".cs-sample-pane", "els => els.filter(e => e.offsetParent !== null).length")
+    page.emulate_media(media="screen")
+    assert visible == len(EXPECTED_SAMPLES), \
+        f"print should reveal all {len(EXPECTED_SAMPLES)} panes (else PDF drops samples), got {visible}"
+
+
+def test_csv_keeps_raw_separatorless_numbers(report_html):
+    """The on-screen tables get thousands separators, but multisample_out.csv must
+    stay machine-readable -- commas would corrupt the comma-delimited data file."""
+    csv_path = os.path.join(os.path.dirname(report_html), "multisample_out.csv")
+    with open(csv_path) as fh:
+        for line in fh:
+            if line.startswith("reads_pre_qc,"):
+                values = line.rstrip("\n").split(",")[4:]
+                assert values, "reads_pre_qc row has no sample values"
+                for v in values:
+                    assert v.isdigit(), f"CSV integer value carries a separator or is non-numeric: {v!r}"
+                return
+    pytest.fail("reads_pre_qc row not found in multisample_out.csv")
