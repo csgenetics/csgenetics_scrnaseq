@@ -124,6 +124,31 @@ def test_dropdown_keeps_all_samples_after_select_and_reopen(page):
         f"dropdown collapsed to {visible} option(s) after select+reopen (collapse regression)"
 
 
+def test_dropdown_is_keyboard_operable(page):
+    """The sample picker is a role=combobox; arrow keys must move the keyboard
+    cursor (aria-activedescendant) and Enter must select the highlighted option."""
+    page.focus("#samplePickerInput")
+    page.keyboard.press("ArrowDown")
+    page.keyboard.press("ArrowDown")
+    ad = page.eval_on_selector("#samplePickerInput", "e => e.getAttribute('aria-activedescendant')")
+    assert ad == "sample-opt-2", f"ArrowDown did not move the keyboard cursor (aria-activedescendant={ad})"
+    page.keyboard.press("Enter")
+    shown = page.eval_on_selector_all(".cs-sample-pane.cs-show", "els => els.map(e => e.id)")
+    assert shown == ["sample-pane-2"], f"Enter did not select the highlighted sample, got {shown}"
+
+
+def test_accessibility_structure(page):
+    """Landmarks, a single page heading, a skip link, and focusable (not hover-only)
+    info affordances -- the structural a11y guarantees."""
+    assert page.eval_on_selector_all("h1", "els => els.length") == 1, "expected exactly one <h1>"
+    assert page.query_selector("main#main-content") is not None, "missing <main> landmark"
+    assert page.query_selector("a.cs-skip-link") is not None, "missing skip-to-content link"
+    assert page.eval_on_selector_all("i.cs-info", "els => els.length") == 0, \
+        "metric-info affordances must be focusable <button>s, not hover-only <i>"
+    assert page.eval_on_selector_all("button.cs-info", "els => els.length") > 0, \
+        "expected focusable info buttons"
+
+
 def test_print_media_reveals_all_panes(page):
     page.emulate_media(media="print")
     visible = page.eval_on_selector_all(

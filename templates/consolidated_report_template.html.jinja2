@@ -13,14 +13,33 @@
   <style>
     :root {
       --cs-green: #36BA00;
-      --cs-green-dark: #2c9a00;
+      --cs-green-dark: #2c9a00;   /* large text / borders only (WCAG large-text 3:1) */
+      --cs-green-text: #237c00;   /* small green TEXT (WCAG normal-text >=4.5:1 on white & bg) */
       --cs-blue: #257FC1;
+      --cs-link: #1f6ba3;         /* inline links (WCAG normal-text >=4.5:1) */
       --cs-teal: #34BBCF;
       --cs-ink: #1c2b22;
-      --cs-muted: #6b7d72;
+      --cs-muted: #596a60;        /* WCAG normal-text >=4.5:1 on white & --cs-bg */
       --cs-bg: #f6f8f6;
       --cs-card-border: #e6ece7;
     }
+
+    /* Visible keyboard focus for every interactive element (WCAG 2.4.7). */
+    a:focus-visible, button:focus-visible, [tabindex]:focus-visible,
+    .cs-info:focus-visible, .cs-sample-option:focus-visible {
+      outline: 2px solid var(--cs-blue);
+      outline-offset: 2px;
+      border-radius: 3px;
+    }
+    /* Skip-to-content link (WCAG 2.4.1), visible only when focused. */
+    .cs-skip-link {
+      position: absolute; left: -9999px; top: 0; z-index: 2000;
+      background: #fff; color: var(--cs-ink); padding: 0.6rem 1rem;
+      border: 2px solid var(--cs-green-dark); border-radius: 0 0 8px 0;
+    }
+    .cs-skip-link:focus { left: 0; }
+    /* Inline body links (not nav/brand) -- accessible contrast. */
+    main a:not(.nav-link):not(.navbar-brand):not(.cs-xsample-link) { color: var(--cs-link); }
 
     body {
       font-family: 'Lexend', system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -44,7 +63,7 @@
       font-weight: 500;
       font-size: 0.95rem;
     }
-    .cs-navbar .nav-link:hover { color: var(--cs-green-dark); }
+    .cs-navbar .nav-link:hover { color: var(--cs-green-text); }
 
     /* ---- Section scaffolding ---- */
     .cs-section { scroll-margin-top: 90px; padding-top: 0.5rem; }
@@ -115,7 +134,15 @@
       font-variant-numeric: tabular-nums;
       white-space: nowrap;
     }
-    .cs-info { color: var(--cs-muted); font-size: 0.85rem; cursor: help; }
+    /* Info icons are focusable <button>s so the metric definition (in the tooltip /
+       aria-label) is reachable by keyboard, screen reader and touch, not hover-only.
+       min 24px = WCAG 2.5.8 target size. */
+    .cs-info {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 24px; min-height: 24px; padding: 0; border: 0; background: transparent;
+      line-height: 1; color: var(--cs-muted); font-size: 0.85rem; cursor: help;
+      vertical-align: baseline;
+    }
 
     /* ---- Sample searchable dropdown ---- */
     .cs-sample-picker {
@@ -136,9 +163,10 @@
       cursor: pointer;
     }
     .cs-sample-picker-input:focus {
-      outline: none;
-      border-color: var(--cs-green);
-      box-shadow: 0 0 0 0.15rem rgba(54,186,0,0.25);
+      outline: 2px solid var(--cs-blue);
+      outline-offset: 1px;
+      border-color: var(--cs-green-dark);
+      box-shadow: 0 0 0 0.15rem rgba(37,127,193,0.25);
     }
     .cs-sample-picker::after {
       content: "";
@@ -177,11 +205,14 @@
       text-overflow: ellipsis;
     }
     .cs-sample-option:hover,
-    .cs-sample-option.cs-active {
+    .cs-sample-option.cs-active,
+    .cs-sample-option.cs-highlight {
       background: var(--cs-bg);
-      color: var(--cs-green-dark);
+      color: var(--cs-green-text);
       font-weight: 600;
     }
+    /* Keyboard cursor (aria-activedescendant) -- distinct from the committed selection. */
+    .cs-sample-option.cs-highlight { outline: 2px solid var(--cs-blue); outline-offset: -2px; }
     .cs-sample-option.cs-hidden { display: none; }
     .cs-sample-noresult {
       padding: 0.5rem 0.85rem;
@@ -218,7 +249,7 @@
     .cs-xsample-table thead th:first-child { background: var(--cs-ink); z-index: 3; }
     .cs-xsample-table .group-row th {
       background: var(--cs-bg);
-      color: var(--cs-green-dark);
+      color: var(--cs-green-text);
       font-weight: 700;
       font-size: 0.95rem;
     }
@@ -271,6 +302,8 @@
 </head>
 <body>
 
+  <a href="#main-content" class="cs-skip-link">Skip to main content</a>
+
   <!-- ===================== STICKY TOP NAV ===================== -->
   <nav class="cs-navbar navbar navbar-expand-lg">
     <div class="container-fluid px-4">
@@ -292,11 +325,13 @@
     </div>
   </nav>
 
-  <div class="container-xl px-4">
+  <main class="container-xl px-4" id="main-content">
+
+    <h1 class="visually-hidden">CS Genetics single-cell RNA-seq report</h1>
 
     <!-- ===================== OVERVIEW ===================== -->
     <section id="overview" class="cs-section">
-      <h1 class="cs-section-title">Experiment overview</h1>
+      <h2 class="cs-section-title">Experiment overview</h2>
       <p class="text-muted mb-3">
         Single-cell RNA-seq report for <strong>{{ overview.n_samples }}</strong>
         sample{{ 's' if overview.n_samples != 1 else '' }}
@@ -314,7 +349,7 @@
                   <div class="value">{{ tup[1] }}</div>
                   <div class="label">
                     {{ tup[0] }}
-                    <i class="bi bi-info-circle cs-info" data-bs-toggle="tooltip" data-bs-title="{{ tup[2] }}"></i>
+                    <button type="button" class="cs-info" data-bs-toggle="tooltip" data-bs-title="{{ tup[2] }}" aria-label="{{ tup[2] }}"><i class="bi bi-info-circle" aria-hidden="true"></i></button>
                   </div>
                 </div>
               </div>
@@ -331,24 +366,26 @@
 
     <!-- ===================== PER-SAMPLE ===================== -->
     <section id="per-sample" class="cs-section">
-      <h1 class="cs-section-title">Per-sample metrics</h1>
+      <h2 class="cs-section-title">Per-sample metrics</h2>
 
       <!-- Sample selector: offline, self-contained searchable dropdown. -->
       <div class="cs-sample-picker" id="samplePicker">
         <input type="text" class="cs-sample-picker-input" id="samplePickerInput"
                autocomplete="off" spellcheck="false"
                placeholder="Search samples..." aria-label="Search and select a sample"
-               aria-expanded="false" role="combobox" aria-controls="samplePickerMenu"/>
-        <div class="cs-sample-menu" id="samplePickerMenu" role="listbox">
+               aria-expanded="false" role="combobox" aria-autocomplete="list" aria-controls="samplePickerMenu"/>
+        <div class="cs-sample-menu" id="samplePickerMenu" role="listbox" aria-label="Samples">
           {% for s in samples %}
             <div class="cs-sample-option {{ 'cs-active' if loop.first else '' }}"
-                 role="option" data-sample-index="{{ loop.index }}"
+                 role="option" id="sample-opt-{{ loop.index }}" data-sample-index="{{ loop.index }}"
                  data-sample-id="{{ s.sample_id }}"
                  aria-selected="{{ 'true' if loop.first else 'false' }}">{{ s.sample_id }}</div>
           {% endfor %}
           <div class="cs-sample-noresult" id="samplePickerNoResult">No matching samples</div>
         </div>
       </div>
+
+      <p id="samplePaneStatus" class="visually-hidden" role="status" aria-live="polite"></p>
 
       <div class="pt-3" id="samplePanesContent">
         {% for s in samples %}
@@ -365,7 +402,7 @@
                     <div class="value">{{ tup[1] }}</div>
                     <div class="label">
                       {{ tup[0] }}
-                      <i class="bi bi-info-circle cs-info" data-bs-toggle="tooltip" data-bs-title="{{ tup[2] }}"></i>
+                      <button type="button" class="cs-info" data-bs-toggle="tooltip" data-bs-title="{{ tup[2] }}" aria-label="{{ tup[2] }}"><i class="bi bi-info-circle" aria-hidden="true"></i></button>
                     </div>
                   </div>
                 </div>
@@ -385,8 +422,8 @@
                       <tbody>
                         {% for var_name, tup in s.metrics_dict[grp].items() %}
                           <tr>
-                            <th>{{ tup[0] }}
-                              <i class="bi bi-info-circle cs-info" data-bs-toggle="tooltip" data-bs-title="{{ tup[2] }}"></i>
+                            <th scope="row">{{ tup[0] }}
+                              <button type="button" class="cs-info" data-bs-toggle="tooltip" data-bs-title="{{ tup[2] }}" aria-label="{{ tup[2] }}"><i class="bi bi-info-circle" aria-hidden="true"></i></button>
                             </th>
                             <td>{{ tup[1] }}</td>
                           </tr>
@@ -402,7 +439,7 @@
               <div class="cs-card">
                 <div class="card-body">
                   <div class="cs-group-title">Cell Caller</div>
-                  <div class="plot-wrap">{{ s.cell_plot | safe }}</div>
+                  <div class="plot-wrap"><p class="visually-hidden">Cell-caller plot for sample {{ s.sample_id }}: distribution of total counts per barcode with the called-cell threshold marked. The numeric values are in the metric tables above.</p>{{ s.cell_plot | safe }}</div>
                 </div>
               </div>
               {% endif %}
@@ -411,10 +448,10 @@
               <div class="cs-card">
                 <div class="card-body">
                   <div class="cs-group-title">QC Cascade
-                    <i class="bi bi-info-circle cs-info" data-bs-toggle="tooltip"
-                       data-bs-title="Visualization showing read retention and loss at each QC processing step. Green bars show reads retained; gray bars show reads removed."></i>
+                    <button type="button" class="cs-info" data-bs-toggle="tooltip"
+                       data-bs-title="Visualization showing read retention and loss at each QC processing step. Green bars show reads retained; gray bars show reads removed." aria-label="Visualization showing read retention and loss at each QC processing step. Green bars show reads retained; gray bars show reads removed."><i class="bi bi-info-circle" aria-hidden="true"></i></button>
                   </div>
-                  <div class="plot-wrap">{{ s.qc_cascade | safe }}</div>
+                  <div class="plot-wrap"><p class="visually-hidden">QC cascade for sample {{ s.sample_id }}: reads retained and removed at each QC step. The numeric values are in the Read QC table above.</p>{{ s.qc_cascade | safe }}</div>
                 </div>
               </div>
               {% endif %}
@@ -438,7 +475,7 @@
                                     data-bs-toggle="collapse" data-bs-target="#{{ col_id }}"
                                     aria-expanded="false" aria-controls="{{ col_id }}">
                               {{ s.metrics_dict[cell_stat_cat].get(cell_stat_cat + "_total", ["", "", ""])[0] }}
-                              <i class="bi bi-info-circle cs-info ms-1" data-bs-toggle="tooltip" data-bs-title="{{ tip_ids[0] }}"></i>
+                              <button type="button" class="cs-info ms-1" data-bs-toggle="tooltip" data-bs-title="{{ tip_ids[0] }}" aria-label="{{ tip_ids[0] }}"><i class="bi bi-info-circle" aria-hidden="true"></i></button>
                             </button>
                           </h2>
                           <div id="{{ col_id }}" class="accordion-collapse collapse"
@@ -447,7 +484,7 @@
                               <table class="cs-metric-table">
                                 <tbody>
                                   {% for var_name, tup in s.metrics_dict[cell_stat_cat].items() %}
-                                    <tr><th>{{ tup[0] }}</th><td>{{ tup[1] }}</td></tr>
+                                    <tr><th scope="row">{{ tup[0] }}</th><td>{{ tup[1] }}</td></tr>
                                   {% endfor %}
                                 </tbody>
                               </table>
@@ -462,8 +499,8 @@
                       <tbody>
                         {% for var_name, tup in s.metrics_dict.get("Cell metrics", {}).items() %}
                           <tr>
-                            <th>{{ tup[0] }}
-                              <i class="bi bi-info-circle cs-info" data-bs-toggle="tooltip" data-bs-title="{{ tup[2] }}"></i>
+                            <th scope="row">{{ tup[0] }}
+                              <button type="button" class="cs-info" data-bs-toggle="tooltip" data-bs-title="{{ tup[2] }}" aria-label="{{ tup[2] }}"><i class="bi bi-info-circle" aria-hidden="true"></i></button>
                             </th>
                             <td>{{ tup[1] }}</td>
                           </tr>
@@ -478,7 +515,7 @@
               <div class="cs-card">
                 <div class="card-body">
                   <div class="cs-group-title">Barnyard plot</div>
-                  <div class="plot-wrap">{{ s.barnyard | safe }}</div>
+                  <div class="plot-wrap"><p class="visually-hidden">Barnyard plot for sample {{ s.sample_id }}: per-barcode human vs mouse counts used to identify single-species cells and multiplets.</p>{{ s.barnyard | safe }}</div>
                 </div>
               </div>
               {% endif %}
@@ -491,7 +528,7 @@
 
     <!-- ===================== EXPERIMENT SUMMARY ===================== -->
     <section id="experiment" class="cs-section">
-      <h1 class="cs-section-title">Experiment summary</h1>
+      <h2 class="cs-section-title">Experiment summary</h2>
 
       {# The across-sample "Key metric distributions" violin/box plot was removed by
          decision (2026-06): a violin/KDE over the small sample counts these reports
@@ -502,10 +539,10 @@
       <div class="cs-card">
         <div class="card-body">
           <div class="cs-group-title">QC Cascade across samples
-            <i class="bi bi-info-circle cs-info" data-bs-toggle="tooltip"
-               data-bs-title="Box plots showing distribution of reads retained at each QC step across all samples. Helps identify samples with unusual QC patterns."></i>
+            <button type="button" class="cs-info" data-bs-toggle="tooltip"
+                       data-bs-title="Box plots showing distribution of reads retained at each QC step across all samples. Helps identify samples with unusual QC patterns." aria-label="Box plots showing distribution of reads retained at each QC step across all samples. Helps identify samples with unusual QC patterns."><i class="bi bi-info-circle" aria-hidden="true"></i></button>
           </div>
-          <div class="plot-wrap">{{ multi_qc_cascade | safe }}</div>
+          <div class="plot-wrap"><p class="visually-hidden">QC cascade across all samples: reads retained at each QC step per sample. The numeric values are in the cross-sample metrics table below.</p>{{ multi_qc_cascade | safe }}</div>
         </div>
       </div>
       {% endif %}
@@ -513,16 +550,17 @@
 
     <!-- ===================== CROSS-SAMPLE TABLE ===================== -->
     <section id="cross-sample" class="cs-section">
-      <h1 class="cs-section-title">Cross-sample metrics table</h1>
+      <h2 class="cs-section-title">Cross-sample metrics table</h2>
       <div class="cs-card">
         <div class="card-body">
           <div class="cs-xsample-wrap">
             <table class="cs-xsample-table">
+              <caption class="visually-hidden">Cross-sample metrics. Rows are metrics; columns are samples.</caption>
               <thead>
                 <tr>
-                  <th></th>
+                  <th scope="col"><span class="visually-hidden">Metric</span></th>
                   {% for sample in sample_name_list %}
-                    <th><a href="#per-sample" class="cs-xsample-link" data-sample-id="{{ sample }}">{{ sample }}</a></th>
+                    <th scope="col"><a href="#per-sample" class="cs-xsample-link" data-sample-id="{{ sample }}">{{ sample }}</a></th>
                   {% endfor %}
                 </tr>
               </thead>
@@ -537,12 +575,12 @@
                 {% for classification in ordered_groups %}
                   {% if multi_metrics_dict.get(classification) %}
                     <tr class="group-row">
-                      <th colspan="{{ sample_name_list|length + 1 }}">{{ classification if classification in ["Read QC", "Deduplication", "Cell metrics"] else (classification | replace("_", " ") | capitalize) }}</th>
+                      <th scope="colgroup" colspan="{{ sample_name_list|length + 1 }}">{{ classification if classification in ["Read QC", "Deduplication", "Cell metrics"] else (classification | replace("_", " ") | capitalize) }}</th>
                     </tr>
                     {% for metric, metric_val_list in multi_metrics_dict[classification].items() %}
                       <tr>
-                        <th>{{ metric[1] }}
-                          <i class="bi bi-info-circle cs-info" data-bs-toggle="tooltip" data-bs-title="{{ metric[2] }}"></i>
+                        <th scope="row">{{ metric[1] }}
+                          <button type="button" class="cs-info" data-bs-toggle="tooltip" data-bs-title="{{ metric[2] }}" aria-label="{{ metric[2] }}"><i class="bi bi-info-circle" aria-hidden="true"></i></button>
                         </th>
                         {% for metric_val in metric_val_list %}
                           <td>{{ metric_val }}</td>
@@ -557,11 +595,11 @@
         </div>
       </div>
     </section>
+  </main>
 
-    <div class="cs-footer text-center">
-      CS Genetics single-cell RNA-seq pipeline &middot; consolidated report
-    </div>
-  </div>
+  <footer class="cs-footer text-center">
+    CS Genetics single-cell RNA-seq pipeline &middot; consolidated report
+  </footer>
 
   <!-- Offline-safe: Bootstrap JS embedded inline (no CDN). Plotly.js is loaded in <head>
        (see the comment there) so it is defined before the inline per-sample newPlot() calls. -->
@@ -582,6 +620,29 @@
       if (!picker || !input || !menu) return;
 
       const options = Array.from(menu.querySelectorAll('.cs-sample-option'));
+      const status = document.getElementById('samplePaneStatus');
+      let activeIdx = -1;  // index into the currently-VISIBLE options = the keyboard cursor
+
+      function visibleOptions() {
+        return options.filter(o => !o.classList.contains('cs-hidden'));
+      }
+      // Move the keyboard cursor (aria-activedescendant); -1 clears it. This is the
+      // transient highlight a keyboard user moves with the arrow keys, distinct from
+      // the committed selection (cs-active / aria-selected) set by selectOption().
+      function setActive(idx) {
+        const vis = visibleOptions();
+        options.forEach(o => o.classList.remove('cs-highlight'));
+        if (idx < 0 || idx >= vis.length) {
+          activeIdx = -1;
+          input.removeAttribute('aria-activedescendant');
+          return;
+        }
+        activeIdx = idx;
+        const opt = vis[idx];
+        opt.classList.add('cs-highlight');
+        input.setAttribute('aria-activedescendant', opt.id);
+        opt.scrollIntoView({ block: 'nearest' });
+      }
 
       function showPaneForIndex(index) {
         document.querySelectorAll('.cs-sample-pane').forEach(pane => {
@@ -603,6 +664,9 @@
         });
         input.value = opt.dataset.sampleId;
         showPaneForIndex(opt.dataset.sampleIndex);
+        // Announce the change to assistive tech (WCAG 4.1.3) via the polite status region.
+        if (status) status.textContent = 'Showing metrics for sample ' + opt.dataset.sampleId;
+        setActive(-1);
         closeMenu();
       }
 
@@ -615,10 +679,12 @@
         // the menu to the single selected sample. Typing then narrows the list via filterOptions().
         options.forEach(o => o.classList.remove('cs-hidden'));
         if (noResult) noResult.style.display = 'none';
+        setActive(-1);
       }
       function closeMenu() {
         menu.classList.remove('open');
         input.setAttribute('aria-expanded', 'false');
+        setActive(-1);
       }
 
       function filterOptions() {
@@ -630,6 +696,7 @@
           if (match) visible++;
         });
         if (noResult) noResult.style.display = visible === 0 ? 'block' : 'none';
+        setActive(-1);
       }
 
       // Initialise the input with the currently-selected (first) sample.
@@ -640,11 +707,25 @@
       input.addEventListener('click', () => { openMenu(); });
       input.addEventListener('input', () => { openMenu(); filterOptions(); });
       input.addEventListener('keydown', e => {
-        if (e.key === 'Escape') { closeMenu(); input.blur(); }
-        else if (e.key === 'Enter') {
-          const firstVisible = options.find(o => !o.classList.contains('cs-hidden'));
-          if (firstVisible) selectOption(firstVisible);
+        const vis = visibleOptions();
+        if (e.key === 'ArrowDown') {
+          if (!menu.classList.contains('open')) openMenu();
+          setActive(activeIdx < 0 ? 0 : Math.min(activeIdx + 1, vis.length - 1));
           e.preventDefault();
+        } else if (e.key === 'ArrowUp') {
+          if (!menu.classList.contains('open')) openMenu();
+          setActive(activeIdx <= 0 ? 0 : activeIdx - 1);
+          e.preventDefault();
+        } else if (e.key === 'Home') {
+          if (menu.classList.contains('open') && vis.length) { setActive(0); e.preventDefault(); }
+        } else if (e.key === 'End') {
+          if (menu.classList.contains('open') && vis.length) { setActive(vis.length - 1); e.preventDefault(); }
+        } else if (e.key === 'Enter') {
+          const target = activeIdx >= 0 ? vis[activeIdx] : vis[0];
+          if (target) selectOption(target);
+          e.preventDefault();
+        } else if (e.key === 'Escape') {
+          closeMenu(); input.blur();
         }
       });
 
