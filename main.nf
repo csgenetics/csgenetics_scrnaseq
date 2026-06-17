@@ -478,6 +478,26 @@ workflow {
     .collect()
   ch_all_qc_cascade_single = qc_cascade_plot_single.out.qc_cascade_plot.map { it[1] }.collect()
 
+  // Run-provenance metadata for the report header/footer (all values already known
+  // to the pipeline; factual only -- no quality judgement). Serialised to JSON and
+  // passed to the consolidated_report process as a single value.
+  def provenance_json = groovy.json.JsonOutput.toJson([
+    genome:        params.genome,
+    annotation:    params.gtf ? file(params.gtf).name : 'N/A',
+    mixed:         params.mixed_species,
+    pipeline_ver:  workflow.manifest.version ?: 'N/A',
+    commit:        workflow.commitId ?: 'N/A',
+    revision:      workflow.revision ?: 'N/A',
+    run_name:      workflow.runName,
+    session_id:    workflow.sessionId.toString(),
+    start:         workflow.start.toString(),
+    nf_version:    workflow.nextflow.version.toString(),
+    outdir:        params.outdir,
+    barcode_kit:   params.barcode_list_path ? file(params.barcode_list_path).name : 'N/A',
+    count_threshold: params.minimum_count_threshold,
+    homepage:      workflow.manifest.homePage ?: 'https://github.com/csgenetics/csgenetics_scrnaseq'
+  ])
+
   // Generate the single consolidated, self-contained experiment report.
   consolidated_report(
     ch_all_metrics_csvs,
@@ -485,7 +505,8 @@ workflow {
     ch_all_qc_cascade_single,
     qc_cascade_plot_multi.out.qc_cascade_plot,
     consolidated_report_template,
-    report_vendor_dir
+    report_vendor_dir,
+    provenance_json
   )
 
 }

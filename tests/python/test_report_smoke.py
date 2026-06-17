@@ -173,6 +173,33 @@ def test_csv_keeps_raw_separatorless_numbers(report_html):
     pytest.fail("reads_pre_qc row not found in multisample_out.csv")
 
 
+def test_run_provenance_renders_when_supplied(tmp_path):
+    """When the consolidated_report process passes a provenance JSON, the report
+    shows a Run-provenance header, a Key-results table, an Output-files pointer and a
+    run id in the title and footer. (The fixture-based tests above pass NO provenance,
+    confirming the sections are cleanly hidden when absent.)"""
+    import json
+    for name in os.listdir(FIXTURE_DIR):
+        shutil.copy(os.path.join(FIXTURE_DIR, name), tmp_path / name)
+    prov = json.dumps({
+        "genome": "GRCh38", "annotation": "gencode.v44.gtf", "mixed": False,
+        "pipeline_ver": "2.0.0", "commit": "abc1234", "revision": "main",
+        "run_name": "cheeky_curie", "session_id": "e495-3a25", "start": "2026-06-17T09:00:00Z",
+        "nf_version": "26.04.1", "outdir": "s3://csg-nextflow/run42",
+        "barcode_kit": "IDT_IO_kit_v2.csv", "count_threshold": 100,
+        "homepage": "https://github.com/csgenetics/csgenetics_scrnaseq",
+    })
+    subprocess.run(
+        [sys.executable, GENERATOR, TEMPLATE, "FALSE", VENDOR_DIR,
+         str(tmp_path / "multisample_qc_cascade.html"), prov],
+        cwd=tmp_path, check=True,
+    )
+    html = (tmp_path / "consolidated_report.html").read_text()
+    for token in ["Run provenance", "GRCh38", "cheeky_curie", "Key results", "Output files"]:
+        assert token in html, f"provenance render missing {token!r}"
+    assert "<title>CS Genetics scRNA-seq report - cheeky_curie" in html, "title lacks run id"
+
+
 def test_malicious_sample_id_is_escaped_not_executed(tmp_path, browser):
     """Sample ids come from the customer's input sheet -- the one piece of
     untrusted text in the report. The generator runs with Jinja autoescaping on,

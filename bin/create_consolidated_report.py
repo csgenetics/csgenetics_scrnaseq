@@ -42,6 +42,7 @@ fragments are located by their conventional filenames in the same directory:
 
 import sys
 import os
+import json
 from pathlib import Path
 from collections import defaultdict
 
@@ -101,6 +102,11 @@ class ConsolidatedReport:
         self.mixed = sys.argv[2].upper() == "TRUE"
         self.vendor_dir = sys.argv[3]
         self.multi_qc_cascade_path = sys.argv[4]
+        # Optional run-provenance JSON (genome, pipeline version, run id, etc.) passed
+        # by the consolidated_report process. Absent/empty -> no provenance section.
+        self.provenance = (
+            json.loads(sys.argv[5]) if len(sys.argv) > 5 and sys.argv[5].strip() else {}
+        )
         # All per-sample inputs are staged flat into the cwd.
         self.work_dir = "."
 
@@ -287,6 +293,7 @@ class ConsolidatedReport:
             cell_stat_cat_dict=cell_stat_cat_dict,
             summary_plot=self.summary_plot_fragment,
             multi_qc_cascade=self.multi_qc_cascade_fragment,
+            provenance=self.provenance,
         )
 
         with open("consolidated_report.html", "w") as fh:

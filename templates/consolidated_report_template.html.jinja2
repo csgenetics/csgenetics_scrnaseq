@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta content="width=device-width, initial-scale=1" name="viewport"/>
-  <title>CS Genetics scRNA-seq report</title>
+  <title>CS Genetics scRNA-seq report{% if provenance %} - {{ provenance.run_name }} ({{ provenance.genome }}, {{ sample_name_list|length }} sample{{ 's' if sample_name_list|length != 1 else '' }}){% endif %}</title>
 
   <!-- Offline-safe: all assets are inlined from locally vendored files. -->
   <style>{{ assets.bootstrap_css | safe }}</style>
@@ -38,8 +38,9 @@
       border: 2px solid var(--cs-green-dark); border-radius: 0 0 8px 0;
     }
     .cs-skip-link:focus { left: 0; }
-    /* Inline body links (not nav/brand) -- accessible contrast. */
-    main a:not(.nav-link):not(.navbar-brand):not(.cs-xsample-link) { color: var(--cs-link); }
+    /* Inline body + footer links (not nav/brand) -- accessible contrast. */
+    main a:not(.nav-link):not(.navbar-brand):not(.cs-xsample-link),
+    .cs-footer a { color: var(--cs-link); }
 
     body {
       font-family: 'Lexend', system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -336,7 +337,32 @@
         Single-cell RNA-seq report for <strong>{{ overview.n_samples }}</strong>
         sample{{ 's' if overview.n_samples != 1 else '' }}
         ({{ 'mixed-species' if mixed else 'single-species' }}).
+        All samples were quantified against the
+        {{ provenance.genome if provenance else 'configured' }} reference in
+        {{ 'mixed-species' if mixed else 'single-species' }} mode regardless of sample name;
+        per-species (barnyard) plots are produced only for mixed-species references.
       </p>
+
+      {% if provenance %}
+      <div class="cs-card">
+        <div class="card-body">
+          <h3 class="cs-group-title">Run provenance</h3>
+          <dl class="row mb-0" style="font-size: 0.9rem;">
+            <dt class="col-sm-3">Reference genome</dt><dd class="col-sm-9">{{ provenance.genome }}</dd>
+            <dt class="col-sm-3">Annotation</dt><dd class="col-sm-9">{{ provenance.annotation }}</dd>
+            <dt class="col-sm-3">Species mode</dt><dd class="col-sm-9">{{ 'Mixed-species (barnyard)' if provenance.mixed else 'Single-species' }}</dd>
+            <dt class="col-sm-3">Cell-call threshold</dt><dd class="col-sm-9">{{ provenance.count_threshold }} counts</dd>
+            <dt class="col-sm-3">Barcode kit</dt><dd class="col-sm-9">{{ provenance.barcode_kit }}</dd>
+            <dt class="col-sm-3">Pipeline version</dt><dd class="col-sm-9">{{ provenance.pipeline_ver }} ({{ provenance.commit }})</dd>
+            <dt class="col-sm-3">Nextflow / version</dt><dd class="col-sm-9">{{ provenance.nf_version }}</dd>
+            <dt class="col-sm-3">Run name</dt><dd class="col-sm-9">{{ provenance.run_name }}</dd>
+            <dt class="col-sm-3">Run id</dt><dd class="col-sm-9">{{ provenance.session_id }}</dd>
+            <dt class="col-sm-3">Run date</dt><dd class="col-sm-9">{{ provenance.start }}</dd>
+            <dt class="col-sm-3">Samples</dt><dd class="col-sm-9">{{ sample_name_list | join(', ') }}</dd>
+          </dl>
+        </div>
+      </div>
+      {% endif %}
 
       {% if samples|length == 1 %}
         {% set s0 = samples[0] %}
@@ -357,10 +383,61 @@
           {% endfor %}
         </div>
       {% else %}
-        <p class="text-muted">
-          Select a sample below to view its headline metrics, or jump to the
-          <a href="#experiment">experiment summary</a> for cross-sample distributions.
-        </p>
+        <div class="cs-card">
+          <div class="card-body">
+            <h3 class="cs-group-title">Key results</h3>
+            <table class="cs-metric-table">
+              <thead>
+                <tr>
+                  <th scope="col">Sample</th>
+                  {% for key, group in overview.headline_keys %}
+                    {% set hdr = samples[0].metrics_dict.get(group, {}).get(key) %}
+                    <th scope="col" style="text-align:right;">{{ hdr[0] if hdr else key }}</th>
+                  {% endfor %}
+                </tr>
+              </thead>
+              <tbody>
+                {% for s in samples %}
+                  <tr>
+                    <th scope="row">{{ s.sample_id }}</th>
+                    {% for key, group in overview.headline_keys %}
+                      {% set tup = s.metrics_dict.get(group, {}).get(key) %}
+                      <td>{{ tup[1] if tup else '-' }}</td>
+                    {% endfor %}
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            <p class="text-muted mt-2 mb-0" style="font-size: 0.85rem;">
+              Select a sample below for its full metrics, or jump to the
+              <a href="#experiment">experiment summary</a> for cross-sample distributions.
+            </p>
+          </div>
+        </div>
+      {% endif %}
+
+      {% if provenance %}
+      <div class="cs-card">
+        <div class="card-body">
+          <h3 class="cs-group-title">Output files</h3>
+          <p class="text-muted mb-2" style="font-size: 0.9rem;">Your pipeline outputs are under
+            <code>{{ provenance.outdir }}</code>:</p>
+          <table class="cs-metric-table">
+            <tbody style="font-size: 0.85rem;">
+              <tr><th scope="row" style="font-weight:500;">Filtered count matrices (h5ad + mtx)</th>
+                  <td style="text-align:left; white-space:normal;"><code>count_matrix/filtered_feature_bc_matrix/&lt;sample&gt;/</code></td></tr>
+              <tr><th scope="row" style="font-weight:500;">Raw count matrices</th>
+                  <td style="text-align:left; white-space:normal;"><code>count_matrix/raw_feature_bc_matrix/&lt;sample&gt;/</code></td></tr>
+              <tr><th scope="row" style="font-weight:500;">Per-sample metric CSVs</th>
+                  <td style="text-align:left; white-space:normal;"><code>report/&lt;sample&gt;/</code></td></tr>
+              <tr><th scope="row" style="font-weight:500;">This report &amp; cross-sample CSV</th>
+                  <td style="text-align:left; white-space:normal;"><code>report/</code></td></tr>
+              <tr><th scope="row" style="font-weight:500;">Resolved run configuration</th>
+                  <td style="text-align:left; white-space:normal;"><code>pipeline_info/</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
       {% endif %}
     </section>
 
@@ -598,7 +675,12 @@
   </main>
 
   <footer class="cs-footer text-center">
-    CS Genetics single-cell RNA-seq pipeline &middot; consolidated report
+    <div><strong>CS Genetics</strong> single-cell RNA-seq pipeline{% if provenance %}
+      v{{ provenance.pipeline_ver }} ({{ provenance.commit }}){% endif %}</div>
+    {% if provenance %}
+    <div><a href="{{ provenance.homepage }}">Pipeline &amp; documentation</a></div>
+    <div class="mt-1">Report id: {{ provenance.run_name }} &middot; generated {{ provenance.start }}</div>
+    {% endif %}
   </footer>
 
   <!-- Offline-safe: Bootstrap JS embedded inline (no CDN). Plotly.js is loaded in <head>
