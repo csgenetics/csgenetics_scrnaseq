@@ -580,6 +580,12 @@
       function openMenu() {
         menu.classList.add('open');
         input.setAttribute('aria-expanded', 'true');
+        // The input doubles as the selected-value display, so after a selection its value
+        // is a full sample id. Reveal the whole list every time the menu opens, otherwise
+        // that value (re-applied as a filter query by the outside-click handler) collapses
+        // the menu to the single selected sample. Typing then narrows the list via filterOptions().
+        options.forEach(o => o.classList.remove('cs-hidden'));
+        if (noResult) noResult.style.display = 'none';
       }
       function closeMenu() {
         menu.classList.remove('open');
