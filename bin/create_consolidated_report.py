@@ -45,7 +45,7 @@ import os
 from pathlib import Path
 from collections import defaultdict
 
-from jinja2 import Template
+from jinja2 import Environment
 from plotly.offline import get_plotlyjs
 
 from create_single_sample_report import get_cell_stat_cat_dict_obj
@@ -104,8 +104,13 @@ class ConsolidatedReport:
         # All per-sample inputs are staged flat into the cwd.
         self.work_dir = "."
 
+        # autoescape=True so all data fields (metric values, human-readable names,
+        # tooltips, and especially the customer-supplied sample ids) are HTML-escaped.
+        # The trusted inlined assets and Plotly plot fragments are raw HTML and carry
+        # an explicit `| safe` in the template; nothing else is trusted.
         with open(self.template_path) as fh:
-            self.jinja_template = Template(fh.read())
+            env = Environment(autoescape=True)
+            self.jinja_template = env.from_string(fh.read())
 
         # Discover samples by their metrics csv. Sort for a stable, logical order.
         self.sample_ids = self._discover_sample_ids()

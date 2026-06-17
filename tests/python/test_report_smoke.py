@@ -146,3 +146,29 @@ def test_csv_keeps_raw_separatorless_numbers(report_html):
                     assert v.isdigit(), f"CSV integer value carries a separator or is non-numeric: {v!r}"
                 return
     pytest.fail("reads_pre_qc row not found in multisample_out.csv")
+
+
+def test_malicious_sample_id_is_escaped_not_executed(tmp_path, browser):
+    """Sample ids come from the customer's input sheet -- the one piece of
+    untrusted text in the report. The generator runs with Jinja autoescaping on,
+    so an HTML/JS payload in a sample id must be rendered as inert text, not
+    injected as markup or executed as script."""
+    payload = "<img src=x onerror=window.__xss=1>"
+    for name in os.listdir(FIXTURE_DIR):
+        dst = name.replace("SAMPLE1", payload) if name.startswith("SAMPLE1") else name
+        shutil.copy(os.path.join(FIXTURE_DIR, name), tmp_path / dst)
+    subprocess.run(
+        [sys.executable, GENERATOR, TEMPLATE, "FALSE", VENDOR_DIR,
+         str(tmp_path / "multisample_qc_cascade.html")],
+        cwd=tmp_path, check=True,
+    )
+    html = (tmp_path / "consolidated_report.html").read_text()
+    assert payload not in html, "raw (unescaped) sample-id payload was injected into the HTML"
+    assert "&lt;img src=x onerror=window.__xss=1&gt;" in html, "payload was not present in escaped form"
+
+    # And confirm it does not execute when rendered.
+    pg = browser.new_page()
+    pg.goto((tmp_path / "consolidated_report.html").as_uri())
+    pg.wait_for_timeout(800)
+    assert pg.evaluate("window.__xss === undefined"), "sample-id payload executed as script (XSS)"
+    pg.close()

@@ -275,7 +275,7 @@
   <nav class="cs-navbar navbar navbar-expand-lg">
     <div class="container-fluid px-4">
       <a class="navbar-brand" href="#overview">
-        <img alt="CS Genetics" src="{{ assets.logo_data_uri }}"/>
+        <img alt="CS Genetics" src="{{ assets.logo_data_uri | safe }}"/>
       </a>
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#csNav"
               aria-controls="csNav" aria-expanded="false" aria-label="Toggle navigation">
@@ -522,7 +522,7 @@
                 <tr>
                   <th></th>
                   {% for sample in sample_name_list %}
-                    <th><a href="#per-sample" onclick="csActivateSample('{{ sample }}'); return true;">{{ sample }}</a></th>
+                    <th><a href="#per-sample" class="cs-xsample-link" data-sample-id="{{ sample }}">{{ sample }}</a></th>
                   {% endfor %}
                 </tr>
               </thead>
@@ -663,10 +663,17 @@
       });
 
       // Cross-sample table column headers select that sample in the dropdown.
-      window.csActivateSample = function (sampleId) {
-        const opt = options.find(o => o.dataset.sampleId === sampleId);
-        if (opt) selectOption(opt);
-      };
+      // Cross-sample table header links activate that sample in the dropdown.
+      // A data-sample-id attribute + delegated listener is used instead of an
+      // inline onclick that interpolated the sample id into a JS string literal,
+      // so sample ids -- the one piece of customer-controlled text in the report --
+      // can never break out into executable script.
+      document.querySelectorAll('.cs-xsample-link').forEach(link => {
+        link.addEventListener('click', () => {
+          const opt = options.find(o => o.dataset.sampleId === link.dataset.sampleId);
+          if (opt) selectOption(opt);
+        });
+      });
     })();
   </script>
 </body>
