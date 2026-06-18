@@ -120,9 +120,8 @@ jobs:
   # panes, the CSV stays separator-free). Catches the blank-plot / dropdown-collapse
   # class of regression that file-level checks cannot see. Also runs the report
   # number-formatting unit tests. Deliberately dependency-light: the report
-  # generator needs only jinja2 + plotly, so this avoids the heavy single-cell
-  # pipeline Python stack (the number-formatting test's legacy multi-sample leg
-  # auto-skips when that stack is absent -- see tests/python/test_number_formatting.py).
+  # generator and these tests need only jinja2 + plotly, so this avoids the heavy
+  # single-cell pipeline Python stack (anndata/scipy/etc.).
   report-smoke:
     docker:
       - image: cimg/python:3.12
