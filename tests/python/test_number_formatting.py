@@ -13,14 +13,22 @@ We test all three implementations against the same table so they cannot drift
 apart silently.
 """
 
-import importlib
-
 import pytest
 
-# Import the three implementations.
+# Live report formatters -- lean (jinja2 + base64 only), always importable.
 import create_consolidated_report as ccr
 import create_single_sample_report as cssr
-import create_multi_sample_report as cmsr
+
+# create_multi_sample_report is legacy: no pipeline process uses it (the pipeline
+# now generates a single consolidated report), and it pulls in the heavy single-cell
+# stack (anndata, scipy) via cell_caller. Import it only when that stack is present,
+# so these unit tests still run in a dependency-light environment (e.g. the lean
+# report-smoke CI job). Its frozen-formatter copy is cross-checked wherever the
+# stack is installed (local dev / a full-env job).
+try:
+    import create_multi_sample_report as cmsr
+except ModuleNotFoundError:
+    cmsr = None
 
 # (input, expected) pairs covering the contract.
 CASES = [
@@ -39,8 +47,11 @@ CASES = [
 IMPLEMENTATIONS = [
     ("consolidated_module_fn", ccr.format_number_to_string),
     ("single_sample_staticmethod", cssr.SingleSampleHTMLReport.format_number_to_string),
-    ("multi_sample_staticmethod", cmsr.MultipleSampleSummaries.format_number_to_string),
 ]
+if cmsr is not None:
+    IMPLEMENTATIONS.append(
+        ("multi_sample_staticmethod", cmsr.MultipleSampleSummaries.format_number_to_string)
+    )
 
 
 @pytest.mark.unit
@@ -51,8 +62,9 @@ def test_format_number_to_string(impl_name, fn, value, expected):
 
 
 @pytest.mark.unit
-def test_all_three_implementations_agree():
-    """Guard against the three frozen copies drifting apart."""
+def test_all_implementations_agree():
+    """Guard against the frozen formatter copies drifting apart (covers the
+    legacy multi-sample copy too where its dependency stack is installed)."""
     for value, _ in CASES:
         results = {fn(value) for _, fn in IMPLEMENTATIONS}
         assert len(results) == 1, f"implementations disagree on {value!r}: {results}"
