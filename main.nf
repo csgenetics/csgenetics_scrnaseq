@@ -61,17 +61,6 @@ include {
   qc_cascade_plot_multi; single_summary_report; multi_sample_report
   } from './modules/processes.nf'
 
-def order_integer_first(it){
-  try{
-        // Will raise exception if not int
-        it.isInteger()
-        0
-      } catch(MissingMethodException _e1){
-        // path will end here and therefore return 1
-        1
-      }
-}
-
 workflow {
 
   // Some users have issues accessing the S3 resources we have hosted publicly in our
@@ -402,6 +391,11 @@ workflow {
           }
         }
     }
+    // BASELINE-ONLY metric-neutral crash fix (backported from epic bfc864b): cell-caller thresholds are
+    // SAMPLE-level, but input_csv has one ROW PER LANE, so a multi-lane sample yields N identical
+    // [sample_id, threshold] tuples that fan cell_caller out N-fold and crash qc_cascade_plot_multi with an
+    // "input file name collision". Dedup to one per sample; no-op for single-lane. Does not change any value.
+    .unique()
     .set { user_specified_cell_caller_thresholds_ch }
 
   
@@ -411,13 +405,14 @@ workflow {
   cell_caller(ch_cell_caller)
   ch_cell_caller_out = cell_caller.out.cell_caller_out //[val(sample), int(cell_caller_nuc_gene_threshold)]
 
-  // Sort the groupTuple so that the int is always
-  // first and then flatten the tuple list to return a 3mer
-  // N.B. We were originally sorting by class (sort:{ val -> val.getClass() == sun.nio.fs.UnixPath ? 1 : 0})
-  // but for some reason this only worked locally and not on Seqera Platform
-  ch_filter_count_matrix_in = ch_cell_caller_out.mix(ch_h5ad)
-  .groupTuple(by: 0, size:2, sort:{ val -> order_integer_first(val)})
-  .map{ grouped -> [grouped[0], grouped[1][0], grouped[1][1]]}
+  // BASELINE-ONLY metric-neutral crash fix (backported from epic f5083d0): cell_caller_out [sample, threshold]
+  // joined with ch_h5ad [sample, raw_h5ad] gives the [sample, threshold, raw_h5ad] tuple filter_count_matrix
+  // expects, deterministically. The previous mix + groupTuple(size:2) with the order_integer_first sort closure
+  // relied on the path throwing on .isInteger(); on Seqera/Fusion the path responds without throwing, so both
+  // elements tied at sort key 0 and groupTuple fell back to arrival order -- a race that put the threshold in
+  // the path slot on heavy samples ("Not a valid path value: '<threshold>'"). join keys on sample_id, no race.
+  // Same pairing of the same data -- no value changes.
+  ch_filter_count_matrix_in = ch_cell_caller_out.join(ch_h5ad, by: 0)
 
   // Output filtered (cells only) count tables
   filter_count_matrix(ch_filter_count_matrix_in)
