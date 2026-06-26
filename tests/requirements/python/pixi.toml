@@ -1,0 +1,19 @@
+[workspace]
+name = "csgenetics-scrnaseq-python-tests"
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64"]
+
+[dependencies]
+python = "3.11.*"
+pytest = "*"
+pytest-timeout = "*"
+numpy = "*"
+pandas = "*"
+scipy = "*"
+plotly = "*"
+jinja2 = "*"
+anndata = "*"
+scanpy = "*"
+h5py = "*"
+pysam = "*"
+gtfparse = "*"

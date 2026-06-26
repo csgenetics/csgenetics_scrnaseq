@@ -1,0 +1,31 @@
+nextflow_process {
+
+    name "Test process save_resolved_configuration"
+    script "../main.nf"
+    process "save_resolved_configuration"
+
+    tag "modules"
+    tag "save_resolved_configuration"
+
+    test("writes resolved_configuration.txt containing the pipeline params") {
+
+        when {
+            process {
+                """
+                // save_resolved_configuration takes no input; it dumps params.
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert process.success },
+                { assert path(process.out[0][0]).exists() },
+                // The dump is params JSON, so it carries volatile paths -> assert
+                // on stable keys rather than snapshotting the whole file.
+                { assert path(process.out[0][0]).text.contains("minimum_count_threshold") },
+                { assert path(process.out[0][0]).text.contains("barcode_pattern") }
+            )
+        }
+    }
+}

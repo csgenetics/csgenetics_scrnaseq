@@ -1,0 +1,75 @@
+variable_name,value,human_readable_name,description,classification
+reads_pre_qc,101394433,Number of reads pre-QC,Total number of input read pairs before any QC processing.,Read QC
+barcode_exact_match,90610612,Exact barcode match,Number of reads with exact barcode match to whitelist (no correction needed).,Read QC
+barcode_corrected,5009322,Corrected barcodes,Number of reads with barcode corrected (1 Hamming distance from whitelist).,Read QC
+barcode_failed,5774499,Invalid barcodes,Number of reads rejected due to invalid barcode (R2 < 13bp OR barcode not in whitelist and not correctable).,Read QC
+barcode_valid_total,95619934,Valid barcodes total,Total reads passing barcode validation (exact match + corrected).,Read QC
+valid_barcode_reads_perc,94.30491514262918,Valid barcodes (%),(Valid barcodes total / Reads pre-QC) * 100,Read QC
+sss_too_short,0,Too short (SSS trim),Number of reads that became < 5bp after SSS trimming (8bp from 5' end of R1).,Read QC
+sss_retained,95619934,After SSS trim,Number of reads retained after SSS trimming and length filtering.,Read QC
+polyx_trimmed,3443158,PolyX trimmed,Number of reads with terminal polyX sequence removed.,Read QC
+polyx_too_short,2947155,Too short (PolyX trim),Number of reads that became < 5bp after polyX trimming.,Read QC
+polyx_retained,92672779,After PolyX trim,Number of reads retained after polyX trimming and length filtering.,Read QC
+quality_failed,65075,Low quality removed,Number of reads removed by quality filtering (mean quality < 15 OR >40% bases with quality < 15).,Read QC
+quality_retained,92607704,After quality filter,Number of reads retained after quality filtering.,Read QC
+n_base_failed,0,Excessive N bases,Number of reads removed due to excessive N bases (>5 N's).,Read QC
+n_base_retained,92607704,After N-base filter,Number of reads retained after N-base filtering.,Read QC
+polya_trimmed,2113312,PolyA trimmed,Number of reads with internal polyA sequence removed.,Read QC
+polya_too_short,2067707,Too short (PolyA trim),Number of reads that became < 5bp after internal polyA trimming.,Read QC
+polya_retained,90539997,After PolyA trim,Number of reads retained after internal polyA trimming and length filtering.,Read QC
+reads_post_qc,90539997,Reads post-QC,Final number of reads passing all QC steps.,Read QC
+reads_post_qc_perc,94.68736613016277,Post-QC reads (%),(Reads post-QC / Valid barcodes total) * 100,Read QC
+mean_read_length,33.2,Mean read length (bp),Mean R1 read length after all QC trimming and filtering.,Read QC
+rna_q30_rate,94.40220000000001,R1 Q30 rate,Fraction of R1 bases with Phred quality ≥30 in final output reads.,Read QC
+barcode_q30_rate,91.51740000000001,Barcode Q30 rate,Fraction of R2 barcode region bases (13bp) with Phred quality ≥30 for reads that passed QC.,Read QC
+reads_in_cells,66579204,Reads in cells,Number of reads mapped to genome associated with cellular barcodes,Read QC
+reads_out_of_cells,22307392,Reads out of cells,Number of reads mapped to genome associated with non-cellular barcodes,Read QC
+unusable_reads,12507837,Unusable reads,Number of reads that couldn't be mapped or processed (Raw reads - reads in cells - reads out of cells),Read QC
+Total Tags,95918260,Total tags,Total tags,Post read QC alignment
+CDS_Exons,43594818,Cds exons,RSeQC Cds exons,Post read QC alignment
+CDS_Exons_perc,45.45,Cds exons percentage,RSeQC Cds exons percentage,Post read QC alignment
+5'UTR_Exons,4590254,5'utr exons,RSeQC 5'utr exons,Post read QC alignment
+5'UTR_Exons_perc,4.79,5'utr exons percentage,RSeQC 5'utr exons percentage,Post read QC alignment
+3'UTR_Exons,22878630,3'utr exons,RSeQC 3'utr exons,Post read QC alignment
+3'UTR_Exons_perc,23.85,3'utr exons percentage,RSeQC 3'utr exons percentage,Post read QC alignment
+Introns,14765667,Introns,RSeQC Introns,Post read QC alignment
+Introns_perc,15.39,Introns percentage,RSeQC Introns percentage,Post read QC alignment
+TSS_up_10kb,1553799,Tss up 10kb,RSeQC Tss up 10kb,Post read QC alignment
+TSS_up_10kb_perc,1.62,Tss up 10kb percentage,RSeQC Tss up 10kb percentage,Post read QC alignment
+TES_down_10kb,1606348,Tes down 10kb,RSeQC Tes down 10kb,Post read QC alignment
+TES_down_10kb_perc,1.67,Tes down 10kb percentage,RSeQC Tes down 10kb percentage,Post read QC alignment
+Intergenic,6928744,Intergenic,Intergenic,Post read QC alignment
+Intergenic_perc,7.22,Intergenic percentage,Intergenic percentage,Post read QC alignment
+Total Tags,77263121,Total tags,Total tags,Annotated reads alignment
+CDS_Exons,42076301,Cds exons,RSeQC Cds exons,Annotated reads alignment
+CDS_Exons_perc,54.46,Cds exons percentage,RSeQC Cds exons percentage,Annotated reads alignment
+5'UTR_Exons,4531368,5'utr exons,RSeQC 5'utr exons,Annotated reads alignment
+5'UTR_Exons_perc,5.86,5'utr exons percentage,RSeQC 5'utr exons percentage,Annotated reads alignment
+3'UTR_Exons,22392407,3'utr exons,RSeQC 3'utr exons,Annotated reads alignment
+3'UTR_Exons_perc,28.98,3'utr exons percentage,RSeQC 3'utr exons percentage,Annotated reads alignment
+Introns,8021149,Introns,RSeQC Introns,Annotated reads alignment
+Introns_perc,10.38,Introns percentage,RSeQC Introns percentage,Annotated reads alignment
+TSS_up_10kb,519,Tss up 10kb,RSeQC Tss up 10kb,Annotated reads alignment
+TSS_up_10kb_perc,0.0,Tss up 10kb percentage,RSeQC Tss up 10kb percentage,Annotated reads alignment
+TES_down_10kb,596,Tes down 10kb,RSeQC Tes down 10kb,Annotated reads alignment
+TES_down_10kb_perc,0.0,Tes down 10kb percentage,RSeQC Tes down 10kb percentage,Annotated reads alignment
+Intergenic,240781,Intergenic,Intergenic,Annotated reads alignment
+Intergenic_perc,0.31,Intergenic percentage,Intergenic percentage,Annotated reads alignment
+reads_before_deduplication,79470594,High confidence gene-annotated reads before deduplication,Number of high confidence (unique alignment; max mismatch <= 3bp) gene-annotated (with XT gene_id annotation) reads before deduplication.,Deduplication
+reads_after_deduplication,20285939,High confidence gene-annotated reads after deduplication,Number of high confidence (unique alignment: max mismatch <= 3bp) gene-annotated (with XT gene_id annotation) reads after deduplication.,Deduplication
+sequencing_saturation,74.4736537391428,Sequencing saturation,(1 - (Reads after deduplication / reads before deduplication)) * 100,Deduplication
+counts_in_cells,14710650,Counts in cells,Post-deduplication counts associated with cellular barcodes,Cell metrics
+counts_out_of_cells,5575160,Counts out of cells,Post-deduplication counts associated with non-cellular barcodes,Cell metrics
+num_cells,2134,Number of cells,Estimated number of cells; Number of barcodes passing the total counts threshold.,Cell metrics
+raw_reads_per_cell,47513.79240862231,Raw reads per cell,Number of reads pre-QC / Number of cells,Cell metrics
+mean_total_counts_per_cell,6893.462890625,Mean total counts per cell,Mean sum of counts per cell.,Cell metrics
+median_total_reads_per_cell,5688,Median total counts per cell,Median sum of counts per cell.,Cell metrics
+mean_genes_detected_per_cell,2851.157450796626,Mean genes detected per cell,Mean number of genes detected for each cell (including nuclear and mitochondrial genes).,Cell metrics
+median_genes_detected_per_cell,2624,Median genes detected per cell,Median number of genes detected for the cells (including nuclear and mitochondrial genes).,Cell metrics
+mean_nuclear_genes_detected_per_cell,2838.9348641049673,Mean nuclear (non-mitochondrial) genes detected per cell,Mean number of nuclear genes detected for each cell.,Cell metrics
+median_nuclear_genes_detected_per_cell,2611,Median nuclear (non-mitochondrial) genes detected per cell,Median number of nuclear genes detected for each cell.,Cell metrics
+mean_mito_genes_detected_per_cell,12.222586691658856,Mean mitochondrial genes detected per cell,Mean number of mitochondrial genes detected for each cell.,Cell metrics
+median_mito_genes_detected_per_cell,12,Median mitochondrial genes detected per cell,Median number of mitochondrial genes detected for each cell.,Cell metrics
+percentage_counts_from_mito,11.210578680038452,Percentage of counts of mitochondrial origin,(Mitochonrial counts / all counts) * 100,Cell metrics
+num_unique_genes_detected_across_sample,29162,Unique genes detected across sample,Number of unique genes detected across the sample (each gene can be counted only once even if found in multiple cells).,Cell metrics
+total_genes_detected_across_sample,6084370,Total genes detected across sample,Total number of genes detected across the sample (each gene can be counted more than once if detected in more than one cell).,Cell metrics

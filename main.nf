@@ -46,31 +46,42 @@ params.mmus_gene_prefix             = getGenomeAttribute('mmus_gene_prefix')
     INCLUDES
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
-include {
-  save_resolved_configuration; download_star_index; download_gtf; download_input_csv; download_barcode_list; download_barcode_correction_list; download_public_fastq;
-  features_file; merge_lanes; qc; star;
-  create_valid_empty_bam as create_valid_empty_bam_star;
-  gtf2bed; run_rseqc as raw_rseqc; run_rseqc as annotated_rseqc;
-  initial_feature_count; filter_for_UMRs_mismatch; umr_transcript_assignment; umr_exon_assignment;
-  filter_for_multimappers_mismatch; multimapper_transcript_assignment; multimapper_exon_assignment;
-  merge_transcript_exon_umr_bams; merge_transcript_exon_multimapper_bams; 
-  merge_annotated_UMRs_with_annotated_multimappers; count_high_conf_annotated_umr_multimap;
-  single_sample_multiqc; multi_sample_multiqc;
-  sort_index_bam; dedup; io_count; count_matrix;
-  filter_count_matrix; cell_caller; categorize_reads; summary_statistics; qc_cascade_plot_single;
-  qc_cascade_plot_multi; single_summary_report; multi_sample_report
-  } from './modules/processes.nf'
-
-def order_integer_first(it){
-  try{
-        // Will raise exception if not int
-        it.isInteger()
-        0
-      } catch(MissingMethodException _e1){
-        // path will end here and therefore return 1
-        1
-      }
-}
+include { save_resolved_configuration } from './modules/local/save_resolved_configuration/main.nf'
+include { download_star_index } from './modules/local/download_star_index/main.nf'
+include { download_gtf } from './modules/local/download_gtf/main.nf'
+include { download_input_csv } from './modules/local/download_input_csv/main.nf'
+include { download_barcode_list } from './modules/local/download_barcode_list/main.nf'
+include { download_barcode_correction_list } from './modules/local/download_barcode_correction_list/main.nf'
+include { download_public_fastq } from './modules/local/download_public_fastq/main.nf'
+include { features_file } from './modules/local/features_file/main.nf'
+include { merge_lanes } from './modules/local/merge_lanes/main.nf'
+include { qc } from './modules/local/qc/main.nf'
+include { star } from './modules/local/star/main.nf'
+include { create_valid_empty_bam as create_valid_empty_bam_star } from './modules/local/create_valid_empty_bam/main.nf'
+include { gtf2bed } from './modules/local/gtf2bed/main.nf'
+include { run_rseqc as raw_rseqc } from './modules/local/run_rseqc/main.nf'
+include { run_rseqc as annotated_rseqc } from './modules/local/run_rseqc/main.nf'
+include { initial_feature_count } from './modules/local/initial_feature_count/main.nf'
+include { filter_for_UMRs_mismatch } from './modules/local/filter_for_UMRs_mismatch/main.nf'
+include { umr_transcript_assignment } from './modules/local/umr_transcript_assignment/main.nf'
+include { umr_exon_assignment } from './modules/local/umr_exon_assignment/main.nf'
+include { multimapper_assignment } from './modules/local/multimapper_assignment/main.nf'
+include { merge_transcript_exon_umr_bams } from './modules/local/merge_transcript_exon_umr_bams/main.nf'
+include { merge_annotated_UMRs_with_annotated_multimappers } from './modules/local/merge_annotated_UMRs_with_annotated_multimappers/main.nf'
+include { count_high_conf_annotated_umr_multimap } from './modules/local/count_high_conf_annotated_umr_multimap/main.nf'
+include { single_sample_multiqc } from './modules/local/single_sample_multiqc/main.nf'
+include { multi_sample_multiqc } from './modules/local/multi_sample_multiqc/main.nf'
+include { sort_index_bam } from './modules/local/sort_index_bam/main.nf'
+include { dedup } from './modules/local/dedup/main.nf'
+include { io_count } from './modules/local/io_count/main.nf'
+include { count_matrix } from './modules/local/count_matrix/main.nf'
+include { filter_count_matrix } from './modules/local/filter_count_matrix/main.nf'
+include { cell_caller } from './modules/local/cell_caller/main.nf'
+include { categorize_reads } from './modules/local/categorize_reads/main.nf'
+include { summary_statistics } from './modules/local/summary_statistics/main.nf'
+include { qc_cascade_plot_single } from './modules/local/qc_cascade_plot_single/main.nf'
+include { qc_cascade_plot_multi } from './modules/local/qc_cascade_plot_multi/main.nf'
+include { consolidated_report } from './modules/local/consolidated_report/main.nf'
 
 workflow {
 
@@ -175,9 +186,9 @@ workflow {
     barcode_correction_list = file(params.barcode_correction_list_path)
   }
 
-  // Create path objects to HTML report templates
-  single_sample_report_template = file("${baseDir}/templates/single_sample_report_template.html.jinja2")
-  multi_sample_report_template = file("${baseDir}/templates/multi_sample_report_template.html.jinja2")
+  // Create path objects to HTML report template + vendored (offline-safe) assets
+  consolidated_report_template = file("${baseDir}/templates/consolidated_report_template.html.jinja2")
+  report_vendor_dir = file("${baseDir}/assets/vendor")
   // Create empty rseqc output template path object
   empty_rseqc_template = file("${baseDir}/templates/rseqc_empty_template.txt")
   // Create feature file for count_matrix from GTF
@@ -297,21 +308,15 @@ workflow {
   // Get the second set of gene associations based on exon feature annotations (i.e. exon-tie breaking)
   umr_exon_assignment(filter_for_UMRs_mismatch.out.umr_mismatch_bam, gtf)
 
-  // Multimappers
-  // Generate a bam with only multimapping alignments, and up to 3 mismatches
-  filter_for_multimappers_mismatch(initial_feature_count_good_bam_out_ch)
-  // Generate assigned and unassigned bams from the multimapper bam
-  multimapper_transcript_assignment(filter_for_multimappers_mismatch.out.multimap_mismatch_bam, file("${baseDir}/bin/assign_multi_mappers.gawk"))
-  // Run exon tie breaking on the unassigned bam to get further gene associated reads
-  multimapper_exon_assignment(multimapper_transcript_assignment.out.unassigned_bam, gtf, file("${baseDir}/bin/assign_multi_mappers.gawk"))
+  // Multimappers: fused filter + transcript assignment + exon tie-break + merge (one task per sample
+  // to cut serial container-starts/staging on the critical path; output unchanged vs the old 4 processes)
+  multimapper_assignment(initial_feature_count_good_bam_out_ch, gtf, file("${baseDir}/bin/assign_multi_mappers.gawk"))
 
   // Merge the transcript- and exon-based gene assignments for the umrs
   merge_transcript_exon_umr_bams(umr_transcript_assignment.out.umr_transcript_assigned_bam.combine(umr_exon_assignment.out.umr_exon_assigned_bam, by: 0))
-  // Merge the transcript- and exon-based gene assignments for the multimappers
-  merge_transcript_exon_multimapper_bams(multimapper_transcript_assignment.out.assigned_bam.combine(multimapper_exon_assignment.out.assigned_bam, by: 0))
 
   // Merge the multimapper and UMR bams
-  merge_annotated_UMRs_with_annotated_multimappers(merge_transcript_exon_umr_bams.out.high_conf_annotated_umr_bam.combine(merge_transcript_exon_multimapper_bams.out.high_conf_annotated_multimapped_bam, by: 0))
+  merge_annotated_UMRs_with_annotated_multimappers(merge_transcript_exon_umr_bams.out.high_conf_annotated_umr_bam.combine(multimapper_assignment.out.high_conf_annotated_multimapped_bam, by: 0))
   
   // Re-merge channels for samples which had 0 or >0 alignments after STAR alignment
   umr_multimapper_annotated_bam_out_ch = merge_annotated_UMRs_with_annotated_multimappers.out.high_conf_annotated_bam.mix(create_valid_empty_bam_star.out.out_bam)
@@ -402,6 +407,13 @@ workflow {
           }
         }
     }
+    // Cell-caller thresholds are SAMPLE-level metadata, but input_csv has one ROW PER LANE, so a
+    // multi-lane sample yields N identical [sample_id, threshold] tuples. Dedup to one per sample:
+    // without this, ch_h5ad.combine(.., by:0) fans cell_caller out N-fold and that multiplicity
+    // propagates through the summary_statistics combine chain, making qc_cascade_plot_multi receive
+    // N copies of each <sample>.metrics.csv -> "input file name collision" crash on multi-lane input.
+    // (Single-lane samples have one row, so .unique() is a no-op for them.)
+    .unique()
     .set { user_specified_cell_caller_thresholds_ch }
 
   
@@ -411,13 +423,15 @@ workflow {
   cell_caller(ch_cell_caller)
   ch_cell_caller_out = cell_caller.out.cell_caller_out //[val(sample), int(cell_caller_nuc_gene_threshold)]
 
-  // Sort the groupTuple so that the int is always
-  // first and then flatten the tuple list to return a 3mer
-  // N.B. We were originally sorting by class (sort:{ val -> val.getClass() == sun.nio.fs.UnixPath ? 1 : 0})
-  // but for some reason this only worked locally and not on Seqera Platform
-  ch_filter_count_matrix_in = ch_cell_caller_out.mix(ch_h5ad)
-  .groupTuple(by: 0, size:2, sort:{ val -> order_integer_first(val)})
-  .map{ grouped -> [grouped[0], grouped[1][0], grouped[1][1]]}
+  // cell_caller_out is [sample_id, threshold] and ch_h5ad is [sample_id, raw_h5ad]; join by sample_id
+  // gives the [sample_id, threshold, raw_h5ad] tuple that filter_count_matrix expects, deterministically.
+  // (This previously used mix + groupTuple(size:2) with a sort closure that put the int threshold before
+  // the path. The sort relied on the path throwing MissingMethodException on .isInteger(); but on Seqera
+  // Platform / Fusion the path object responds to isInteger() without throwing, so both elements tied at
+  // sort key 0 and groupTuple fell back to arrival order -- a race between cell_caller and count_matrix
+  // that silently put the threshold in the path slot on heavy samples, crashing filter_count_matrix with
+  // "Not a valid path value: '<threshold>'". join keys on sample_id and is order-deterministic.)
+  ch_filter_count_matrix_in = ch_cell_caller_out.join(ch_h5ad, by: 0)
 
   // Output filtered (cells only) count tables
   filter_count_matrix(ch_filter_count_matrix_in)
@@ -449,25 +463,50 @@ workflow {
   // Generate summary statistics
   summary_statistics(ch_summary_statistics_in)
 
-  // Generate single-sample QC cascade plots
+  // Generate single-sample QC cascade plots (Plotly-free fragments)
   qc_cascade_plot_single(summary_statistics.out.metrics_csv)
 
-  // Join metrics CSV with cell caller plots and QC cascade plot
-  ch_summary_metrics_and_plots = summary_statistics.out.metrics_csv
-    .combine(cell_caller.out.cell_caller_plots, by: 0)
-    .combine(qc_cascade_plot_single.out.qc_cascade_plot, by: 0)
+  // Generate multi-sample QC cascade plot (Plotly-free fragment)
+  qc_cascade_plot_multi(summary_statistics.out.metrics_csv.map { it[1] }.collect())
 
-  // Generate single sample report
-  single_summary_report(ch_summary_metrics_and_plots, single_sample_report_template)
+  // Collect, flat, all per-sample inputs for the single consolidated report.
+  // Metrics csvs are also published per-sample by summary_statistics.
+  ch_all_metrics_csvs = summary_statistics.out.metrics_csv.map { it[1] }.collect()
+  // cell_caller_plots = tuple(sample_id, counts_pdf_html, barnyard_html); keep the file paths.
+  ch_all_cell_caller_plots = cell_caller.out.cell_caller_plots
+    .flatMap { sample_id, counts_pdf, barnyard -> [counts_pdf, barnyard] }
+    .collect()
+  ch_all_qc_cascade_single = qc_cascade_plot_single.out.qc_cascade_plot.map { it[1] }.collect()
 
-  // Generate multi-sample QC cascade plot
-  qc_cascade_plot_multi(single_summary_report.out.single_sample_metric_out.collect())
+  // Run-provenance metadata for the report header/footer (all values already known
+  // to the pipeline; factual only -- no quality judgement). Serialised to JSON and
+  // passed to the consolidated_report process as a single value.
+  def provenance_json = groovy.json.JsonOutput.toJson([
+    genome:        params.genome,
+    annotation:    params.gtf ? file(params.gtf).name : 'N/A',
+    mixed:         params.mixed_species,
+    pipeline_ver:  workflow.manifest.version ?: 'N/A',
+    commit:        workflow.commitId ?: 'N/A',
+    revision:      workflow.revision ?: 'N/A',
+    run_name:      workflow.runName,
+    session_id:    workflow.sessionId.toString(),
+    start:         workflow.start.toString(),
+    nf_version:    workflow.nextflow.version.toString(),
+    outdir:        params.outdir,
+    barcode_kit:   params.barcode_list_path ? file(params.barcode_list_path).name : 'N/A',
+    count_threshold: params.minimum_count_threshold,
+    homepage:      workflow.manifest.homePage ?: 'https://github.com/csgenetics/csgenetics_scrnaseq'
+  ])
 
-  // Generate multi sample report
-  multi_sample_report(
-    single_summary_report.out.single_sample_metric_out.collect(),
-    multi_sample_report_template,
-    qc_cascade_plot_multi.out.qc_cascade_plot
+  // Generate the single consolidated, self-contained experiment report.
+  consolidated_report(
+    ch_all_metrics_csvs,
+    ch_all_cell_caller_plots,
+    ch_all_qc_cascade_single,
+    qc_cascade_plot_multi.out.qc_cascade_plot,
+    consolidated_report_template,
+    report_vendor_dir,
+    provenance_json
   )
- 
+
 }

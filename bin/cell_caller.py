@@ -53,11 +53,20 @@ Mmus_counts > Mmus_threshold & Hsap_counts > Hsap_threshold is a multiplet.
 """
 
 # The plot to html method is defined outside the class as it will also be used later in the multi-sample summary report process. 
-def output_plot_to_html(dict_of_figs_and_names, html_filename):
+def output_plot_to_html(dict_of_figs_and_names, html_filename, include_plotlyjs='cdn'):
    """
    Output a suite of plots to an html file, incorporating the Lexend font.
    Expects as input a dictionary of plotly figures and their names.
    Figure names are used to name the .svg files which can be downloaded from the html.
+
+   include_plotlyjs controls how Plotly.js is bundled into the fragment:
+     - 'cdn' (default): standalone, self-viewable fragments that load Plotly.js
+       from the CDN. Used for the independently published *_pdf_with_cutoff.html
+       plots.
+     - False: a bare Plotly <div> fragment with NO Plotly.js. Used when the
+       fragment is embedded into the consolidated report, which loads a single
+       inline copy of Plotly.js once. This keeps the consolidated report
+       offline-safe and avoids loading Plotly.js once per plot.
    """
    # Add custom CSS to embed the Lexend font
    html_content = """
@@ -70,7 +79,7 @@ def output_plot_to_html(dict_of_figs_and_names, html_filename):
    # Add each figure to the HTML content
    for fig_name in dict_of_figs_and_names.keys():
       fig = dict_of_figs_and_names[fig_name]
-      html_content += pio.to_html(fig, full_html=False, include_plotlyjs='cdn', config={"responsive": True, 
+      html_content += pio.to_html(fig, full_html=False, include_plotlyjs=include_plotlyjs, config={"responsive": True,
                                                                                           'displaylogo': False, 
                                                                                           'toImageButtonOptions': {'format': 'svg',
                                                                                                                   'filename': fig_name,
@@ -274,7 +283,8 @@ class CellCaller:
 
       if self.single_species:
          total_counts_pdf_fig = self.pdf_plotter(self.pdf_df, self.log_cutoff, "total")
-         output_plot_to_html({f"{self.sample_name}_cellcaller_plot":total_counts_pdf_fig}, pdf_html_filename)
+         # Report-bound fragment: no Plotly.js (the consolidated report embeds it once).
+         output_plot_to_html({f"{self.sample_name}_cellcaller_plot":total_counts_pdf_fig}, pdf_html_filename, include_plotlyjs=False)
 
          # Save the figure as an HTML file
          # We used to write this out as .png, but in some HPC systems that was
@@ -286,8 +296,9 @@ class CellCaller:
       else:
          human_counts_pdf_fig = self.pdf_plotter(self.hsap_pdf_df, self.hsap_log_cutoff, "human")
          mouse_counts_pdf_fig = self.pdf_plotter(self.mmus_pdf_df, self.mmus_log_cutoff, "mouse")
+         # Report-bound fragment: no Plotly.js (the consolidated report embeds it once).
          output_plot_to_html({f"{self.sample_name}_hsap_cellcaller_plot":human_counts_pdf_fig, f"{self.sample_name}_mmus_cellcaller_plot":mouse_counts_pdf_fig},
-                              pdf_html_filename)
+                              pdf_html_filename, include_plotlyjs=False)
 
          # Save the figures as HTML files
          # We used to write this out as .png, but in some HPC systems that was
@@ -483,7 +494,8 @@ class CellCaller:
 
          barnyard_html_filename = f"{self.sample_name}_barnyard_plot.html"
 
-         output_plot_to_html({f"{self.sample_name}_barnyard_plot":barnyard_fig}, barnyard_html_filename)
+         # Report-bound fragment: no Plotly.js (the consolidated report embeds it once).
+         output_plot_to_html({f"{self.sample_name}_barnyard_plot":barnyard_fig}, barnyard_html_filename, include_plotlyjs=False)
       
 if __name__ == "__main__":
    CellCaller()
