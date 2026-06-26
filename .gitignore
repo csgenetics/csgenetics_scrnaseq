@@ -28,3 +28,6 @@ agent-secrets/
 # nf-test
 .nf-test/
 .nf-test.log
+
+# Nextflow debug logs (may contain ephemeral Wave/Tower access tokens; never commit)
+debug/
