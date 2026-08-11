@@ -3,10 +3,11 @@
 ## 2.0.0 - 2026-08-11
 
 Major overhaul: Nextflow 26 migration, performance, per-process module structure, a
-consolidated report, and run-to-run reproducibility. Summary metrics and per-barcode total
-counts are byte-identical to before; the changes below are runtime, structural, presentational,
-and a one-time deterministic resolution of a pre-existing count-matrix ambiguity (see
-Reproducibility).
+consolidated report, and run-to-run reproducibility. The changes below are runtime,
+structural, presentational, and a one-time deterministic resolution of a pre-existing
+count-matrix ambiguity. Cross-version summary metrics are biologically concordant but not
+byte-identical; the measured small deltas are recorded in Reproducibility and
+[docs/validation.md](docs/validation.md).
 
 Equivalence with 1.x was verified on 20 samples across four datasets covering both supported
 genome types: cell calling was identical or differed by a single borderline cell, and read and
@@ -23,12 +24,13 @@ the full results, and the known differences.
   - removed: `report/<sample>/<sample>_report.html`, `report/multisample_report.html`,
     `report/multisample_summary_plots.html`
   - added: `report/consolidated_report.html`
-  - unchanged: per-sample `report/<sample>/<sample>.metrics.csv` and
+  - retained paths and schemas: per-sample `report/<sample>/<sample>.metrics.csv` and
     `report/<sample>/<sample>.qc_cascade.html`, `report/multisample_out.csv`,
     `report/multisample_qc_cascade.html`, `plots/*.html`, and all MultiQC outputs.
 
   If you consume the old report HTML filenames, switch to `consolidated_report.html`. The
-  metric VALUES and the `.csv` outputs are identical to before.
+  `.csv` schemas and paths are retained. Values can show the documented small
+  cross-version multimapper effects, so 1.x and 2.0 CSV bytes are not promised identical.
 
 ### Changed
 
@@ -44,7 +46,8 @@ the full results, and the known differences.
   single-threaded). STAR's `--runThreadN` is kept at the original value of 8 and pinned (decoupled
   from the cpu reservation) because the thread count affects multimapper output order and therefore
   per-barcode counts; only the reservation changed. These are throughput/packing changes; pipeline
-  outputs are byte-unchanged (verified by the output-equivalence comparator).
+  customer-visible outputs satisfy their documented per-class equivalence
+  contracts (verified by the output-equivalence comparator).
 - **Performance (process-level speedups).** Profiling real samples on Seqera identified the dominant
   single-threaded steps and rewrote/parallelised them. Verified on 8 real human samples (cell calls
   identical to before, read counts within ~0.003%); total compute dropped ~39% (945 -> 579 CPU-min):
@@ -95,15 +98,23 @@ the run to fail loudly; none could produce silently incorrect results.**
 
 ### Reproducibility
 
-This release makes the pipeline **run-to-run byte-reproducible** by pinning `PYTHONHASHSEED=0`.
-The prior non-determinism was `umi_tools` choosing between equally-ranked reads via Python's
-hash-seed-randomized set iteration; pinning the seed makes that choice deterministic.
+This release makes the pipeline **run-to-run output-reproducible** under the comparator's
+documented per-class contracts by pinning `PYTHONHASHSEED=0`. The prior non-determinism was
+`umi_tools` choosing between equally-ranked reads via Python's hash-seed-randomized set
+iteration; pinning the seed makes that choice deterministic. This is not a claim that every
+container and report in the whole output directory has identical bytes: BAM representatives,
+HDF5 encoding, presentation HTML, and normalised Nextflow/MultiQC provenance have explicit
+semantic contracts.
 
 One-time consequence: a few genuinely-ambiguous multimapped reads (which previously landed on
-either of two genes at random, run-to-run) now resolve deterministically. **Summary metrics and
-per-barcode total counts are byte-identical to before**; only those few per-gene count-matrix
-entries change, once. From this release, count matrices are reproducible — the output-equivalence
-comparator (`tests/regression/compare_outputs.py`) can therefore gate future changes byte-exact.
+either of two genes at random, run-to-run) now resolve deterministically. Per-barcode matrix
+totals are preserved by that assignment move, while separately derived summary metrics and
+RSeQC bins have the small measured cross-version deltas documented in the validation report.
+From this release, count matrices are reproducible and the comparator
+(`tests/regression/compare_outputs.py`) can gate future changes by the appropriate format
+contract. In particular, identical inputs produce byte-identical raw and filtered tripartite
+count-matrix archives (`barcodes.tsv.gz`, `features.tsv.gz`, and `matrix.mtx.gz`); H5AD matrices
+are compared by their complete AnnData semantics rather than HDF5 container bytes.
 
 **What this means in practice.** Under 1.x, processing the same FASTQs twice could give slightly
 different count-matrix entries. If you are comparing samples processed at different times — a

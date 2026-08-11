@@ -192,6 +192,23 @@ jobs:
             tests/check_no_internal_files.sh
             tests/check_no_internal_files_test.sh
 
+  # The release comparator is itself a release gate. Exercise every file-class
+  # contract with a locked Python/anndata/scipy/samtools environment so a missing
+  # optional reader can never turn validation into a silent skip.
+  comparator-tests:
+    docker:
+      - image: cimg/base:stable
+    resource_class: medium
+    steps:
+      - checkout
+      - install-pinned-pixi
+      - run:
+          name: Comparator adversarial tests
+          command: |
+            pixi run --frozen \
+              --manifest-path tests/requirements/comparator/pixi.toml \
+              python -m pytest tests/python/test_compare_outputs.py -v
+
   # Exercise report parsing and generation in the exact image configured for the
   # three production report processes. That image currently carries Python 3.13.1;
   # install pytest only as CI tooling and do not replace any runtime dependency.
@@ -287,6 +304,7 @@ workflows:
   ci:
     jobs:
       - check-no-internal-files
+      - comparator-tests
       - nf-test
       - python-tests
       - report-production-container

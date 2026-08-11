@@ -175,21 +175,44 @@ done this.
 The comparator used for this work ships with the pipeline:
 
 ```bash
-# Strict: requires byte-identical outputs. Use this to compare two 2.0.0 runs.
+# Strict: requires output equivalence with no count-matrix envelope.
+# Use this to compare two 2.0.0 runs.
 python tests/regression/compare_outputs.py <outdir_a> <outdir_b>
 
-# Envelope: allows up to N count-matrix entries to differ, provided per-barcode
-# column sums are identical. Use this across the 1.x -> 2.0.0 boundary.
-python tests/regression/compare_outputs.py <old_outdir> <new_outdir> --envelope-max-flips 200
+# Optional cross-version diagnostic: stage matching relative paths into two
+# non-empty directories and retain the per-file details for review.
+python tests/regression/compare_outputs.py <old_common> <new_common> \
+  --allow-subset --envelope-max-flips 200 --json cross-version.json
 ```
 
-Strict mode is the default and requires byte-exact agreement. Envelope mode relaxes *only* the
-count-matrix comparison, and only on a specific condition: per-barcode column sums must still be
-identical, and the number of differing entries must fall within the budget you give it. Every
-other class of output stays strict regardless. That condition is what makes it a meaningful test
-rather than a loosened one — it permits a read to move between two genes, but not to appear,
-disappear, or move between barcodes.
+Do not point the cross-version command at both complete output directories.
+2.0 intentionally removes and replaces report filenames and changes execution
+metadata, so whole-tree path equality across the major-version boundary is
+neither expected nor what was validated here. For this release validation,
+`old_common` and `new_common` preserved matching relative paths for metrics,
+RSeQC, dedup and raw/filtered matrix outputs. This was a diagnostic inventory,
+not a command expected to exit zero: the strict `TEXT_EXACT` metric/RSeQC
+classes and strict dedup-count contract correctly reported the measured
+cross-version changes described above. Each `DIFFER` was reconciled with those
+results, and matrix envelope verdicts were assessed separately for the
+net-preserving ambiguity. `--allow-subset` disables only the 2.0 complete-run
+`pipeline_info` manifest requirement; it does not relax any selected file or
+turn a known change into a pass.
+
+Strict mode is the default and applies each output class's documented equivalence contract with no
+count-matrix ambiguity allowance. Envelope mode relaxes *only* the count-matrix comparison, and
+only on a specific condition: per-barcode column sums must still be identical, and the number of
+differing entries must fall within the budget you give it. Every other class of output stays
+strict regardless. That condition is what makes it a meaningful test rather than a loosened one —
+it permits a read to move between two genes, but not to appear, disappear, or move between
+barcodes.
 
 Choose the budget to suit your data; `--json` writes the full result set if you want to inspect
 what differed. Within 2.0.0, strict mode should pass — the pipeline is now reproducible run to
-run.
+run under those per-class semantic/output contracts. This does not assert whole-directory byte
+identity: for example, the BAM contract deliberately permits a different representative read for
+the same stable molecule, and run-specific Nextflow task IDs/timings/resources are normalised.
+MultiQC timestamps, work/temp directories and equivalent provenance paths are likewise
+normalised while its report data remains part of the comparison.
+The raw and filtered tripartite count-matrix archives have the stronger guarantee: identical
+inputs produce byte-identical `barcodes.tsv.gz`, `features.tsv.gz`, and `matrix.mtx.gz` files.

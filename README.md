@@ -107,20 +107,23 @@ The separate per-sample and multi-sample HTML reports are replaced by one
 If you have scripts or LIMS integrations that consume the old report filenames, point them at
 `report/consolidated_report.html`.
 
-**Everything else in `report/` is unchanged**, including `report/<sample>/<sample>.metrics.csv`,
-`report/multisample_out.csv`, `report/multisample_qc_cascade.html` and
-`report/<sample>/<sample>.qc_cascade.html`. Metric *values* are unchanged, and all `.csv` outputs
-are byte-identical in format to 1.x.
+The remaining `report/` paths and CSV schemas are retained, including
+`report/<sample>/<sample>.metrics.csv`, `report/multisample_out.csv`,
+`report/multisample_qc_cascade.html` and
+`report/<sample>/<sample>.qc_cascade.html`. Their cross-version content is not
+byte-identical: the deterministic multimapper change causes the small metric
+and RSeQC deltas recorded in [the validation report](docs/validation.md#known-differences).
 
 **What has not changed:** parameters, the input CSV format, genome/profile names, and the
-`count_matrix` outputs. No change is needed to your sample sheets or launch commands beyond the
-Nextflow version.
+locations and file formats of the `count_matrix` outputs. No change is needed to your sample
+sheets or launch commands beyond the Nextflow version.
 
 **One note on count matrices.** 2.0.0 resolves a pre-existing ambiguity in how multi-mapped reads
 were assigned. Previously the choice between equally-valid assignments depended on processing
 order and could vary between runs; it is now deterministic. This is a one-time effect on roughly
-0.3% of count-matrix entries. Cell calls are unaffected, and re-running 1.x data through 2.0.0
-reproduces the same biology. See [CHANGELOG.md](CHANGELOG.md) for the full detail.
+0.3% of count-matrix entries. In validation, cell calls were identical or differed by a single
+borderline cell, and re-running 1.x data through 2.0.0 reproduced the same biology. See
+[CHANGELOG.md](CHANGELOG.md) for the full detail.
 
 ### It should also be faster, and cost less
 
@@ -141,11 +144,19 @@ records how 2.0.0 was validated against 1.x: 20 samples across four datasets cov
 supported genome types, the method (including why the baseline had to be determinism-controlled),
 the results, and an explicit account of what *did* change.
 
-The comparator used for that work ships with the pipeline, so you can run it on your own data:
+The comparator used for that work ships with the pipeline. Its release-gate use
+is to compare two runs made with the same 2.0 code and inputs:
 
 ```bash
-python tests/regression/compare_outputs.py <old_outdir> <new_outdir> --envelope-max-flips 200
+python tests/regression/compare_outputs.py <outdir_a> <outdir_b>
 ```
+
+The complete 1.x and 2.0 output trees are not directly path-comparable because
+this release intentionally replaces report files. A curated cross-version
+comparison is diagnostic rather than an all-green gate: metrics, RSeQC and
+some dedup counts have documented real deltas, and their strict comparator
+classes correctly report `DIFFER`. The linked validation guide explains how
+those results were reviewed without weakening future same-version gates.
 
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
