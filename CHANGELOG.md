@@ -16,10 +16,11 @@ Reproducibility).
 - **The HTML report is consolidated into a single file.** The separate per-sample and
   multi-sample reports are replaced by one `report/consolidated_report.html`:
   - removed: `report/<sample>/<sample>_report.html`, `report/multisample_report.html`,
-    `report/multisample_summary_plots.html`, `report/multisample_qc_cascade.html`
+    `report/multisample_summary_plots.html`
   - added: `report/consolidated_report.html`
-  - unchanged: per-sample `report/<sample>/<sample>.metrics.csv`, `report/multisample_out.csv`,
-    `plots/*.html`, and all MultiQC outputs.
+  - unchanged: per-sample `report/<sample>/<sample>.metrics.csv` and
+    `report/<sample>/<sample>.qc_cascade.html`, `report/multisample_out.csv`,
+    `report/multisample_qc_cascade.html`, `plots/*.html`, and all MultiQC outputs.
 
   If you consume the old report HTML filenames, switch to `consolidated_report.html`. The
   metric VALUES and the `.csv` outputs are identical to before.
