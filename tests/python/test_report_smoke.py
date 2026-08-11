@@ -185,7 +185,7 @@ def test_run_provenance_renders_when_supplied(tmp_path):
         "genome": "GRCh38", "annotation": "gencode.v44.gtf", "mixed": False,
         "pipeline_ver": "2.0.0", "commit": "abc1234", "revision": "main",
         "run_name": "cheeky_curie", "session_id": "e495-3a25", "start": "2026-06-17T09:00:00Z",
-        "nf_version": "26.04.1", "outdir": "s3://csg-nextflow/run42",
+        "nf_version": "26.04.1", "outdir": "s3://example-bucket/run42",
         "barcode_kit": "IDT_IO_kit_v2.csv", "count_threshold": 100,
         "homepage": "https://github.com/csgenetics/csgenetics_scrnaseq",
     })

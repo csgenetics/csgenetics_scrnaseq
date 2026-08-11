@@ -50,7 +50,6 @@ input_csv/               # Sample sheet examples
 docs/                    # Documentation assets
 .circleci/               # CircleCI workflow config
 .claude/skills/          # Development skills (this file + others)
-docker/agent/            # Autonomous agent container (see docs/agent-containerisation.md)
 ```
 
 ## Branching strategy

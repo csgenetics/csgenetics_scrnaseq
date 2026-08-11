@@ -17,6 +17,9 @@ jobs:
     # the right CE with it (no manual CircleCI env-var flip). Only the SECRET TOWER_AUTH_TOKEN
     # remains a CircleCI project env var. The Nextflow version is likewise pinned in the launch
     # JSON below (preRunScript), so version + CE + workspace all travel with the commit.
+    # These two IDs are deliberately in this PUBLIC repo: they are opaque identifiers, inert
+    # without TOWER_AUTH_TOKEN, and must travel with the commit for the above to work. Do not
+    # "fix" them into CircleCI env vars.
     environment:
       TOWER_WORKSPACE_ID: "40027684065767"
       TOWER_COMPUTE_ENV_ID: "ed0zjbIeIvKoUPuGsy8fA"
@@ -113,6 +116,19 @@ jobs:
             export NXF_VER=26.04.1
             nf-test test tests/nf/pipeline_stub.nf.test modules/local/save_resolved_configuration/tests/main.nf.test --verbose
 
+  # This repo is PUBLIC. Fails the build if agent working files, ad-hoc internal sample
+  # sheets, credentials or beast-local paths get committed. See CLAUDE.md for the parts
+  # that cannot be mechanised. Deliberately dependency-free so it is always cheap to run.
+  check-no-internal-files:
+    docker:
+      - image: cimg/base:stable
+    resource_class: small
+    steps:
+      - checkout
+      - run:
+          name: No internal-only files, credentials or local paths
+          command: tests/check_no_internal_files.sh
+
   # Headless-browser smoke test for the consolidated HTML report. Generates a
   # report from a committed fixture and renders it in Chromium to assert it is
   # FUNCTIONAL (no JS console errors, Plotly defined, every plot drew an SVG, the
@@ -148,6 +164,7 @@ jobs:
 workflows:
   ci:
     jobs:
+      - check-no-internal-files
       - nf-test
       - report-smoke
       - run-current-branch

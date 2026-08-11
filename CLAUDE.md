@@ -1,5 +1,19 @@
 # Claude Instructions for csgenetics_scrnaseq
 
+## THIS REPOSITORY IS PUBLIC
+Everything committed here is world-readable the moment it is pushed, and stays readable
+in the git history even after deletion. Before committing, check that you are not adding:
+- internal S3 paths (`csg-nextflow`, `csg-reference`, ...) or infrastructure IDs
+- customer/site/run identifiers (e.g. `251212_UCSD_MOR027_...`) or colleague names
+- credentials, credential file paths, or anything under `agent-secrets/`
+- local machine paths (`/nssd2/...`)
+- planning docs, handoffs, campaign logs, or other agent working files
+
+Write agent working files to the session scratchpad or a private location, never into the
+tree. Ad-hoc sample sheets that point at internal data belong in
+`s3://csg-reference/internal_nf_tests_data/external_validation/`, not in this repo. The
+`check-no-internal-files` CI job enforces the mechanical parts of this.
+
 ## When developing
 - Never write code that fails silently. Always fail loud.
 - Never run the pipeline unless I explicitly ask you to do so.
