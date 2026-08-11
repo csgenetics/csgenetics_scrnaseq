@@ -122,6 +122,31 @@ order and could vary between runs; it is now deterministic. This is a one-time e
 0.3% of count-matrix entries. Cell calls are unaffected, and re-running 1.x data through 2.0.0
 reproduces the same biology. See [CHANGELOG.md](CHANGELOG.md) for the full detail.
 
+### It should also be faster, and cost less
+
+2.0.0 uses **39% less compute** than 1.x on the same data. Time-to-result improved roughly 1.7x on
+human data and 3.3x on mixed-species data in like-for-like testing.
+
+> **If you override CPU or memory in a custom config, re-check it.** Per-process reservations were
+> re-tuned against measured usage throughout 2.0.0 — some went down (STAR 16 to 8 cpus, which is
+> memory-bound rather than CPU-bound at our read counts), some went up (the multimapper and
+> read-categorisation steps, which needed more headroom on heavy samples). Values carried over
+> from a 1.x custom config may now under- or over-provision. If you have not customised
+> `conf/base.config` or supplied your own `-c` config, no action is needed.
+
+### Verifying the upgrade
+
+If you would rather see the evidence than take the above on trust, [`docs/validation.md`](docs/validation.md)
+records how 2.0.0 was validated against 1.x: 20 samples across four datasets covering both
+supported genome types, the method (including why the baseline had to be determinism-controlled),
+the results, and an explicit account of what *did* change.
+
+The comparator used for that work ships with the pipeline, so you can run it on your own data:
+
+```bash
+python tests/regression/compare_outputs.py <old_outdir> <new_outdir> --envelope-max-flips 200
+```
+
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
 ## Running the pipeline
