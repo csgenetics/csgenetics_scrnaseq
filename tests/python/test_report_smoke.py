@@ -18,21 +18,25 @@ the dropdown selects the right pane and keeps all samples on reopen, the print
 stylesheet reveals every per-sample pane, and the re-emitted ``multisample_out.csv``
 keeps raw (separator-free) numbers so it stays machine-readable.
 
-It is intentionally dependency-light: the report generator needs only jinja2 +
-plotly, so this runs in a small Playwright CI image without the heavy pipeline
-Python environment.
+CI runs the non-browser contract in the exact configured production container,
+then persists that generated report for Chromium in a separate Python 3.11 lane
+matching the declared Conda report environment.
 """
 
 import os
+from pathlib import Path
 import shutil
 import subprocess
 import sys
 
+import plotly.graph_objects as go
+import plotly.io as pio
 import pytest
 
-# Skip cleanly where Playwright is not installed (e.g. a bare dev env); CI installs it.
-pytest.importorskip("playwright.sync_api")
-from playwright.sync_api import sync_playwright  # noqa: E402
+try:
+    from playwright.sync_api import sync_playwright
+except ImportError:  # production report container intentionally has no browser tooling
+    sync_playwright = None
 
 # Runs the report generator as a subprocess and renders it in a browser.
 pytestmark = pytest.mark.integration
@@ -47,21 +51,80 @@ EXPECTED_SAMPLES = ["SAMPLE1", "SAMPLE2"]
 # fixture has, per sample: 1 cell-caller + 1 qc-cascade plot, plus 1 multi-sample
 # qc-cascade across all samples => 2*2 + 1 = 5 Plotly figures.
 EXPECTED_PLOTS = 5
+ADVERSARIAL_FRAGMENTS = [
+    pytest.param(
+        '<script>fetch("https://network.example.test/data")</script>',
+        id="fetch",
+    ),
+    pytest.param(
+        '<script>new Image().src="https://images.example.test/pixel"</script>',
+        id="image-src",
+    ),
+    pytest.param(
+        '<img srcset="data:image/gif;base64,AAAA 1x, https://images.example.test/x 2x">',
+        id="mixed-srcset",
+    ),
+    pytest.param(
+        '<iframe srcdoc="<script>fetch(\'https://frame.example.test\')</script>"></iframe>',
+        id="iframe-srcdoc",
+    ),
+    pytest.param(
+        '<svg><use href="https://svg.example.test/icons.svg#x"></use></svg>',
+        id="svg-use",
+    ),
+    pytest.param(
+        '<base href="https://base.example.test/"><img src="relative.png">',
+        id="base-relative",
+    ),
+    pytest.param(
+        '<form action="https://forms.example.test/submit"></form>',
+        id="form-action",
+    ),
+    pytest.param(
+        '<script nonce="csgenetics-trusted-report-script">fetch("https://network.example.test")</script>',
+        id="forged-csp-nonce",
+    ),
+    pytest.param('<script type="text/javascript">', id="unclosed-script"),
+    pytest.param("<html></html>", id="trailing-empty-html-wrapper"),
+    pytest.param("<body></body><head></head>", id="misordered-wrapper"),
+]
+
+
+def _copy_report_fixture(work):
+    for name in os.listdir(FIXTURE_DIR):
+        shutil.copy(os.path.join(FIXTURE_DIR, name), work / name)
+
+
+def _run_report_generator(work, *, mixed=False, capture_output=False):
+    return subprocess.run(
+        [
+            sys.executable,
+            GENERATOR,
+            TEMPLATE,
+            str(mixed).upper(),
+            VENDOR_DIR,
+            str(work / "multisample_qc_cascade.html"),
+        ],
+        cwd=work,
+        capture_output=capture_output,
+        text=True,
+    )
+
+
+def _assert_no_report_outputs(work):
+    assert not (work / "consolidated_report.html").exists()
+    assert not (work / "multisample_out.csv").exists()
 
 
 @pytest.fixture(scope="module")
 def report_html(tmp_path_factory):
     """Generate the consolidated report from the fixture; return the .html path."""
     work = tmp_path_factory.mktemp("report")
-    for name in os.listdir(FIXTURE_DIR):
-        shutil.copy(os.path.join(FIXTURE_DIR, name), work / name)
+    _copy_report_fixture(work)
 
     # Same invocation Nextflow uses: <template> <mixed_species> <vendor_dir> <multi_qc_cascade>
-    subprocess.run(
-        [sys.executable, GENERATOR, TEMPLATE, "FALSE", VENDOR_DIR,
-         str(work / "multisample_qc_cascade.html")],
-        cwd=work, check=True,
-    )
+    result = _run_report_generator(work)
+    assert result.returncode == 0
     html = work / "consolidated_report.html"
     assert html.exists(), "generator did not produce consolidated_report.html"
     return html
@@ -69,6 +132,8 @@ def report_html(tmp_path_factory):
 
 @pytest.fixture(scope="module")
 def browser():
+    if sync_playwright is None:
+        pytest.skip("Playwright is not installed")
     with sync_playwright() as p:
         b = p.chromium.launch()
         yield b
@@ -77,20 +142,363 @@ def browser():
 
 @pytest.fixture
 def page(browser, report_html):
-    """A freshly-loaded page per test, with JS errors collected from load onward."""
-    pg = browser.new_page()
+    """Load the report offline and collect JS errors and network attempts."""
+    context = browser.new_context(offline=True)
+    pg = context.new_page()
     errors = []
+    remote_requests = []
     pg.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
     pg.on("pageerror", lambda e: errors.append(str(e)))
+    pg.on(
+        "request",
+        lambda request: remote_requests.append(request.url)
+        if request.url.startswith(("http://", "https://"))
+        else None,
+    )
     pg.goto(report_html.as_uri())
     pg.wait_for_timeout(1200)  # let inline Plotly.newPlot() calls settle
     pg._console_errors = errors
+    pg._remote_requests = remote_requests
     yield pg
-    pg.close()
+    context.close()
 
 
 def test_no_js_console_errors(page):
     assert page._console_errors == [], f"JS errors in rendered report: {page._console_errors}"
+
+
+def test_report_renders_without_attempting_network_access(page):
+    assert page._remote_requests == [], \
+        f"offline report attempted external requests: {page._remote_requests}"
+
+
+def test_legacy_fragment_resources_are_removed(report_html):
+    """The fixture deliberately contains the Google Fonts tag emitted by older
+    Cell Caller versions. It must not survive consolidation as an active tag."""
+    fixture = os.path.join(FIXTURE_DIR, "SAMPLE2_counts_pdf_with_threshold.html")
+    with open(fixture, encoding="utf-8") as fh:
+        assert "fonts.googleapis.com" in fh.read()
+
+    with open(report_html, encoding="utf-8") as fh:
+        html = fh.read()
+    assert '<link href="https://fonts.googleapis.com' not in html
+    assert '<script src="https://cdn.plot.ly' not in html
+
+
+def test_report_has_restrictive_csp_and_only_trusted_scripts(page, report_html):
+    with open(report_html, encoding="utf-8") as fh:
+        html = fh.read()
+    for directive in (
+        "connect-src 'none'",
+        "frame-src 'none'",
+        "object-src 'none'",
+        "media-src 'none'",
+        "base-uri 'none'",
+        "form-action 'none'",
+    ):
+        assert directive in html, f"report CSP is missing {directive!r}"
+
+    script_nonces = page.eval_on_selector_all(
+        "script", "els => els.map(element => element.getAttribute('nonce'))"
+    )
+    assert script_nonces
+    assert set(script_nonces) == {"csgenetics-trusted-report-script"}
+
+
+def test_dense_scattergl_fragment_renders_offline_in_consolidated_report(
+    tmp_path, browser
+):
+    """Dense barnyards use scattergl, which must survive the strict CSP."""
+    for name in os.listdir(FIXTURE_DIR):
+        shutil.copy(os.path.join(FIXTURE_DIR, name), tmp_path / name)
+
+    figure = go.Figure(
+        data=go.Scattergl(x=list(range(1_001)), y=list(range(1_001)))
+    )
+    fragment = pio.to_html(
+        figure,
+        full_html=False,
+        include_plotlyjs=False,
+        config={"responsive": True, "displaylogo": False},
+    )
+    (tmp_path / "SAMPLE1_counts_pdf_with_threshold.html").write_text(
+        fragment, encoding="utf-8"
+    )
+    subprocess.run(
+        [
+            sys.executable,
+            GENERATOR,
+            TEMPLATE,
+            "FALSE",
+            VENDOR_DIR,
+            str(tmp_path / "multisample_qc_cascade.html"),
+        ],
+        cwd=tmp_path,
+        check=True,
+    )
+
+    context = browser.new_context(offline=True)
+    pg = context.new_page()
+    errors = []
+    remote_requests = []
+    pg.on("console", lambda message: errors.append(message.text) if message.type == "error" else None)
+    pg.on("pageerror", lambda error: errors.append(str(error)))
+    pg.on(
+        "request",
+        lambda request: remote_requests.append(request.url)
+        if request.url.startswith(("http://", "https://"))
+        else None,
+    )
+    pg.goto((tmp_path / "consolidated_report.html").as_uri(), wait_until="load")
+    pg.wait_for_selector(".gl-container canvas", state="attached", timeout=10_000)
+
+    assert remote_requests == []
+    assert errors == []
+    context.close()
+
+
+def test_production_container_report_renders_offline_in_host_chromium(browser):
+    """CircleCI passes the report made by the configured production image here."""
+    report_path_value = os.environ.get("CSGENETICS_PRODUCTION_CONTAINER_REPORT")
+    if not report_path_value:
+        pytest.skip("no production-container report artifact was supplied")
+    report_path = Path(report_path_value)
+    assert report_path.is_file(), f"missing production-container report: {report_path}"
+
+    context = browser.new_context(offline=True)
+    pg = context.new_page()
+    errors = []
+    remote_requests = []
+    pg.on("console", lambda message: errors.append(message.text) if message.type == "error" else None)
+    pg.on("pageerror", lambda error: errors.append(str(error)))
+    pg.on(
+        "request",
+        lambda request: remote_requests.append(request.url)
+        if request.url.startswith(("http://", "https://"))
+        else None,
+    )
+    pg.goto(report_path.as_uri(), wait_until="load")
+    pg.wait_for_selector(".js-plotly-plot .main-svg", state="attached", timeout=10_000)
+
+    n_divs = pg.locator(".js-plotly-plot").count()
+    n_with_svg = pg.eval_on_selector_all(
+        ".js-plotly-plot",
+        "els => els.filter(element => element.querySelector('.main-svg')).length",
+    )
+    assert n_divs >= EXPECTED_PLOTS
+    assert n_with_svg == n_divs, (
+        f"{n_divs - n_with_svg} of {n_divs} production-container plots "
+        "drew no SVG"
+    )
+    assert remote_requests == []
+    assert errors == []
+    context.close()
+
+
+@pytest.mark.parametrize(
+    "case,role,filename,error_text",
+    [
+        (
+            "missing-single",
+            "QC cascade fragment for sample 'SAMPLE1'",
+            "SAMPLE1.qc_cascade.html",
+            "is missing",
+        ),
+        (
+            "empty-single",
+            "QC cascade fragment for sample 'SAMPLE1'",
+            "SAMPLE1.qc_cascade.html",
+            "is empty",
+        ),
+        (
+            "missing-multi",
+            "multi-sample QC cascade fragment",
+            "multisample_qc_cascade.html",
+            "is missing",
+        ),
+        (
+            "empty-multi",
+            "multi-sample QC cascade fragment",
+            "multisample_qc_cascade.html",
+            "is empty",
+        ),
+    ],
+)
+def test_required_qc_fragment_inputs_fail_loud_without_partial_outputs(
+    tmp_path, case, role, filename, error_text
+):
+    _copy_report_fixture(tmp_path)
+    fragment = tmp_path / filename
+    if case.startswith("missing"):
+        fragment.unlink()
+    else:
+        fragment.write_text("", encoding="utf-8")
+
+    result = _run_report_generator(tmp_path, capture_output=True)
+
+    assert result.returncode != 0
+    assert role in result.stderr
+    assert filename in result.stderr
+    assert error_text in result.stderr
+    _assert_no_report_outputs(tmp_path)
+
+
+@pytest.mark.parametrize("optional_role", ["cell-caller", "barnyard"])
+def test_existing_zero_byte_optional_plot_sentinels_are_accepted(
+    tmp_path, optional_role
+):
+    _copy_report_fixture(tmp_path)
+    if optional_role == "cell-caller":
+        (tmp_path / "SAMPLE1_counts_pdf_with_threshold.html").write_text(
+            "", encoding="utf-8"
+        )
+        mixed = False
+    else:
+        for sample_id in EXPECTED_SAMPLES:
+            (tmp_path / f"{sample_id}_barnyard_plot.html").write_text(
+                "", encoding="utf-8"
+            )
+        mixed = True
+
+    result = _run_report_generator(tmp_path, mixed=mixed, capture_output=True)
+
+    assert result.returncode == 0, result.stderr
+    assert (tmp_path / "consolidated_report.html").is_file()
+    assert (tmp_path / "multisample_out.csv").is_file()
+
+
+@pytest.mark.parametrize(
+    "mixed,filename,role",
+    [
+        (
+            False,
+            "SAMPLE1_counts_pdf_with_threshold.html",
+            "Cell Caller fragment for sample 'SAMPLE1'",
+        ),
+        (
+            True,
+            "SAMPLE1_barnyard_plot.html",
+            "barnyard fragment for sample 'SAMPLE1'",
+        ),
+    ],
+)
+def test_optional_plot_sentinel_must_still_exist(
+    tmp_path, mixed, filename, role
+):
+    _copy_report_fixture(tmp_path)
+    fragment = tmp_path / filename
+    if fragment.exists():
+        fragment.unlink()
+
+    result = _run_report_generator(tmp_path, mixed=mixed, capture_output=True)
+
+    assert result.returncode != 0
+    assert role in result.stderr
+    assert filename in result.stderr
+    assert "is missing" in result.stderr
+    _assert_no_report_outputs(tmp_path)
+
+
+def test_non_file_fragment_fails_loud_without_partial_outputs(tmp_path):
+    _copy_report_fixture(tmp_path)
+    fragment = tmp_path / "SAMPLE1.qc_cascade.html"
+    fragment.unlink()
+    fragment.mkdir()
+
+    result = _run_report_generator(tmp_path, capture_output=True)
+
+    assert result.returncode != 0
+    assert "QC cascade fragment for sample 'SAMPLE1'" in result.stderr
+    assert fragment.name in result.stderr
+    assert "not a regular file" in result.stderr
+    _assert_no_report_outputs(tmp_path)
+
+
+def test_unreadable_fragment_fails_loud_without_partial_outputs(tmp_path):
+    _copy_report_fixture(tmp_path)
+    fragment = tmp_path / "SAMPLE1.qc_cascade.html"
+    fragment.chmod(0)
+    try:
+        result = _run_report_generator(tmp_path, capture_output=True)
+    finally:
+        fragment.chmod(0o600)
+
+    assert result.returncode != 0
+    assert "QC cascade fragment for sample 'SAMPLE1'" in result.stderr
+    assert fragment.name in result.stderr
+    assert "not readable" in result.stderr
+    _assert_no_report_outputs(tmp_path)
+
+
+@pytest.mark.parametrize("attack", ADVERSARIAL_FRAGMENTS)
+def test_generator_rejects_unsafe_fragment_before_writing_outputs(tmp_path, attack):
+    _copy_report_fixture(tmp_path)
+
+    fragment = tmp_path / "SAMPLE1_counts_pdf_with_threshold.html"
+    original = fragment.read_text(encoding="utf-8")
+    fragment.write_text(
+        original.replace("</body>", attack + "</body>", 1), encoding="utf-8"
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            GENERATOR,
+            TEMPLATE,
+            "FALSE",
+            VENDOR_DIR,
+            str(tmp_path / "multisample_qc_cascade.html"),
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0, "unsafe fragment was silently accepted"
+    assert "Cell Caller fragment for sample 'SAMPLE1'" in result.stderr
+    assert "is unsafe" in result.stderr
+    assert fragment.name in result.stderr
+    _assert_no_report_outputs(tmp_path)
+
+
+def test_csp_blocks_active_content_if_a_finished_report_is_tampered(report_html, browser, tmp_path):
+    tampered = tmp_path / "tampered_report.html"
+    with open(report_html, encoding="utf-8") as fh:
+        html = fh.read()
+    attack = (
+        '<script>window.__csp_script_ran=true; '
+        'fetch("https://network.example.test/data")</script>'
+        '<img src="https://images.example.test/pixel" '
+        'onerror="window.__csp_handler_ran=true">'
+    )
+    tampered.write_text(html.replace("</body>", attack + "</body>"), encoding="utf-8")
+
+    context = browser.new_context()
+    pg = context.new_page()
+    remote_requests = []
+    blocked_requests = []
+    pg.on(
+        "request",
+        lambda request: remote_requests.append(request.url)
+        if request.url.startswith(("http://", "https://"))
+        else None,
+    )
+    pg.on(
+        "requestfailed",
+        lambda request: blocked_requests.append((request.url, request.failure)),
+    )
+    pg.goto(tampered.as_uri())
+    pg.wait_for_timeout(500)
+
+    assert pg.evaluate("window.__csp_script_ran === undefined")
+    assert pg.evaluate("window.__csp_handler_ran === undefined")
+    # Chromium exposes the blocked image through its request event, but the CSP
+    # cancels it before a network response. The injected script never runs, so
+    # its fetch is not attempted at all.
+    assert remote_requests == ["https://images.example.test/pixel"]
+    assert blocked_requests == [
+        ("https://images.example.test/pixel", "csp")
+    ]
+    context.close()
 
 
 def test_plotly_is_defined(page):
@@ -171,6 +579,56 @@ def test_csv_keeps_raw_separatorless_numbers(report_html):
                     assert v.isdigit(), f"CSV integer value carries a separator or is non-numeric: {v!r}"
                 return
     pytest.fail("reads_pre_qc row not found in multisample_out.csv")
+
+
+def test_tower_report_mappings_match_published_outputs():
+    tower_path = os.path.join(REPO_ROOT, "tower.yml")
+    with open(tower_path, encoding="utf-8") as fh:
+        tower = fh.read()
+
+    expected = {
+        "report/consolidated_report.html": "CS Genetics scRNA-seq report",
+        "report/multisample_out.csv": "Cross-sample metrics (CSV)",
+        "pipeline_info/execution_report.html": "Nextflow execution report",
+        "pipeline_info/execution_timeline.html": "Nextflow execution timeline",
+        "pipeline_info/execution_trace.txt": "Nextflow execution trace",
+        "pipeline_info/pipeline_dag.html": "Nextflow workflow diagram",
+    }
+    for path, display in expected.items():
+        mapping = f'  "{path}":\n    display: "{display}"'
+        assert mapping in tower, f"tower.yml is missing the exact mapping {path!r}"
+
+    for stale_path in (
+        "multisample_report.html",
+        "*_report.html",
+        "execution_timeline_*.html",
+        "execution_report_*.html",
+    ):
+        assert stale_path not in tower, f"tower.yml still contains stale path {stale_path!r}"
+
+
+def test_ci_exercises_configured_production_report_image_and_browser_handoff():
+    images_config = Path(REPO_ROOT, "conf", "images.config").read_text(encoding="utf-8")
+    circle_config = Path(REPO_ROOT, ".circleci", "config.yml").read_text(
+        encoding="utf-8"
+    )
+    configured_image = "quay.io/csgenetics/html_build:0.1.0"
+    assert f"container = '{configured_image}'" in images_config
+
+    production_start = circle_config.index("  report-production-container:")
+    production_end = circle_config.index(
+        "  # The declared Conda report environment", production_start
+    )
+    production_job = circle_config[production_start:production_end]
+    assert f"- image: {configured_image}" in production_job
+    assert "python -m pip install --quiet pytest" in production_job
+    assert 'plotly==' not in production_job
+    assert "persist_to_workspace" in production_job
+
+    assert "- image: cimg/python:3.11" in circle_config
+    assert "attach_workspace" in circle_config
+    assert "CSGENETICS_PRODUCTION_CONTAINER_REPORT=" in circle_config
+    assert "report-smoke:\n          requires:\n            - report-production-container" in circle_config
 
 
 def test_run_provenance_renders_when_supplied(tmp_path):

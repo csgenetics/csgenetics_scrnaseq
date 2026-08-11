@@ -384,6 +384,30 @@ The repository includes a `nextflow_schema.json` file that will automatically di
 
 To make use of containerization, don't forget to add an appropriate profile e.g. `docker` in the 'Config profiles' section of the 'Add pipeline' dialog.
 
+### Viewing the consolidated report in Seqera Platform
+
+The pipeline's `tower.yml` exposes the consolidated HTML report, the cross-sample metrics CSV,
+and the four Nextflow execution reports in the run's **Reports** tab. The paths match the files
+published under `report/` and `pipeline_info/`; no Launchpad override is needed.
+
+The consolidated report is self-contained, so its size grows with both the number and density of
+the sample plots. A scaling check using the repository's tiny single-species fixture measured
+approximately 5.7 MB of fixed assets plus 73.8 KB per sample (about 13.1 MB for 100 fixture
+samples). That is a test-fixture measurement, not a general per-sample estimate. Mixed-species
+barnyard plots can be much larger: representative fragments measured approximately 0.316 MB at
+10,000 barcodes and 3.068 MB at 100,000 barcodes. A dense 100,000-barcode mixed-species run can
+therefore cross Seqera's preview limit with around two samples.
+
+Seqera Platform previews reports smaller than 10 MB and directly downloads reports smaller than
+25 MB. The report generator prints its actual final size and an access warning whenever it reaches
+10 MB; use that measured size rather than estimating from sample count. If the report is between
+10 and 25 MB, download it from the Reports tab and open it locally. If it is larger than 25 MB,
+retrieve `report/consolidated_report.html` from the published output path. The complete report is
+written in both cases, and `report/multisample_out.csv` remains available as a lightweight,
+separately previewable fallback in the Reports tab. See the
+[Seqera report limits](https://docs.seqera.io/platform-cloud/reports/overview#limitations) for the
+current Platform behaviour.
+
 ## Available standard profiles
 
 Nextflow pipeline configurable parameters can be set in groups by specifying profiles.
@@ -710,7 +734,12 @@ report/
 `consolidated_report.html` is a single self-contained file covering every sample in the run. It
 opens in any browser with no internet connection required (all assets are embedded), and has a
 sample selector for moving between per-sample views plus a cross-sample metrics table. It prints
-to PDF with every sample included.
+to PDF with every sample included. The single- and multi-sample QC cascade HTML files listed above
+are also self-contained and can be opened without internet access.
+
+For large runs launched through Seqera Platform, see
+[Viewing the consolidated report in Seqera Platform](#viewing-the-consolidated-report-in-seqera-platform)
+for preview/download limits and the CSV fallback.
 
 The `.csv` files are the machine-readable form of the same metrics. Numbers in them are raw and
 separator-free so they can be parsed directly, even though the on-screen tables display thousands
@@ -747,7 +776,8 @@ Contains a multi-sample MultiQC report and associated data, plus a subdirectory 
 ### `plots`
 
 Plots of the Cell Caller profiles used to generate the minimum detected nuclear genes threshold
-for cell calling.
+for cell calling. These HTML files embed the plotting library and can be opened without internet
+access.
 
 The density plot describes the number of nuclear genes detected (log10 Nuclear genes) across cells. The black line describes the default cutoff value for nuclear genes when calling cells. In contrast, the red line describes the threshold determined by the Cell Caller.
 
@@ -889,4 +919,3 @@ By default, when a task fails it will be retried (a maximum of 5 times) with inc
 ```
 
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
-

@@ -132,30 +132,89 @@ jobs:
             tests/check_no_internal_files.sh
             tests/check_no_internal_files_test.sh
 
-  # Headless-browser smoke test for the consolidated HTML report. Generates a
-  # report from a committed fixture and renders it in Chromium to assert it is
-  # FUNCTIONAL (no JS console errors, Plotly defined, every plot drew an SVG, the
-  # sample dropdown selects the right pane and does not collapse, print reveals all
-  # panes, the CSV stays separator-free). Catches the blank-plot / dropdown-collapse
-  # class of regression that file-level checks cannot see. Also runs the report
-  # number-formatting unit tests. Deliberately dependency-light: the report
-  # generator and these tests need only jinja2 + plotly, so this avoids the heavy
-  # single-cell pipeline Python stack (anndata/scipy/etc.).
-  report-smoke:
+  # Exercise report parsing and generation in the exact image configured for the
+  # three production report processes. That image currently carries Python 3.13.1;
+  # install pytest only as CI tooling and do not replace any runtime dependency.
+  # Persist one image-generated report so the separate Chromium job renders the
+  # actual artifact rather than merely regenerating it in its Python 3.11 host.
+  report-production-container:
     docker:
-      - image: cimg/python:3.12
+      - image: quay.io/csgenetics/html_build:0.1.0
     resource_class: medium
     steps:
       - checkout
       - run:
+          name: Verify configured report runtime and install test runner
+          command: |
+            python --version
+            python -m pip install --quiet pytest
+      - run:
+          name: Production-container report contract tests
+          command: |
+            python -m pytest \
+              tests/python/test_report_smoke.py \
+              tests/python/test_number_formatting.py \
+              tests/python/test_cell_caller.py \
+              tests/python/test_qc_cascade_offline.py \
+              -v
+      - run:
+          name: Generate report artifact in production container
+          command: |
+            runtime_repo_dir="$PWD"
+            runtime_report_dir="/tmp/csgenetics-report-runtime/container_report"
+            mkdir -p "$runtime_report_dir"
+            cp tests/python/fixtures/report/* "$runtime_report_dir/"
+            cd "$runtime_report_dir"
+            python "$runtime_repo_dir/bin/create_consolidated_report.py" \
+              "$runtime_repo_dir/templates/consolidated_report_template.html.jinja2" \
+              FALSE \
+              "$runtime_repo_dir/assets/vendor" \
+              "$runtime_report_dir/multisample_qc_cascade.html"
+            test -s consolidated_report.html
+            test -s multisample_out.csv
+      - persist_to_workspace:
+          root: /tmp/csgenetics-report-runtime
+          paths:
+            - container_report/consolidated_report.html
+
+  # The declared Conda report environment uses Python 3.11, so retain a matching
+  # host lane with system Chromium. It generates its own report and also renders
+  # the artifact persisted by report-production-container. Assertions cover no JS
+  # errors or network requests, every Plotly chart drawing, selector/print behavior,
+  # standalone Cell Caller and QC-cascade pages, and the strict fragment/CSP boundary.
+  report-smoke:
+    docker:
+      - image: cimg/python:3.11
+    resource_class: medium
+    steps:
+      - checkout
+      - attach_workspace:
+          at: /tmp/csgenetics-report-runtime
+      - run:
           name: Install report deps + headless Chromium
           command: |
-            pip install --quiet jinja2 plotly pytest playwright
+            pip install --quiet \
+              "anndata==0.11.3" \
+              "h5py==3.12.1" \
+              "jinja2==3.1.5" \
+              "natsort==7.1.1" \
+              "numpy==2.2.1" \
+              "pandas==2.2.3" \
+              "plotly==5.24.1" \
+              "scipy==1.15.1" \
+              playwright \
+              pytest
             python -m playwright install --with-deps chromium
       - run:
-          name: Report smoke + number-formatting tests
+          name: Consolidated and standalone offline-report tests
           command: |
-            python -m pytest tests/python/test_report_smoke.py tests/python/test_number_formatting.py -v
+            CSGENETICS_PRODUCTION_CONTAINER_REPORT=/tmp/csgenetics-report-runtime/container_report/consolidated_report.html \
+            python -m pytest \
+              tests/python/test_report_smoke.py \
+              tests/python/test_number_formatting.py \
+              tests/python/test_cell_caller.py \
+              tests/python/test_qc_cascade_offline.py \
+              -v
 
 
 # Invoke jobs via workflows
@@ -169,5 +228,8 @@ workflows:
     jobs:
       - check-no-internal-files
       - nf-test
-      - report-smoke
+      - report-production-container
+      - report-smoke:
+          requires:
+            - report-production-container
       - run-current-branch

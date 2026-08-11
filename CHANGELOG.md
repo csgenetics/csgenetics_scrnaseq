@@ -60,7 +60,10 @@ the full results, and the known differences.
   - `samtools sort`/`view` threading in `initial_feature_count` and the filter steps (byte-identical).
   Remaining target: the multimapper assignment gawk and RSeQC `read_distribution` (both single-threaded).
 - **Report.** A single, offline-safe (no CDN) consolidated report with CS Genetics branding,
-  a searchable per-sample selector, and a cross-sample metrics table.
+  a searchable per-sample selector, and a cross-sample metrics table. Independently published
+  Cell Caller and single-/multi-sample QC cascade plots are offline-safe too, and Seqera report
+  mappings now follow the 2.0 output names with the cross-sample CSV available as a lightweight
+  fallback for large HTML reports.
 - **Structure.** The monolithic `modules/processes.nf` is split into per-process modules at
   `modules/local/<name>/main.nf` (nf-core local-module layout).
 

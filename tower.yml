@@ -1,9 +1,13 @@
 reports:
-  "**/report/multisample_report.html":
-    display: "Multi Sample HTML report"
-  "**/report/**/*_report.html":
-    display: "Per-sample HTML report"
-  "**/pipeline_info/execution_timeline_*.html":
-    display: "Execution timeline report"
-  "**/pipeline_info/execution_report_*.html":
-    display: "Execution overview report"
+  "report/consolidated_report.html":
+    display: "CS Genetics scRNA-seq report"
+  "report/multisample_out.csv":
+    display: "Cross-sample metrics (CSV)"
+  "pipeline_info/execution_report.html":
+    display: "Nextflow execution report"
+  "pipeline_info/execution_timeline.html":
+    display: "Nextflow execution timeline"
+  "pipeline_info/execution_trace.txt":
+    display: "Nextflow execution trace"
+  "pipeline_info/pipeline_dag.html":
+    display: "Nextflow workflow diagram"

@@ -97,28 +97,41 @@ Mmus_counts > Mmus_threshold & Hsap_counts > Hsap_threshold is a multiplet.
 """
 
 # The plot to html method is defined outside the class as it will also be used later in the multi-sample summary report process. 
-def output_plot_to_html(dict_of_figs_and_names, html_filename, include_plotlyjs='cdn'):
+def output_plot_to_html(dict_of_figs_and_names, html_filename, include_plotlyjs=True):
    """
-   Output a suite of plots to an html file, incorporating the Lexend font.
+   Output a suite of plots to an HTML file using an offline-safe font stack.
    Expects as input a dictionary of plotly figures and their names.
    Figure names are used to name the .svg files which can be downloaded from the html.
 
    include_plotlyjs controls how Plotly.js is bundled into the fragment:
-     - 'cdn' (default): standalone, self-viewable fragments that load Plotly.js
-       from the CDN. Used for the independently published *_pdf_with_cutoff.html
-       plots.
+     - True (default): standalone, self-viewable output with Plotly.js embedded
+       inline. Used for the independently published *_pdf_with_cutoff.html plots.
      - False: a bare Plotly <div> fragment with NO Plotly.js. Used when the
        fragment is embedded into the consolidated report, which loads a single
        inline copy of Plotly.js once. This keeps the consolidated report
        offline-safe and avoids loading Plotly.js once per plot.
    """
-   # Add custom CSS to embed the Lexend font
-   html_content = """
-   <head>
-      <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;700&display=swap" rel="stylesheet">
-   </head>
-   <body>
-   """
+   if include_plotlyjs is False:
+      # Inputs to the consolidated report are fragments by contract: no document
+      # wrappers, stylesheets, or library loaders. The report generator validates
+      # this structure before trusting the inline Plotly.newPlot call.
+      html_content = ""
+   else:
+      # The report uses an embedded Lexend asset, but standalone plots do not have
+      # access to that vendor directory. Prefer a locally installed Lexend and fall
+      # back to system fonts rather than fetching a web font.
+      html_content = """<!doctype html>
+      <html lang="en">
+      <head>
+         <meta charset="utf-8">
+         <meta name="viewport" content="width=device-width, initial-scale=1">
+         <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; frame-src 'none'; object-src 'none'; media-src 'none'; base-uri 'none'; form-action 'none'">
+         <style>
+            body { font-family: Lexend, system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; }
+         </style>
+      </head>
+      <body>
+      """
 
    # Add each figure to the HTML content
    for fig_name in dict_of_figs_and_names.keys():
@@ -131,10 +144,11 @@ def output_plot_to_html(dict_of_figs_and_names, html_filename, include_plotlyjs=
                                                                                                                   }
                                                                                        })
 
-   # Close the HTML tags
-   html_content += """
-   </body>
-   """
+   if include_plotlyjs is not False:
+      html_content += """
+      </body>
+      </html>
+      """
 
    # Write the HTML content to the file
    with open(html_filename, "w") as f:

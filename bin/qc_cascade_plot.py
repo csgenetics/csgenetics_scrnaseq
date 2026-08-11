@@ -8,30 +8,64 @@ Multi-sample mode: Box plots showing distribution of reads retained across sampl
 """
 
 import argparse
+from pathlib import Path
+import sys
+
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
 from plotly.subplots import make_subplots
-import sys
 
 
-def write_plotly_fragment(fig, html_filename):
+PLOTLY_CONFIG = {"responsive": True, "displaylogo": False}
+
+
+def write_plotly_outputs(fig, fragment_filename, standalone_filename):
     """
-    Write a Plotly figure as a bare HTML fragment with NO Plotly.js bundled.
+    Write distinct consolidated-report and standalone Plotly outputs.
 
-    These fragments are embedded into the consolidated report, which loads a
-    single inline copy of Plotly.js once. Keeping Plotly.js out of each
-    fragment keeps the consolidated report offline-safe and avoids loading
-    Plotly.js once per plot.
+    ``fragment_filename`` deliberately omits Plotly.js because the consolidated
+    report embeds one shared copy. ``standalone_filename`` embeds Plotly.js so
+    the separately published plot remains usable without internet access.
+
+    Keeping the two files distinct is important: publishing the fragment under
+    the customer-facing filename creates a page that is blank when opened on
+    its own, while feeding the standalone file into the consolidated report
+    needlessly duplicates several megabytes of JavaScript for every plot.
     """
     fragment = pio.to_html(
         fig,
         full_html=False,
         include_plotlyjs=False,
-        config={"responsive": True, "displaylogo": False},
+        config=PLOTLY_CONFIG,
     )
-    with open(html_filename, "w") as f:
+    standalone_plot = pio.to_html(
+        fig,
+        full_html=False,
+        include_plotlyjs=True,
+        config=PLOTLY_CONFIG,
+    )
+    standalone = f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; frame-src 'none'; object-src 'none'; media-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>QC cascade plot</title>
+  <style>
+    body {{ font-family: Lexend, system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; }}
+  </style>
+</head>
+<body>
+{standalone_plot}
+</body>
+</html>
+"""
+    with open(fragment_filename, "w", encoding="utf-8") as f:
         f.write(fragment)
+    with open(standalone_filename, "w", encoding="utf-8") as f:
+        f.write(standalone)
+
 
 class QCCascadePlotter:
     def __init__(self, mode, sample_id=None):
@@ -232,9 +266,17 @@ class QCCascadePlotter:
             margin=dict(l=80, r=40, t=80, b=80)
         )
 
-        # Save as a Plotly-free fragment for embedding into the consolidated report.
-        write_plotly_fragment(fig, f"{self.sample_id}.qc_cascade.html")
-        print(f"Created single-sample QC cascade plot: {self.sample_id}.qc_cascade.html")
+        # The fragment retains the historical task-local filename because the
+        # consolidated-report generator discovers it by sample id. Nextflow
+        # publishes only the standalone file, renaming it back to the stable
+        # customer-facing ``<sample>.qc_cascade.html`` filename.
+        fragment_filename = f"{self.sample_id}.qc_cascade.html"
+        standalone_filename = f"{self.sample_id}.qc_cascade.standalone.html"
+        write_plotly_outputs(fig, fragment_filename, standalone_filename)
+        print(
+            "Created single-sample QC cascade outputs: "
+            f"{fragment_filename}, {standalone_filename}"
+        )
 
     def create_multi_sample_plot(self, csv_files):
         """
@@ -245,7 +287,8 @@ class QCCascadePlotter:
         all_samples_data = []
 
         for csv_file in csv_files:
-            sample_id = csv_file.replace('.metrics.csv', '')
+            csv_name = Path(csv_file).name
+            sample_id = csv_name.removesuffix('.metrics.csv')
             metrics = self.read_metrics_csv(csv_file)
 
             sample_data = {
@@ -538,9 +581,13 @@ class QCCascadePlotter:
             row=2, col=1
         )
 
-        # Save as a Plotly-free fragment for embedding into the consolidated report.
-        write_plotly_fragment(fig, "multisample_qc_cascade.html")
-        print(f"Created multi-sample QC cascade plot: multisample_qc_cascade.html")
+        fragment_filename = "multisample_qc_cascade.fragment.html"
+        standalone_filename = "multisample_qc_cascade.html"
+        write_plotly_outputs(fig, fragment_filename, standalone_filename)
+        print(
+            "Created multi-sample QC cascade outputs: "
+            f"{fragment_filename}, {standalone_filename}"
+        )
 
 
 def main():

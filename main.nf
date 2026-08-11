@@ -463,11 +463,12 @@ workflow {
   // Generate summary statistics
   summary_statistics(ch_summary_statistics_in)
 
-  // Generate single-sample QC cascade plots (Plotly-free fragments)
+  // Generate single-sample QC cascade plots. Each task emits a small internal
+  // fragment for consolidated_report and a separately published offline page.
   qc_cascade_plot_single(summary_statistics.out.metrics_csv)
 
-  // Generate multi-sample QC cascade plot (Plotly-free fragment)
-  qc_cascade_plot_multi(summary_statistics.out.metrics_csv.map { it[1] }.collect())
+  // Generate the equivalent internal + standalone outputs across all samples.
+  qc_cascade_plot_multi(summary_statistics.out.metrics_csv.map { metrics_tuple -> metrics_tuple[1] }.collect())
 
   // Collect, flat, all per-sample inputs for the single consolidated report.
   // Metrics csvs are also published per-sample by summary_statistics.
@@ -476,7 +477,9 @@ workflow {
   ch_all_cell_caller_plots = cell_caller.out.cell_caller_plots
     .flatMap { sample_id, counts_pdf, barnyard -> [counts_pdf, barnyard] }
     .collect()
-  ch_all_qc_cascade_single = qc_cascade_plot_single.out.qc_cascade_plot.map { it[1] }.collect()
+  ch_all_qc_cascade_fragments = qc_cascade_plot_single.out.qc_cascade_fragment
+    .map { qc_cascade_tuple -> qc_cascade_tuple[1] }
+    .collect()
 
   // Run-provenance metadata for the report header/footer (all values already known
   // to the pipeline; factual only -- no quality judgement). Serialised to JSON and
@@ -502,8 +505,8 @@ workflow {
   consolidated_report(
     ch_all_metrics_csvs,
     ch_all_cell_caller_plots,
-    ch_all_qc_cascade_single,
-    qc_cascade_plot_multi.out.qc_cascade_plot,
+    ch_all_qc_cascade_fragments,
+    qc_cascade_plot_multi.out.qc_cascade_fragment,
     consolidated_report_template,
     report_vendor_dir,
     provenance_json

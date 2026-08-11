@@ -25,6 +25,7 @@ import pytest
 from scipy.sparse import csr_matrix
 
 import cell_caller as cc
+import create_consolidated_report as ccr
 
 
 SCRIPT = os.path.abspath(
@@ -87,6 +88,100 @@ def _run_cell_caller(tmp_path, count_matrix, manual_threshold, single_species=Tr
         capture_output=True,
         text=True,
     )
+
+
+# ---------------------------------------------------------------------------
+# offline standalone plot output
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_standalone_plot_embeds_plotly_and_has_no_remote_font_or_script(tmp_path):
+    output = tmp_path / "cell_caller_plot.html"
+    figure = cc.go.Figure(data=cc.go.Scatter(x=[1, 2], y=[3, 4]))
+
+    cc.output_plot_to_html({"cell_caller_plot": figure}, output)
+
+    html = output.read_text(encoding="utf-8")
+    assert "<!doctype html>" in html.lower()
+    assert "Plotly.newPlot" in html
+    assert len(html) > 1_000_000, "Plotly.js was not embedded into standalone output"
+    assert "fonts.googleapis.com" not in html
+    assert '<script src="https://' not in html
+    assert "<script src='https://" not in html
+    assert '<script src="//cdn.' not in html
+
+
+@pytest.mark.unit
+def test_report_bound_cell_caller_plot_satisfies_trusted_fragment_contract(tmp_path):
+    output = tmp_path / "cell_caller_fragment.html"
+    figure = cc.go.Figure(data=cc.go.Scatter(x=[1, 2], y=[3, 4]))
+
+    cc.output_plot_to_html(
+        {"cell_caller_plot": figure}, output, include_plotlyjs=False
+    )
+
+    raw = output.read_text(encoding="utf-8")
+    trusted = ccr.validate_plot_fragment(raw)
+    assert "<html" not in raw.lower()
+    assert "Plotly.newPlot" in trusted
+    assert f'nonce="{ccr.REPORT_SCRIPT_NONCE}"' in trusted
+
+
+@pytest.mark.unit
+def test_dense_barnyard_scattergl_satisfies_trusted_fragment_contract(tmp_path):
+    """Plotly Express switches dense barnyards to scattergl automatically."""
+    output = tmp_path / "dense_barnyard_fragment.html"
+    frame = pd.DataFrame(
+        {
+            "mmus_counts": np.arange(1_001),
+            "hsap_counts": np.arange(1_001),
+        }
+    )
+    figure = cc.px.scatter(frame, x="mmus_counts", y="hsap_counts")
+    assert [trace.type for trace in figure.data] == ["scattergl"]
+
+    cc.output_plot_to_html(
+        {"dense_barnyard_plot": figure}, output, include_plotlyjs=False
+    )
+
+    trusted = ccr.validate_plot_fragment(output.read_text(encoding="utf-8"))
+    assert '"type":"scattergl"' in trusted.replace(" ", "")
+
+
+@pytest.mark.integration
+def test_standalone_cell_caller_plot_renders_offline(tmp_path):
+    playwright = pytest.importorskip("playwright.sync_api")
+    output = tmp_path / "cell_caller_plot.html"
+    figure = cc.go.Figure(data=cc.go.Scatter(x=[1, 2], y=[3, 4]))
+    cc.output_plot_to_html({"cell_caller_plot": figure}, output)
+
+    with playwright.sync_playwright() as runtime:
+        try:
+            browser = runtime.chromium.launch()
+        except Exception as exc:
+            pytest.skip(f"Playwright Chromium is unavailable: {exc}")
+
+        context = browser.new_context(offline=True)
+        page = context.new_page()
+        errors = []
+        remote_requests = []
+        page.on("console", lambda message: errors.append(message.text) if message.type == "error" else None)
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.on(
+            "request",
+            lambda request: remote_requests.append(request.url)
+            if request.url.startswith(("http://", "https://"))
+            else None,
+        )
+
+        page.goto(output.as_uri(), wait_until="load")
+        page.wait_for_selector(".js-plotly-plot .main-svg", state="attached", timeout=10_000)
+        assert page.evaluate("typeof window.Plotly !== 'undefined'")
+        assert remote_requests == []
+        assert errors == []
+        context.close()
+        browser.close()
 
 
 # ---------------------------------------------------------------------------
