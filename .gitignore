@@ -36,3 +36,16 @@ debug/
 # the private csgenetics repos (navigator, CBK, GRT, rnaseq). Keep a local copy here if
 # you need one, but it must not be committed.
 docker/agent/
+
+# Agent/AI working files. THIS REPO IS PUBLIC. Planning docs, handoffs and campaign logs
+# routinely quote internal S3 paths, infrastructure IDs and customer run names, so they
+# must not live in the tree. Keep them in the session scratchpad or a private location.
+plans/
+HANDOFF.md
+
+# Ad-hoc sample sheets pointing at internal (non-public) data. Canonical copies live at
+# s3://csg-reference/internal_nf_tests_data/external_validation/. Only the generic
+# example templates in input_csv/ belong in this repo.
+*_test_data/
+mixed_testing.csv
+input_csv/badsamples.csv
