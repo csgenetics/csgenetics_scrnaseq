@@ -5,7 +5,9 @@ from pandas.api.types import CategoricalDtype
 from scipy.sparse import csr_matrix, hstack
 from scipy.io import mmwrite
 from numpy import zeros, float32, where
+import numpy as np
 from anndata import AnnData
+from count_arithmetic import canonical_count_csr, row_sums
 import sys, argparse, gzip
 
 class CountMatrix:
@@ -47,6 +49,23 @@ class CountMatrix:
         self.write_count_matrix()
     
     def annotate_count_matrix(self):
+        # X is intentionally float32 for Seurat compatibility, but counts are
+        # integer observations.  Reduce the original integer matrix so float32
+        # arithmetic cannot perturb annotations.  We retain the established
+        # float32 obs schema only while every row total is in float32's
+        # consecutive exact-integer range.
+        exact_counts = canonical_count_csr(
+            self.sparse_matrix, context="count_matrix input"
+        )
+        if exact_counts.shape != self.anndata_obj.shape:
+            raise ValueError("count matrix dimensions do not match AnnData")
+        total_counts = row_sums(exact_counts)
+        if np.any(total_counts > 2**24):
+            raise OverflowError(
+                "per-barcode total exceeds the exact float32 integer range "
+                "required by the H5AD obs schema"
+            )
+
         if self.mixed_species:
             # Annotate the mitochondrial genes to report the mito and nuclear genes in the summary statistics
             self.anndata_obj.var['is_mito'] = where((self.anndata_obj.var['chromosome'] == self.hsap_mito_chr) | (self.anndata_obj.var['chromosome'] == self.mmus_mito_chr), True, False)
@@ -57,14 +76,24 @@ class CountMatrix:
             self.anndata_obj.var['is_hsap'] = where(self.anndata_obj.var_names.str.startswith(self.hsap_gene_prefix), True, False)
             self.anndata_obj.var['is_mmus'] = where(self.anndata_obj.var_names.str.startswith(self.mmus_gene_prefix), True, False)
 
-            self.anndata_obj.obs["hsap_counts"] = self.anndata_obj.X[:, self.anndata_obj.var["is_hsap"]].toarray().sum(axis=1)
-            self.anndata_obj.obs["mmus_counts"] = self.anndata_obj.X[:, self.anndata_obj.var["is_mmus"]].toarray().sum(axis=1)
-            self.anndata_obj.obs["total_counts"] = self.anndata_obj.X.toarray().sum(axis=1)
+            hsap_counts = row_sums(
+                exact_counts[
+                    :, np.asarray(self.anndata_obj.var["is_hsap"], dtype=bool)
+                ]
+            )
+            mmus_counts = row_sums(
+                exact_counts[
+                    :, np.asarray(self.anndata_obj.var["is_mmus"], dtype=bool)
+                ]
+            )
+            self.anndata_obj.obs["hsap_counts"] = hsap_counts.astype(float32)
+            self.anndata_obj.obs["mmus_counts"] = mmus_counts.astype(float32)
+            self.anndata_obj.obs["total_counts"] = total_counts.astype(float32)
             
         else:
             # Annotate mitochondrial genes to report the mito and nuclear genes in the summary statistics
             self.anndata_obj.var['is_mito'] = where(self.anndata_obj.var['chromosome'] == self.mito_chr, True, False)
-            self.anndata_obj.obs['total_counts'] = self.anndata_obj.X.toarray().sum(axis=1)
+            self.anndata_obj.obs['total_counts'] = total_counts.astype(float32)
 
     def make_base_count_matrix(self):
         # Load CS Genetics barcode_list of IOs

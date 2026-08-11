@@ -67,6 +67,13 @@ the full results, and the known differences.
   Cell Caller and single-/multi-sample QC cascade plots are offline-safe too, and Seqera report
   mappings now follow the 2.0 output names with the cross-sample CSV available as a lightweight
   fallback for large HTML reports.
+- **Count statistics.** Cell and count metrics now stay sparse and use validated exact-integer
+  reductions instead of densifying the matrix and accumulating in `float32`. Metric definitions,
+  CSV schemas, integer totals, and two-decimal report formatting are unchanged. A raw
+  `*.metrics.csv` mean or percentage can have corrected decimal digits where the old `float32`
+  accumulation rounded; on sufficiently high-count matrices that correction can also change the
+  last digits displayed in the report. See
+  [`docs/count-statistics.md`](docs/count-statistics.md).
 - **Structure.** The monolithic `modules/processes.nf` is split into per-process modules at
   `modules/local/<name>/main.nf` (nf-core local-module layout).
 

@@ -18,6 +18,12 @@ import re
 import numpy as np
 from collections import defaultdict
 import pandas as pd
+from count_arithmetic import (
+    canonical_count_csr,
+    exact_median_floor,
+    row_nnz,
+    row_sums,
+)
 
 from empty_h5ad import is_empty_h5ad_sentinel
 
@@ -212,245 +218,222 @@ class SummaryStatistics:
             for base_stat in base_stats:
                 setattr(self, f"{base_stat}", 0)
 
-    def calculate_single_cell_stats(self):
-        # strip the anndata object down to only the is_single_cell cells
-        # so that all metrics are only calculated for single_cells.
-        # If single species this means those that meet the counts threshold
-        # If mixed species then the barcodes must be above one of the species thresholds and below the other.
-        self.anndata_sc = self.anndata[self.anndata.obs['is_single_cell']]
+    @staticmethod
+    def _boolean_annotation(frame, name):
+        """Return a strict boolean annotation rather than coercing bad data."""
+        if name not in frame:
+            raise ValueError(f"count matrix is missing required annotation {name!r}")
+        values = np.asarray(frame[name])
+        if values.dtype.kind != "b":
+            raise ValueError(f"count matrix annotation {name!r} must be boolean")
+        return values
 
-        # Subset to get rid of genes that have 0 counts 
-        self.anndata_sc = self.anndata_sc[:,~np.all(self.anndata_sc.X.toarray() == 0, axis=0)]
-        
-        # Convert to array for convenience
-        anndata_array_sc = self.anndata_sc.to_df()
-        
+    def _prepare_count_matrix(self):
+        """Validate raw counts and the cell/species classification contract."""
+        self.count_matrix = canonical_count_csr(
+            self.anndata.X, context="summary-statistics raw count matrix"
+        )
+        if self.count_matrix.shape != self.anndata.shape:
+            raise ValueError("raw count matrix dimensions do not match AnnData")
+
+        self.single_cell_mask = self._boolean_annotation(
+            self.anndata.obs, "is_single_cell"
+        )
         if self.mixed:
-            # For the Hsap and Mmus single cell df we work with
-            # only their associated genes. I.e. the metrics do not
-            # include genes / counts from the other species.
-            anndata_array_sc_Hsap = self.anndata_sc[self.anndata_sc.obs["is_hsap_cell"], self.anndata_sc.var["is_hsap"]].to_df()
-            anndata_array_sc_Mmus = self.anndata_sc[self.anndata_sc.obs["is_mmus_cell"], self.anndata_sc.var["is_mmus"]].to_df()
-            
-            # If mixed then we need to calculate 3 versions of each of the metrics:
-            #   _total, _Hsap, _Mmus
-            self.num_cells_total = anndata_array_sc.shape[0]
-            self.num_cells_Hsap = anndata_array_sc_Hsap.shape[0]
-            self.num_cells_Mmus = anndata_array_sc_Mmus.shape[0]
+            self.hsap_cell_mask = self._boolean_annotation(
+                self.anndata.obs, "is_hsap_cell"
+            )
+            self.mmus_cell_mask = self._boolean_annotation(
+                self.anndata.obs, "is_mmus_cell"
+            )
+            if np.any(self.hsap_cell_mask & self.mmus_cell_mask) or not np.array_equal(
+                self.hsap_cell_mask | self.mmus_cell_mask, self.single_cell_mask
+            ):
+                raise ValueError(
+                    "mixed-species single cells must be partitioned exactly once "
+                    "between is_hsap_cell and is_mmus_cell"
+                )
 
-            # For the calculation of the total values, we make a concat of the two species
-            # sum series so that for the _total version of the stat, Hsap cells only count
-            # Hsap genes and vice versa for Mmus
-            summed_counts_Hsap = anndata_array_sc_Hsap.sum(axis=1)
-            summed_counts_Mmus = anndata_array_sc_Mmus.sum(axis=1)
-            concat_counts_species_series = pd.concat([summed_counts_Hsap, summed_counts_Mmus])
-
-            # Similar to the counts we create a concatenated mixed species series
-            # so that for Hsap cells, only Hsap detected genes are counted
-            # and for Mmus cells only Mmus genes are detected
-            summed_genes_detected_Hsap = anndata_array_sc_Hsap.astype(bool).sum(axis=1)
-            summed_genes_detected_Mmus = anndata_array_sc_Mmus.astype(bool).sum(axis=1)
-            concat_genes_detected_species_series = pd.concat([summed_genes_detected_Hsap, summed_genes_detected_Mmus])
-
-            # Get a subset of the arrays that don't contain the mito genes
-            anndata_array_sc_nuc_Hsap = anndata_array_sc_Hsap.loc[:, ~self.anndata.var["is_mito_hsap"]]
-            anndata_array_sc_nuc_Mmus = anndata_array_sc_Mmus.loc[:, ~self.anndata.var["is_mito_mmus"]]
-            
-            # As above we create a concatenated series of the two individual species
-            # so that only Hsap genes are detected for Hsap cells and vice versa for Mmus cells
-            summed_nuc_genes_detected_Hsap = anndata_array_sc_nuc_Hsap.astype(bool).sum(axis=1)
-            summed_nuc_genes_detected_Mmus = anndata_array_sc_nuc_Mmus.astype(bool).sum(axis=1)
-            concat_nuc_genes_detected_species_series = pd.concat([summed_nuc_genes_detected_Hsap, summed_nuc_genes_detected_Mmus])
-
-            # Get a subset of the array that contains only the mito genes
-            anndata_array_sc_mito_Hsap = anndata_array_sc_Hsap.loc[:, self.anndata.var["is_mito_hsap"]]
-            anndata_array_sc_mito_Mmus = anndata_array_sc_Mmus.loc[:, self.anndata.var["is_mito_mmus"]]
-
-            # As above we create a concatenated series made up of both of the individual species
-            # series
-            summed_mito_genes_detected_Hsap = anndata_array_sc_mito_Hsap.astype(bool).sum(axis=1)
-            summed_mito_genes_detected_Mmus = anndata_array_sc_mito_Mmus.astype(bool).sum(axis=1)
-            concat_mito_genes_detected_species_series = pd.concat([summed_mito_genes_detected_Hsap, summed_mito_genes_detected_Mmus])
-
-            # It is possible that one of the species has no cells
-            if self.num_cells_Hsap == 0: # No Human cells
-                self.raw_reads_per_cell_total = self.metrics_dict["Read QC"]["reads_pre_qc"][1] / self.num_cells_total
-                self.raw_reads_per_cell_Hsap = 0
-                self.raw_reads_per_cell_Mmus = self.metrics_dict["Read QC"]["reads_pre_qc"][1] / self.num_cells_Mmus
-
-                self.mean_total_counts_per_cell_total = np.mean(concat_counts_species_series)
-                self.mean_total_counts_per_cell_Hsap = 0
-                self.mean_total_counts_per_cell_Mmus = np.mean(summed_counts_Mmus)
-
-                self.median_total_counts_per_cell_total = int(np.median(concat_counts_species_series))
-                self.median_total_counts_per_cell_Hsap = 0
-                self.median_total_counts_per_cell_Mmus = int(np.median(summed_counts_Mmus))
-
-                self.mean_genes_detected_per_cell_total = np.mean(concat_genes_detected_species_series)
-                self.mean_genes_detected_per_cell_Hsap = 0
-                self.mean_genes_detected_per_cell_Mmus = np.mean(summed_genes_detected_Mmus)
-
-                self.median_genes_detected_per_cell_total = int(np.median(concat_genes_detected_species_series))
-                self.median_genes_detected_per_cell_Hsap = 0
-                self.median_genes_detected_per_cell_Mmus = int(np.median(summed_genes_detected_Mmus))
-
-                self.mean_nuclear_genes_detected_per_cell_total = np.mean(concat_nuc_genes_detected_species_series)
-                self.mean_nuclear_genes_detected_per_cell_Hsap = 0
-                self.mean_nuclear_genes_detected_per_cell_Mmus = np.mean(summed_nuc_genes_detected_Mmus)
-
-                self.median_nuclear_genes_detected_per_cell_total = int(np.median(concat_nuc_genes_detected_species_series))
-                self.median_nuclear_genes_detected_per_cell_Hsap = 0
-                self.median_nuclear_genes_detected_per_cell_Mmus = int(np.median(summed_nuc_genes_detected_Mmus))
-
-                self.mean_mito_genes_detected_per_cell_total = np.mean(concat_mito_genes_detected_species_series)
-                self.mean_mito_genes_detected_per_cell_Hsap = 0
-                self.mean_mito_genes_detected_per_cell_Mmus = np.mean(summed_mito_genes_detected_Mmus)
-
-                self.median_mito_genes_detected_per_cell_total = int(np.median(concat_mito_genes_detected_species_series))
-                self.median_mito_genes_detected_per_cell_Hsap = 0
-                self.median_mito_genes_detected_per_cell_Mmus = int(np.median(summed_mito_genes_detected_Mmus))
-
-                self.percentage_counts_from_mito_total = self.as_perc((anndata_array_sc_mito_Hsap.sum(axis=1).sum() + anndata_array_sc_mito_Mmus.sum(axis=1).sum()) / concat_counts_species_series.sum())
-                self.percentage_counts_from_mito_Hsap = self.as_perc(0)
-                self.percentage_counts_from_mito_Mmus = self.as_perc(anndata_array_sc_mito_Mmus.values.sum() / anndata_array_sc_Mmus.values.sum())
-
-                self.num_unique_genes_detected_across_sample_total = anndata_array_sc.sum(axis=0).astype(bool).sum()
-                self.num_unique_genes_detected_across_sample_Hsap = 0
-                self.num_unique_genes_detected_across_sample_Mmus = anndata_array_sc_Mmus.sum(axis=0).astype(bool).sum()
-                
-                self.total_genes_detected_across_sample_total = np.count_nonzero(anndata_array_sc)
-                self.total_genes_detected_across_sample_Hsap  = 0
-                self.total_genes_detected_across_sample_Mmus  = np.count_nonzero(anndata_array_sc_Mmus)
-
-            elif self.num_cells_Mmus == 0: # No Mouse cells
-                self.raw_reads_per_cell_total = self.metrics_dict["Read QC"]["reads_pre_qc"][1] / self.num_cells_total
-                self.raw_reads_per_cell_Hsap = self.metrics_dict["Read QC"]["reads_pre_qc"][1] / self.num_cells_Hsap
-                self.raw_reads_per_cell_Mmus = 0
-
-                self.mean_total_counts_per_cell_total = np.mean(concat_counts_species_series)
-                self.mean_total_counts_per_cell_Hsap = np.mean(summed_counts_Hsap)
-                self.mean_total_counts_per_cell_Mmus = 0
-
-                self.median_total_counts_per_cell_total = int(np.median(concat_counts_species_series))
-                self.median_total_counts_per_cell_Hsap = int(np.median(summed_counts_Hsap))
-                self.median_total_counts_per_cell_Mmus = 0
-
-                self.mean_genes_detected_per_cell_total = np.mean(concat_genes_detected_species_series)
-                self.mean_genes_detected_per_cell_Hsap = np.mean(summed_genes_detected_Hsap)
-                self.mean_genes_detected_per_cell_Mmus = 0
-
-                self.median_genes_detected_per_cell_total = int(np.median(concat_genes_detected_species_series))
-                self.median_genes_detected_per_cell_Hsap = int(np.median(summed_genes_detected_Hsap))
-                self.median_genes_detected_per_cell_Mmus = 0
-
-                self.mean_nuclear_genes_detected_per_cell_total = np.mean(concat_nuc_genes_detected_species_series)
-                self.mean_nuclear_genes_detected_per_cell_Hsap = np.mean(summed_nuc_genes_detected_Hsap)
-                self.mean_nuclear_genes_detected_per_cell_Mmus = 0
-
-                self.median_nuclear_genes_detected_per_cell_total = int(np.median(concat_nuc_genes_detected_species_series))
-                self.median_nuclear_genes_detected_per_cell_Hsap = int(np.median(summed_nuc_genes_detected_Hsap))
-                self.median_nuclear_genes_detected_per_cell_Mmus = 0
-
-                self.mean_mito_genes_detected_per_cell_total = np.mean(concat_mito_genes_detected_species_series)
-                self.mean_mito_genes_detected_per_cell_Hsap = np.mean(summed_mito_genes_detected_Hsap)
-                self.mean_mito_genes_detected_per_cell_Mmus = 0
-
-                self.median_mito_genes_detected_per_cell_total = int(np.median(concat_mito_genes_detected_species_series))
-                self.median_mito_genes_detected_per_cell_Hsap = int(np.median(summed_mito_genes_detected_Hsap))
-                self.median_mito_genes_detected_per_cell_Mmus = 0
-
-                self.percentage_counts_from_mito_total = self.as_perc((anndata_array_sc_mito_Hsap.sum(axis=1).sum() + anndata_array_sc_mito_Mmus.sum(axis=1).sum()) / concat_counts_species_series.sum())
-                self.percentage_counts_from_mito_Hsap = self.as_perc(anndata_array_sc_mito_Hsap.values.sum() / anndata_array_sc_Hsap.values.sum())
-                self.percentage_counts_from_mito_Mmus = self.as_perc(0)
-
-                self.num_unique_genes_detected_across_sample_total = anndata_array_sc.sum(axis=0).astype(bool).sum()
-                self.num_unique_genes_detected_across_sample_Hsap = anndata_array_sc_Hsap.sum(axis=0).astype(bool).sum()
-                self.num_unique_genes_detected_across_sample_Mmus = 0
-                
-                self.total_genes_detected_across_sample_total = np.count_nonzero(anndata_array_sc)
-                self.total_genes_detected_across_sample_Hsap  = np.count_nonzero(anndata_array_sc_Hsap)
-                self.total_genes_detected_across_sample_Mmus  = 0
-
-            else: # We have counts for both species
-                self.raw_reads_per_cell_total = self.metrics_dict["Read QC"]["reads_pre_qc"][1] / self.num_cells_total
-                self.raw_reads_per_cell_Hsap = self.metrics_dict["Read QC"]["reads_pre_qc"][1] / self.num_cells_Hsap
-                self.raw_reads_per_cell_Mmus = self.metrics_dict["Read QC"]["reads_pre_qc"][1] / self.num_cells_Mmus
-                
-                self.mean_total_counts_per_cell_total = np.mean(concat_counts_species_series)
-                self.mean_total_counts_per_cell_Hsap = np.mean(summed_counts_Hsap)
-                self.mean_total_counts_per_cell_Mmus = np.mean(summed_counts_Mmus)
-
-                self.median_total_counts_per_cell_total = int(np.median(concat_counts_species_series))
-                self.median_total_counts_per_cell_Hsap = int(np.median(summed_counts_Hsap))
-                self.median_total_counts_per_cell_Mmus = int(np.median(summed_counts_Mmus))
-
-                self.mean_genes_detected_per_cell_total = np.mean(concat_genes_detected_species_series)
-                self.mean_genes_detected_per_cell_Hsap = np.mean(summed_genes_detected_Hsap)
-                self.mean_genes_detected_per_cell_Mmus = np.mean(summed_genes_detected_Mmus)
-
-                self.median_genes_detected_per_cell_total = int(np.median(concat_genes_detected_species_series))
-                self.median_genes_detected_per_cell_Hsap = int(np.median(summed_genes_detected_Hsap))
-                self.median_genes_detected_per_cell_Mmus = int(np.median(summed_genes_detected_Mmus))
-
-                self.mean_nuclear_genes_detected_per_cell_total = np.mean(concat_nuc_genes_detected_species_series)
-                self.mean_nuclear_genes_detected_per_cell_Hsap = np.mean(summed_nuc_genes_detected_Hsap)
-                self.mean_nuclear_genes_detected_per_cell_Mmus = np.mean(summed_nuc_genes_detected_Mmus)
-
-                self.median_nuclear_genes_detected_per_cell_total = int(np.median(concat_nuc_genes_detected_species_series))
-                self.median_nuclear_genes_detected_per_cell_Hsap = int(np.median(summed_nuc_genes_detected_Hsap))
-                self.median_nuclear_genes_detected_per_cell_Mmus = int(np.median(summed_nuc_genes_detected_Mmus))
-
-                self.mean_mito_genes_detected_per_cell_total = np.mean(concat_mito_genes_detected_species_series)
-                self.mean_mito_genes_detected_per_cell_Hsap = np.mean(summed_mito_genes_detected_Hsap)
-                self.mean_mito_genes_detected_per_cell_Mmus = np.mean(summed_mito_genes_detected_Mmus)
-
-                self.median_mito_genes_detected_per_cell_total = int(np.median(concat_mito_genes_detected_species_series))
-                self.median_mito_genes_detected_per_cell_Hsap = int(np.median(summed_mito_genes_detected_Hsap))
-                self.median_mito_genes_detected_per_cell_Mmus = int(np.median(summed_mito_genes_detected_Mmus))
-
-                # Calculate percentage of counts of mitochondrial origin
-                # Similar to above we only want to count mito counts that
-                # come from genes of the species. The concat_counts_species_series.sum()
-                # gives us the total mito counts for the two species in this way. Then
-                # we get the counts for each individual species from the mito series.
-                self.percentage_counts_from_mito_total = self.as_perc((anndata_array_sc_mito_Hsap.sum(axis=1).sum() + anndata_array_sc_mito_Mmus.sum(axis=1).sum()) / concat_counts_species_series.sum())
-                self.percentage_counts_from_mito_Hsap = self.as_perc(anndata_array_sc_mito_Hsap.values.sum() / anndata_array_sc_Hsap.values.sum())
-                self.percentage_counts_from_mito_Mmus = self.as_perc(anndata_array_sc_mito_Mmus.values.sum() / anndata_array_sc_Mmus.values.sum())
-
-                self.num_unique_genes_detected_across_sample_total = anndata_array_sc.sum(axis=0).astype(bool).sum()
-                self.num_unique_genes_detected_across_sample_Hsap = anndata_array_sc_Hsap.sum(axis=0).astype(bool).sum()
-                self.num_unique_genes_detected_across_sample_Mmus = anndata_array_sc_Mmus.sum(axis=0).astype(bool).sum()
-                
-                self.total_genes_detected_across_sample_total = np.count_nonzero(anndata_array_sc)
-                self.total_genes_detected_across_sample_Hsap  = np.count_nonzero(anndata_array_sc_Hsap)
-                self.total_genes_detected_across_sample_Mmus  = np.count_nonzero(anndata_array_sc_Mmus)
+            self.hsap_gene_mask = self._boolean_annotation(
+                self.anndata.var, "is_hsap"
+            )
+            self.mmus_gene_mask = self._boolean_annotation(
+                self.anndata.var, "is_mmus"
+            )
+            if np.any(self.hsap_gene_mask & self.mmus_gene_mask):
+                raise ValueError("a gene cannot be classified as both Hsap and Mmus")
+            self.hsap_mito_mask = self._boolean_annotation(
+                self.anndata.var, "is_mito_hsap"
+            )
+            self.mmus_mito_mask = self._boolean_annotation(
+                self.anndata.var, "is_mito_mmus"
+            )
         else:
-            # If single species just calculate the single version of each of the metrics.
-            self.num_cells = anndata_array_sc.shape[0]
-            self.raw_reads_per_cell = self.metrics_dict["Read QC"]["reads_pre_qc"][1] / self.num_cells
-            self.mean_total_counts_per_cell = np.mean(anndata_array_sc.sum(axis=1))
-            self.median_total_counts_per_cell = int(np.median(anndata_array_sc.sum(axis=1)))
-            self.mean_genes_detected_per_cell = np.mean(anndata_array_sc.astype(bool).sum(axis=1))
-            self.median_genes_detected_per_cell = int(np.median(anndata_array_sc.astype(bool).sum(axis=1)))
+            self.mito_gene_mask = self._boolean_annotation(
+                self.anndata.var, "is_mito"
+            )
 
-            # Get a subset of the array that doesn't contain the mito genes
-            anndata_array_sc_nuc = anndata_array_sc.loc[:, ~self.anndata.var["is_mito"]]
+    def _cell_vectors(self, cell_mask, gene_mask, mito_mask):
+        """Build O(cells) metric vectors from sparse submatrices."""
+        row_indices = np.flatnonzero(cell_mask)
+        gene_indices = np.flatnonzero(gene_mask)
+        selected_rows = self.count_matrix[row_indices]
+        if gene_indices.size == self.count_matrix.shape[1]:
+            population = selected_rows
+        else:
+            population = selected_rows[:, gene_indices].tocsr()
+            del selected_rows
 
-            self.mean_nuclear_genes_detected_per_cell = np.mean(anndata_array_sc_nuc.astype(bool).sum(axis=1))
-            self.median_nuclear_genes_detected_per_cell = int(np.median(anndata_array_sc_nuc.astype(bool).sum(axis=1)))
+        relative_mito_indices = np.flatnonzero(mito_mask[gene_indices])
+        if relative_mito_indices.size:
+            mito = population[:, relative_mito_indices].tocsr()
+            mito_genes = row_nnz(mito)
+            mito_counts = int(mito.data.sum(dtype=np.int64))
+        else:
+            mito_genes = np.zeros(row_indices.size, dtype=np.int64)
+            mito_counts = 0
 
-            # Get a subset of the array that contains only the mito genes
-            anndata_array_sc_mito = anndata_array_sc.loc[:, self.anndata.var["is_mito"]]
+        genes = row_nnz(population)
 
-            self.mean_mito_genes_detected_per_cell = np.mean(anndata_array_sc_mito.astype(bool).sum(axis=1))
-            self.median_mito_genes_detected_per_cell = int(np.median(anndata_array_sc_mito.astype(bool).sum(axis=1)))
+        return {
+            "num_cells": int(row_indices.size),
+            "counts": row_sums(population),
+            "genes": genes,
+            "nuclear_genes": genes - mito_genes,
+            "mito_genes": mito_genes,
+            "mito_counts": mito_counts,
+            "unique_genes": int(np.count_nonzero(population.getnnz(axis=0))),
+            "total_genes": int(population.nnz),
+        }
 
-            # Calculate percentage of counts or mitochondrial origin
-            self.percentage_counts_from_mito = self.as_perc(anndata_array_sc_mito.values.sum() / anndata_array_sc.values.sum())
+    @staticmethod
+    def _combine_cell_vectors(*populations):
+        return {
+            "num_cells": sum(population["num_cells"] for population in populations),
+            "counts": np.concatenate(
+                [population["counts"] for population in populations]
+            ),
+            "genes": np.concatenate(
+                [population["genes"] for population in populations]
+            ),
+            "nuclear_genes": np.concatenate(
+                [population["nuclear_genes"] for population in populations]
+            ),
+            "mito_genes": np.concatenate(
+                [population["mito_genes"] for population in populations]
+            ),
+            "mito_counts": sum(
+                population["mito_counts"] for population in populations
+            ),
+            # These two are replaced with the all-gene definitions for the
+            # mixed-species total immediately below.
+            "unique_genes": sum(
+                population["unique_genes"] for population in populations
+            ),
+            "total_genes": sum(
+                population["total_genes"] for population in populations
+            ),
+        }
 
-            self.num_unique_genes_detected_across_sample = anndata_array_sc.shape[1]
+    def _assign_population_stats(self, population, suffix=""):
+        num_cells = population["num_cells"]
+        if num_cells == 0:
+            for base_stat in (
+                "num_cells",
+                "raw_reads_per_cell",
+                "mean_total_counts_per_cell",
+                "median_total_counts_per_cell",
+                "mean_genes_detected_per_cell",
+                "median_genes_detected_per_cell",
+                "mean_nuclear_genes_detected_per_cell",
+                "median_nuclear_genes_detected_per_cell",
+                "mean_mito_genes_detected_per_cell",
+                "median_mito_genes_detected_per_cell",
+                "percentage_counts_from_mito",
+                "num_unique_genes_detected_across_sample",
+                "total_genes_detected_across_sample",
+            ):
+                setattr(self, f"{base_stat}{suffix}", 0)
+            return
 
-            self.total_genes_detected_across_sample = np.count_nonzero(anndata_array_sc)
+        total_counts = int(population["counts"].sum(dtype=np.int64))
+        reads_pre_qc = self.metrics_dict["Read QC"]["reads_pre_qc"][1]
+        setattr(self, f"num_cells{suffix}", num_cells)
+        setattr(self, f"raw_reads_per_cell{suffix}", reads_pre_qc / num_cells)
+        setattr(
+            self,
+            f"mean_total_counts_per_cell{suffix}",
+            total_counts / num_cells,
+        )
+        setattr(
+            self,
+            f"median_total_counts_per_cell{suffix}",
+            exact_median_floor(population["counts"]),
+        )
+
+        for metric_name, vector_name in (
+            ("genes_detected_per_cell", "genes"),
+            ("nuclear_genes_detected_per_cell", "nuclear_genes"),
+            ("mito_genes_detected_per_cell", "mito_genes"),
+        ):
+            vector = population[vector_name]
+            setattr(
+                self,
+                f"mean_{metric_name}{suffix}",
+                int(vector.sum(dtype=np.int64)) / num_cells,
+            )
+            setattr(
+                self,
+                f"median_{metric_name}{suffix}",
+                exact_median_floor(vector),
+            )
+
+        mito_percentage = (
+            self.as_perc(population["mito_counts"] / total_counts)
+            if total_counts
+            else 0.0
+        )
+        setattr(self, f"percentage_counts_from_mito{suffix}", mito_percentage)
+        setattr(
+            self,
+            f"num_unique_genes_detected_across_sample{suffix}",
+            population["unique_genes"],
+        )
+        setattr(
+            self,
+            f"total_genes_detected_across_sample{suffix}",
+            population["total_genes"],
+        )
+
+    def calculate_single_cell_stats(self):
+        """Calculate all cell metrics with sparse, exact integer reductions."""
+        all_genes = np.ones(self.anndata.n_vars, dtype=bool)
+        if self.mixed:
+            hsap = self._cell_vectors(
+                self.hsap_cell_mask, self.hsap_gene_mask, self.hsap_mito_mask
+            )
+            mmus = self._cell_vectors(
+                self.mmus_cell_mask, self.mmus_gene_mask, self.mmus_mito_mask
+            )
+            total = self._combine_cell_vectors(hsap, mmus)
+
+            # Established mixed-species semantics use species-matched counts
+            # and per-cell gene metrics, but all genes (including off-species
+            # detections) for the two across-sample total-detection metrics.
+            all_gene_detections = self._cell_vectors(
+                self.single_cell_mask, all_genes, np.zeros(self.anndata.n_vars, dtype=bool)
+            )
+            total["unique_genes"] = all_gene_detections["unique_genes"]
+            total["total_genes"] = all_gene_detections["total_genes"]
+
+            self._assign_population_stats(total, "_total")
+            self._assign_population_stats(hsap, "_Hsap")
+            self._assign_population_stats(mmus, "_Mmus")
+        else:
+            population = self._cell_vectors(
+                self.single_cell_mask, all_genes, self.mito_gene_mask
+            )
+            self._assign_population_stats(population)
 
     def populate_cell_stats_in_metrics_dict_mixed_species(self):
         # Same as the single_species version below except that the primary key will
@@ -565,6 +548,7 @@ class SummaryStatistics:
             self.set_cell_and_called_cell_and_multiplet_stats_to_zero()
         else:
             self.anndata = anndata.read_h5ad(self.args.h5ad)
+            self._prepare_count_matrix()
             if self.anndata.shape[0] == 0:
                 self.set_cell_and_called_cell_and_multiplet_stats_to_zero()
             else:
@@ -585,7 +569,7 @@ class SummaryStatistics:
                 # are cells to call the stats from
                 # else set the cell stats to 0
                 # The is_single_cell, is_hsap_cell, and is_mmus_cell attributes are annotated in filter_count_matrix.py
-                if sum(self.anndata.obs["is_single_cell"]) > 0:
+                if np.any(self.single_cell_mask):
                     # Then we can populate the single cell stats
                     self.calculate_single_cell_stats()
                 else:

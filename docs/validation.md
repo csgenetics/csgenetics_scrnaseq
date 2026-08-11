@@ -150,6 +150,18 @@ equivalent — representative read for some UMI groups, because parallel dedupli
 the choice of which PCR duplicate represents the molecule differs. If you consume `dedup.bam`
 directly rather than the count matrices, this is worth knowing.
 
+**4. Exact sparse count arithmetic can correct low-order decimal digits.** During release
+hardening, count-statistics reductions were changed from dense `float32` accumulation to validated
+exact-integer sparse arithmetic. Metric definitions, CSV schemas, integer totals, and the values
+shown in customer reports retain their two-decimal formatting. The raw decimal spelling of a mean
+or percentage in `*.metrics.csv` can differ where the former `float32` accumulation rounded (for
+example, an approximation of 30% becomes exactly `30.0`). On the representative validation
+fixtures the correction was below report display precision; sufficiently high valid counts can
+also correct the last displayed decimal digits. These are approved arithmetic corrections, so
+cross-version metric files remain diagnostic `TEXT_EXACT` differences rather than being claimed
+byte-identical. The validation and overflow contract is documented in
+[Count-statistics arithmetic](count-statistics.md).
+
 ## Multi-lane and heavy-sample testing
 
 Beyond equivalence, 2.0.0 was tested on deliberately demanding input: four lane-merged samples,

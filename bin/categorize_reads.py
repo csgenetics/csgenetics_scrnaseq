@@ -18,8 +18,8 @@ import anndata as ad
 import numpy as np
 import pandas as pd
 import pysam
-from scipy import sparse
 
+from count_arithmetic import canonical_count_csr, row_sums
 from empty_h5ad import is_empty_h5ad_sentinel
 
 
@@ -82,19 +82,8 @@ def load_count_matrix(h5ad_path):
 
 
 def _validate_count_matrix_values(adata):
-    """Reject values that cannot represent raw non-negative integer counts."""
-    values = adata.X.data if sparse.issparse(adata.X) else np.asarray(adata.X)
-    values = np.asarray(values)
-    if not np.issubdtype(values.dtype, np.number) or not np.isrealobj(values):
-        raise ValueError("H5AD count matrix must contain real numeric values")
-    if not np.all(np.isfinite(values)):
-        raise ValueError("H5AD count matrix contains non-finite values")
-    if np.any(values < 0):
-        raise ValueError("H5AD count matrix contains negative values")
-    if np.any(values != np.floor(values)):
-        raise ValueError("H5AD count matrix contains non-integer values")
-    if np.any(values > MAX_SIGNED_64_BIT):
-        raise ValueError("H5AD count matrix contains a value above the signed 64-bit limit")
+    """Return a validated canonical int64 copy of the raw count matrix."""
+    return canonical_count_csr(adata.X, context="H5AD count matrix")
 
 def get_cells_from_h5ad(adata, mixed_species=False):
     """
@@ -142,14 +131,15 @@ def get_counts_by_cell_status(adata, sample_id):
     if 'is_single_cell' not in adata.obs.columns:
         raise ValueError("H5AD file does not have 'is_single_cell' column in obs")
 
-    _validate_count_matrix_values(adata)
+    exact_counts = _validate_count_matrix_values(adata)
 
     # Create boolean mask for cells
     cell_mask = adata.obs['is_single_cell'].astype(bool).to_numpy()
 
-    # Get the count matrix as a dataframe
-    # Sum counts across all genes for each barcode
-    counts_per_barcode = np.array(adata.X.sum(axis=1)).flatten()
+    # Sum in int64 only after the complete non-negative total has been proven
+    # to fit int64. Reducing in X's source dtype can wrap an integer matrix or
+    # drop low-order float32 counts before validation sees the result.
+    counts_per_barcode = row_sums(exact_counts)
 
     # Calculate counts in cells vs out of cells using boolean indexing
     counts_in_cells = as_nonnegative_integer(

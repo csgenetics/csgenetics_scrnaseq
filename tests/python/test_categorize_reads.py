@@ -83,6 +83,18 @@ def _make_adata(barcodes, counts_matrix, obs_cols=None):
     return ad.AnnData(X=X, obs=obs, var=var)
 
 
+def _make_adata_with_storage(matrix, cell_mask, storage):
+    """Build an AnnData without changing the adversarial source dtype."""
+    matrix = np.asarray(matrix)
+    X = matrix if storage == "dense" else csr_matrix(matrix)
+    obs = pd.DataFrame(
+        {"is_single_cell": cell_mask},
+        index=[f"S1_barcode{i}" for i in range(matrix.shape[0])],
+    )
+    var = pd.DataFrame(index=[f"gene{i}" for i in range(matrix.shape[1])])
+    return ad.AnnData(X=X, obs=obs, var=var)
+
+
 def _write_bam(path, records=(), *, include_sequence_dictionary=True):
     header = {"HD": {"VN": "1.6"}}
     if include_sequence_dictionary:
@@ -172,6 +184,51 @@ def test_get_counts_all_cells():
     in_cells, out_cells = cr.get_counts_by_cell_status(adata, "S1")
     assert in_cells == 15
     assert out_cells == 0
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("storage", ["dense", "sparse"])
+def test_get_counts_customer_shaped_dense_sparse_equivalence(storage):
+    adata = _make_adata_with_storage(
+        np.array(
+            [[1, 2, 0], [3, 4, 0], [5, 6, 1], [7, 8, 2]],
+            dtype=np.float32,
+        ),
+        [True, False, True, False],
+        storage,
+    )
+
+    assert cr.get_counts_by_cell_status(adata, "S1") == (15, 24)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("storage", ["dense", "sparse"])
+def test_get_counts_preserves_float32_unit_beyond_accumulation_precision(storage):
+    # Every stored value is exactly representable in float32, but a source-
+    # dtype reduction rounds 2**24 + 1 back to 2**24.
+    adata = _make_adata_with_storage(
+        np.array([[2**24, 1], [3, 4]], dtype=np.float32),
+        [True, False],
+        storage,
+    )
+
+    assert cr.get_counts_by_cell_status(adata, "S1") == (2**24 + 1, 7)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("storage", ["dense", "sparse"])
+def test_get_counts_rejects_int64_total_overflow_before_group_reduction(storage):
+    # The old source-dtype reduction returned -MAX_I64 + 1 for the two
+    # non-cell rows (MAX_I64 + 3). Exact arithmetic must fail before wrapping.
+    max_i64 = np.iinfo(np.int64).max
+    adata = _make_adata_with_storage(
+        np.array([[max_i64], [max_i64], [3]], dtype=np.int64),
+        [True, False, False],
+        storage,
+    )
+
+    with pytest.raises(OverflowError, match="total exceeds the int64 range"):
+        cr.get_counts_by_cell_status(adata, "S1")
 
 
 @pytest.mark.unit
