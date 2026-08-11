@@ -1,12 +1,17 @@
 # Changelog
 
-## 2.0.0
+## 2.0.0 - 2026-08-11
 
 Major overhaul: Nextflow 26 migration, performance, per-process module structure, a
 consolidated report, and run-to-run reproducibility. Summary metrics and per-barcode total
 counts are byte-identical to before; the changes below are runtime, structural, presentational,
 and a one-time deterministic resolution of a pre-existing count-matrix ambiguity (see
 Reproducibility).
+
+Equivalence with 1.x was verified on 20 samples across four datasets covering both supported
+genome types: cell calling was identical or differed by a single borderline cell, and read and
+count totals agreed to within 0.02%. See [docs/validation.md](docs/validation.md) for the method,
+the full results, and the known differences.
 
 ### Breaking
 
@@ -16,10 +21,11 @@ Reproducibility).
 - **The HTML report is consolidated into a single file.** The separate per-sample and
   multi-sample reports are replaced by one `report/consolidated_report.html`:
   - removed: `report/<sample>/<sample>_report.html`, `report/multisample_report.html`,
-    `report/multisample_summary_plots.html`, `report/multisample_qc_cascade.html`
+    `report/multisample_summary_plots.html`
   - added: `report/consolidated_report.html`
-  - unchanged: per-sample `report/<sample>/<sample>.metrics.csv`, `report/multisample_out.csv`,
-    `plots/*.html`, and all MultiQC outputs.
+  - unchanged: per-sample `report/<sample>/<sample>.metrics.csv` and
+    `report/<sample>/<sample>.qc_cascade.html`, `report/multisample_out.csv`,
+    `report/multisample_qc_cascade.html`, `plots/*.html`, and all MultiQC outputs.
 
   If you consume the old report HTML filenames, switch to `consolidated_report.html`. The
   metric VALUES and the `.csv` outputs are identical to before.
@@ -58,12 +64,31 @@ Reproducibility).
 - **Structure.** The monolithic `modules/processes.nf` is split into per-process modules at
   `modules/local/<name>/main.nf` (nf-core local-module layout).
 
+### Fixed
+
+Three pre-existing bugs, all present in 1.x, found by heavy multi-lane testing. **All three caused
+the run to fail loudly; none could produce silently incorrect results.**
+
+- **Multi-lane runs failed.** The cell-caller threshold channel was parsed once per input-CSV
+  *row*, but a multi-lane sample occupies one row per lane. A four-lane sample therefore produced
+  four duplicate threshold entries, fanning `cell_caller` out four times and colliding downstream
+  in `qc_cascade_plot_multi` with an input file name collision. Fixed by deduplicating the
+  threshold channel; a no-op for single-lane input, which is why single-lane testing never
+  surfaced it.
+- **`filter_count_matrix` channel race.** On cloud filesystems (Seqera/Fusion), arrival-order
+  dependent `groupTuple` ordering could place the cell-caller threshold in the slot expected to
+  hold a file path, failing with `Not a valid path value`. Replaced with a deterministic
+  `join(by: 0)`.
+- **Empty-sample deduplication log.** Wrote a literal `\n` rather than a newline.
+
 ### Added
 
 - An nf-test harness (`nf-test.config` + `tests/nf/`) with a `stub:` block on every process
   and a whole-pipeline `-stub` DAG test that exercises the full workflow wiring.
 - An output-equivalence regression comparator (`tests/regression/compare_outputs.py`) with a
   strict mode and an envelope mode (see note below).
+- [`docs/validation.md`](docs/validation.md) — how 2.0.0 was validated against 1.x, with the
+  datasets, results, and known differences.
 
 ### Reproducibility
 
@@ -76,3 +101,11 @@ either of two genes at random, run-to-run) now resolve deterministically. **Summ
 per-barcode total counts are byte-identical to before**; only those few per-gene count-matrix
 entries change, once. From this release, count matrices are reproducible — the output-equivalence
 comparator (`tests/regression/compare_outputs.py`) can therefore gate future changes byte-exact.
+
+**What this means in practice.** Under 1.x, processing the same FASTQs twice could give slightly
+different count-matrix entries. If you are comparing samples processed at different times — a
+longitudinal study, a re-analysis of archived data, or a batch split across several runs — that
+variation was a floor on how precisely results could be compared. From 2.0.0 it is gone: the same
+input produces the same output. Note that the floor applies to the 1.x-to-2.0.0 transition itself,
+so a mixed-version comparison still carries the one-time shift described above; re-processing the
+older data under 2.0.0 removes it.

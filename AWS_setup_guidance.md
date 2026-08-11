@@ -247,7 +247,14 @@ which nextflow
 nextflow -version
 ```
 
-Expected output should show Nextflow version 24.04.3 or newer.
+Expected output should show **Nextflow version 26.04.0 or newer**, which the pipeline requires
+from version 2.0.0 onwards. If `curl -s https://get.nextflow.io | bash` gave you an older
+release, pin the version explicitly:
+
+```bash
+NXF_VER=26.04.1 nextflow self-update
+nextflow -version
+```
 
 ## Step 8: Install Conda
 
