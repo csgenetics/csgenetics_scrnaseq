@@ -12,9 +12,11 @@ The script reads sys.argv directly at import, so we drive it as a subprocess on
 a crafted input h5ad and assert the obs annotations on the output.
 """
 
+import gzip
 import os
 import subprocess
 import sys
+import time
 
 import numpy as np
 import pandas as pd
@@ -34,6 +36,26 @@ def _make_var(n_genes):
             "gene_name": [f"Gene{i}" for i in range(n_genes)],
         },
         index=[f"Gene{i}" for i in range(n_genes)],
+    )
+
+
+def _write_single_species_input(workdir):
+    workdir.mkdir(parents=True, exist_ok=True)
+    barcodes = ["S1_A", "S1_B", "S1_C", "S1_D"]
+    X = csr_matrix(np.array(
+        [[25, 25], [60, 40], [100, 50], [50, 49]], dtype=np.float32
+    ))
+    obs = pd.DataFrame({"total_counts": [50, 100, 150, 99]}, index=barcodes)
+    in_h5ad = workdir / "raw.h5ad"
+    anndata.AnnData(X=X, obs=obs, var=_make_var(2)).write(str(in_h5ad))
+    return in_h5ad
+
+
+def _run_single_species_filter(workdir):
+    in_h5ad = _write_single_species_input(workdir)
+    return subprocess.run(
+        [sys.executable, SCRIPT, "100", str(in_h5ad), "S1", "FALSE"],
+        capture_output=True, text=True, cwd=str(workdir),
     )
 
 
@@ -74,6 +96,30 @@ def test_filter_single_species(tmp_path):
     # Tripartite outputs are written too.
     for fn in ["matrix.mtx.gz", "barcodes.tsv.gz", "features.tsv.gz"]:
         assert (tmp_path / fn).exists()
+
+
+@pytest.mark.integration
+def test_filtered_tripartite_archives_are_byte_reproducible(tmp_path):
+    """Raw-equivalent filtering at different times is byte-reproducible."""
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+
+    first_result = _run_single_species_filter(first)
+    assert first_result.returncode == 0, first_result.stderr
+    time.sleep(1.1)
+    second_result = _run_single_species_filter(second)
+    assert second_result.returncode == 0, second_result.stderr
+
+    for filename in ("matrix.mtx.gz", "barcodes.tsv.gz", "features.tsv.gz"):
+        first_archive = first / filename
+        second_archive = second / filename
+        assert first_archive.read_bytes() == second_archive.read_bytes(), filename
+        with gzip.open(first_archive, "rb") as first_gzip:
+            first_payload = first_gzip.read()
+        with gzip.open(second_archive, "rb") as second_gzip:
+            assert second_gzip.read() == first_payload
+
+    assert (first / "matrix.mtx.gz").read_bytes()[4:8] == b"\x00\x00\x00\x00"
 
 
 @pytest.mark.integration

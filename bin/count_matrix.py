@@ -135,8 +135,12 @@ class CountMatrix:
         self.anndata_obj.write(f"{self.sample}.raw_feature_bc_matrix.h5ad")
 
         # Write sparse matrix format
-        mtx_file = gzip.open('matrix.mtx.gz', 'w')
-        mmwrite(mtx_file, a = self.sparse_matrix.T, comment='', field='integer', precision=None, symmetry='general')
+        # gzip.open() uses the current time by default, so two otherwise identical
+        # matrices receive different gzip headers.  A fixed timestamp keeps the
+        # public filename and decompressed MatrixMarket payload unchanged while
+        # making the archive itself byte-reproducible.
+        with gzip.GzipFile(filename='matrix.mtx.gz', mode='wb', mtime=0) as mtx_file:
+            mmwrite(mtx_file, a = self.sparse_matrix.T, comment='', field='integer', precision=None, symmetry='general')
         # Write feature table
         self.ft_names['feature_type'] = 'Gene Expression'
         # Drop the chromosome column 

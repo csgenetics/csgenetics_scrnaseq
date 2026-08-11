@@ -4,9 +4,9 @@
 Takes in an h5ad raw count matrix and a nuclear gene threshold to filter to
 and outputs a filtered h5ad containing only those barcodes meeting the threshold.
 Also outputs the filtered matrix in the tripartite format with:
-    cell_only.barcodes.tsv.gz
-    cell_only.features.tsv.gz
-    cell_only.matrix.mtx.gz
+    barcodes.tsv.gz
+    features.tsv.gz
+    matrix.mtx.gz
 """
 
 import sys
@@ -86,12 +86,15 @@ class FilterCountMatrix:
     def write_out_tripartite_filtered_matrix_files(self):
         """
         write out the
-            cell_only.barcodes.tsv.gz
-            cell_only.features.tsv.gz
-            cell_only.matrix.mtx.gz
+            barcodes.tsv.gz
+            features.tsv.gz
+            matrix.mtx.gz
         """
         # Write filtered AnnData object into matrix file
-        with gzip.open('matrix.mtx.gz', 'w') as mtx_file:
+        # Use a fixed gzip header timestamp so identical filtered matrices are
+        # byte-identical across runs.  The filename and decompressed payload stay
+        # unchanged.
+        with gzip.GzipFile(filename='matrix.mtx.gz', mode='wb', mtime=0) as mtx_file:
             mmwrite(mtx_file, a = self.anndata_obj_filtered.X.T, comment='', field='integer', precision=None, symmetry='general')
 
         # Write barcode table

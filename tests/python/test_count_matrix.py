@@ -23,6 +23,7 @@ import gzip
 import os
 import subprocess
 import sys
+import time
 
 import pytest
 
@@ -30,6 +31,22 @@ anndata = pytest.importorskip("anndata")
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 SCRIPT = os.path.join(REPO_ROOT, "bin", "count_matrix.py")
+
+
+def _run_count_matrix(workdir):
+    barcode_list, count_table, features = _write_inputs(workdir)
+    return subprocess.run(
+        [
+            sys.executable, SCRIPT,
+            "--barcode_list", str(barcode_list),
+            "--count_table", str(count_table),
+            "--gene_list", str(features),
+            "--sample", "S1",
+            "--mixed_species", "False",
+            "--mito_chr", "chrM",
+        ],
+        capture_output=True, text=True, cwd=str(workdir),
+    )
 
 
 def _write_inputs(tmp_path):
@@ -70,20 +87,7 @@ def _write_inputs(tmp_path):
 
 @pytest.mark.integration
 def test_count_matrix_construction(tmp_path):
-    barcode_list, count_table, features = _write_inputs(tmp_path)
-
-    result = subprocess.run(
-        [
-            sys.executable, SCRIPT,
-            "--barcode_list", str(barcode_list),
-            "--count_table", str(count_table),
-            "--gene_list", str(features),
-            "--sample", "S1",
-            "--mixed_species", "False",
-            "--mito_chr", "chrM",
-        ],
-        capture_output=True, text=True, cwd=str(tmp_path),
-    )
+    result = _run_count_matrix(tmp_path)
     assert result.returncode == 0, f"script failed:\nSTDOUT:{result.stdout}\nSTDERR:{result.stderr}"
 
     h5ad = tmp_path / "S1.raw_feature_bc_matrix.h5ad"
@@ -125,6 +129,37 @@ def test_count_matrix_construction(tmp_path):
     totals = dict(zip(adata.obs_names, adata.obs["total_counts"]))
     assert totals["S1_AAAAAAAAAAAAA"] == pytest.approx(3.0)
     assert totals["S1_CCCCCCCCCCCCC"] == pytest.approx(3.0)
+
+
+@pytest.mark.integration
+def test_raw_tripartite_archives_are_byte_reproducible(tmp_path):
+    """Independent writes at different times produce identical gzip archives."""
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+
+    first_result = _run_count_matrix(first)
+    assert first_result.returncode == 0, first_result.stderr
+
+    # The old gzip.open() implementation stored wall-clock seconds in the
+    # matrix header. Crossing a second boundary makes this a regression test
+    # for that behavior, in addition to checking the fixed header directly.
+    time.sleep(1.1)
+    second_result = _run_count_matrix(second)
+    assert second_result.returncode == 0, second_result.stderr
+
+    for filename in ("matrix.mtx.gz", "barcodes.tsv.gz", "features.tsv.gz"):
+        first_archive = first / filename
+        second_archive = second / filename
+        assert first_archive.read_bytes() == second_archive.read_bytes(), filename
+        with gzip.open(first_archive, "rb") as first_gzip:
+            first_payload = first_gzip.read()
+        with gzip.open(second_archive, "rb") as second_gzip:
+            assert second_gzip.read() == first_payload
+
+    # Bytes 4..7 are the little-endian gzip MTIME field.
+    assert (first / "matrix.mtx.gz").read_bytes()[4:8] == b"\x00\x00\x00\x00"
 
 
 @pytest.mark.integration
