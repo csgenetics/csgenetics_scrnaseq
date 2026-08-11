@@ -43,9 +43,9 @@ docker/agent/
 plans/
 HANDOFF.md
 
-# Ad-hoc sample sheets pointing at internal (non-public) data. Canonical copies live at
-# s3://csg-reference/internal_nf_tests_data/external_validation/. Only the generic
-# example templates in input_csv/ belong in this repo.
+# Ad-hoc sample sheets pointing at internal (non-public) data. Canonical copies live in
+# access-controlled storage outside the repository. Only the generic example templates
+# in input_csv/ belong here.
 *_test_data/
 mixed_testing.csv
 input_csv/badsamples.csv

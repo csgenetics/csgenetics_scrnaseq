@@ -14,9 +14,9 @@ jobs:
     # Seqera workspace + compute environment are sourced from the CODEBASE (this file),
     # per-branch, NOT from shared CircleCI project env vars. Each commit therefore launches
     # on the compute environment that matches its own pipeline version, and a merge carries
-    # the right CE with it (no manual CircleCI env-var flip). Only the SECRET TOWER_AUTH_TOKEN
-    # remains a CircleCI project env var. The Nextflow version is likewise pinned in the launch
-    # JSON below (preRunScript), so version + CE + workspace all travel with the commit.
+    # the right CE with it (no manual CircleCI env-var flip). Secrets and private storage
+    # locations remain CircleCI project env vars. The Nextflow version is likewise pinned in
+    # the launch JSON below (preRunScript), so version + CE + workspace travel with the commit.
     # These two IDs are deliberately in this PUBLIC repo: they are opaque identifiers, inert
     # without TOWER_AUTH_TOKEN, and must travel with the commit for the above to work. Do not
     # "fix" them into CircleCI env vars.
@@ -38,22 +38,23 @@ jobs:
       - run:
           name: Create a new endpoint for the current branch
           command: |
+            : "${TOWER_WORK_DIR:?Configure TOWER_WORK_DIR as a private CircleCI environment variable}"
             myvar=`curl -X POST "https://api.tower.nf/actions?workspaceId=$TOWER_WORKSPACE_ID" \
             -H "Accept: application/json" \
             -H "Authorization: Bearer $TOWER_AUTH_TOKEN" \
             -H "Content-Type: application/json" \
-            -d '{"name":"'"$NAME"'","source":"tower","launch":{"configProfiles":["test"], "computeEnvId":"'"$TOWER_COMPUTE_ENV_ID"'","pipeline":"https://github.com/csgenetics/csgenetics_scrnaseq","workDir":"s3://csg-tower-bucket","revision":"'"$CIRCLE_SHA1"'","pullLatest":true,"preRunScript":"export NXF_VER=26.04.1"}}'`
+            -d '{"name":"'"$NAME"'","source":"tower","launch":{"configProfiles":["test"], "computeEnvId":"'"$TOWER_COMPUTE_ENV_ID"'","pipeline":"https://github.com/csgenetics/csgenetics_scrnaseq","workDir":"'"$TOWER_WORK_DIR"'","revision":"'"$CIRCLE_SHA1"'","pullLatest":true,"preRunScript":"export NXF_VER=26.04.1"}}'`
             id=`echo $myvar | awk -F: {'print $2'} | sed 's/}//g'`
             echo "export ACTION_ID=$id" >> $BASH_ENV
             echo $id
       - run:
           name: Start the pipeline using the newly created endpoint
           command: |
+            : "${PIPELINE_OUTDIR_ROOT:?Configure PIPELINE_OUTDIR_ROOT as a private CircleCI environment variable}"
             echo "NAME is $NAME"
             SHA=$NAME
             echo $NAME
-            outdir="s3://csg-nextflow/circleci/"$NAME
-            echo $outdir
+            outdir="${PIPELINE_OUTDIR_ROOT%/}/circleci/${NAME}"
             myvar=`curl -X POST "https://api.tower.nf/actions/$ACTION_ID/launch?workspaceId=$TOWER_WORKSPACE_ID" \
             -H "Authorization: Bearer $TOWER_AUTH_TOKEN" \
             -H "Content-Type: application/json" \
@@ -117,8 +118,8 @@ jobs:
             nf-test test tests/nf/pipeline_stub.nf.test modules/local/save_resolved_configuration/tests/main.nf.test --verbose
 
   # This repo is PUBLIC. Fails the build if agent working files, ad-hoc internal sample
-  # sheets, credentials or beast-local paths get committed. See CLAUDE.md for the parts
-  # that cannot be mechanised. Deliberately dependency-free so it is always cheap to run.
+  # sheets, credentials, private S3 endpoints or beast-local paths get committed. See
+  # CLAUDE.md for the remaining human-review checks. Deliberately dependency-free.
   check-no-internal-files:
     docker:
       - image: cimg/base:stable
@@ -126,8 +127,10 @@ jobs:
     steps:
       - checkout
       - run:
-          name: No internal-only files, credentials or local paths
-          command: tests/check_no_internal_files.sh
+          name: No internal-only files, credentials or private endpoints
+          command: |
+            tests/check_no_internal_files.sh
+            tests/check_no_internal_files_test.sh
 
   # Headless-browser smoke test for the consolidated HTML report. Generates a
   # report from a committed fixture and renders it in Chromium to assert it is
@@ -157,10 +160,10 @@ jobs:
 
 # Invoke jobs via workflows
 # See: https://circleci.com/docs/2.0/configuration-reference/#workflows
-# NOTE: the run-current-branch (Seqera Tower) job needs exactly ONE CircleCI project env
-# var: TOWER_AUTH_TOKEN (the Seqera access token - a secret). The workspace and compute-env
-# IDs are codebase-controlled in the job's `environment:` block above (per-branch), so no
-# CircleCI env var needs flipping when branches on different pipeline versions coexist.
+# NOTE: the run-current-branch (Seqera Tower) job needs three CircleCI project env vars:
+# TOWER_AUTH_TOKEN (secret), TOWER_WORK_DIR and PIPELINE_OUTDIR_ROOT (private locations).
+# The workspace and compute-env IDs remain codebase-controlled in the job's `environment:`
+# block above, so no version-specific CircleCI env var needs flipping between branches.
 workflows:
   ci:
     jobs:
