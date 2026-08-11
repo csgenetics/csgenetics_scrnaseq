@@ -31,3 +31,8 @@ agent-secrets/
 
 # Nextflow debug logs (may contain ephemeral Wave/Tower access tokens; never commit)
 debug/
+
+# Internal agent-container tooling. THIS REPO IS PUBLIC; the equivalent setup lives in
+# the private csgenetics repos (navigator, CBK, GRT, rnaseq). Keep a local copy here if
+# you need one, but it must not be committed.
+docker/agent/
