@@ -264,6 +264,54 @@ def test_degenerate_automatic_threshold_keeps_minimum_fallback(tmp_path):
 
 
 @pytest.mark.integration
+def test_named_zero_byte_h5ad_uses_the_explicit_empty_path(tmp_path):
+    count_matrix = tmp_path / "sample.raw_feature_bc_matrix.empty.h5ad"
+    count_matrix.touch()
+
+    result = _run_cell_caller(tmp_path, count_matrix, "nan")
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "100"
+    assert (tmp_path / "sample_counts_pdf_with_threshold.html").stat().st_size == 0
+    assert (tmp_path / "sample_barnyard_plot.html").stat().st_size == 0
+    assert (tmp_path / "sample_pdf_with_cutoff.html").stat().st_size == 0
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "filename,payload",
+    [
+        ("generic-zero.h5ad", b""),
+        ("corrupt.h5ad", b"not an HDF5 file"),
+        ("nonempty.empty.h5ad", b"not an empty sentinel"),
+    ],
+)
+def test_invalid_h5ad_cannot_be_relabelled_as_empty(
+    tmp_path, filename, payload
+):
+    count_matrix = tmp_path / filename
+    count_matrix.write_bytes(payload)
+
+    result = _run_cell_caller(tmp_path, count_matrix, "nan")
+
+    assert result.returncode != 0
+    assert result.stdout == ""
+    assert not (tmp_path / "sample_counts_pdf_with_threshold.html").exists()
+    assert not (tmp_path / "sample_barnyard_plot.html").exists()
+    assert not (tmp_path / "sample_pdf_with_cutoff.html").exists()
+
+
+@pytest.mark.integration
+def test_missing_h5ad_fails_without_empty_outputs(tmp_path):
+    result = _run_cell_caller(tmp_path, tmp_path / "missing.empty.h5ad", "nan")
+
+    assert result.returncode != 0
+    assert "existing regular file" in result.stderr
+    assert result.stdout == ""
+    assert not (tmp_path / "sample_counts_pdf_with_threshold.html").exists()
+
+
+@pytest.mark.integration
 @pytest.mark.parametrize("manual_threshold", ["-0.1", "inf", "NaN", "invalid", "309"])
 def test_invalid_manual_threshold_fails_clearly(tmp_path, manual_threshold):
     result = _run_cell_caller(

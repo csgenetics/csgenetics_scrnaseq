@@ -15,6 +15,9 @@ script changes, this test documents the previously-frozen behaviour. The
 ``as_perc`` helper it composes with is the real one from the module.
 """
 
+from collections import defaultdict
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
@@ -93,3 +96,53 @@ def test_sequencing_saturation_no_duplication():
 def test_sequencing_saturation_zero_reads_before():
     # Guard branch: 0 input reads -> 0.0 (avoids divide-by-zero).
     assert _sequencing_saturation(0, 0) == 0.0
+
+
+# ---------------------------------------------------------------------------
+# explicit empty-H5AD provenance
+# ---------------------------------------------------------------------------
+
+
+def _bare_summary_for_h5ad(path):
+    summary = object.__new__(SS)
+    summary.args = SimpleNamespace(h5ad=path)
+    summary.mixed = False
+    summary.metrics_dict = defaultdict(dict)
+    return summary
+
+
+@pytest.mark.unit
+def test_named_zero_byte_h5ad_sets_cell_metrics_to_zero(tmp_path):
+    sentinel = tmp_path / "sample.raw_feature_bc_matrix.empty.h5ad"
+    sentinel.touch()
+    summary = _bare_summary_for_h5ad(sentinel)
+
+    summary.get_cell_stats()
+
+    assert summary.num_cells == 0
+    assert summary.metrics_dict["Cell metrics"]["num_cells"][1] == 0
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "filename,payload,error_type",
+    [
+        ("generic-zero.h5ad", b"", ValueError),
+        ("corrupt.h5ad", b"not an HDF5 file", OSError),
+        ("nonempty.empty.h5ad", b"not an empty sentinel", ValueError),
+    ],
+)
+def test_invalid_h5ad_cannot_be_reported_as_empty(
+    tmp_path, filename, payload, error_type
+):
+    path = tmp_path / filename
+    path.write_bytes(payload)
+
+    with pytest.raises(error_type):
+        _bare_summary_for_h5ad(path).get_cell_stats()
+
+
+@pytest.mark.unit
+def test_missing_h5ad_fails_instead_of_reporting_empty_metrics(tmp_path):
+    with pytest.raises(ValueError, match="existing regular file"):
+        _bare_summary_for_h5ad(tmp_path / "missing.empty.h5ad").get_cell_stats()

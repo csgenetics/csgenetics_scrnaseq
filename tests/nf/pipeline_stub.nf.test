@@ -5,7 +5,7 @@ nextflow_pipeline {
     tag "pipeline"
     tag "stub"
 
-    test("whole-workflow wiring stub-succeeds with two samples") {
+    test("whole-workflow wiring keeps two aligned samples") {
 
         options "-stub -profile test"
 
@@ -19,6 +19,92 @@ nextflow_pipeline {
             assert workflow.success
             assert workflow.trace.succeeded().size() > 0
             assert workflow.trace.failed().size() == 0
+            def names = workflow.trace.tasks()*.name
+            assert names.count { it.startsWith("star (") } == 2
+            assert names.count { it.contains("create_valid_empty_bam") } == 0
+            assert names.count { it.startsWith("filter_for_UMRs_mismatch (") } == 2
+            assert names.count { it.startsWith("categorize_reads (") } == 2
+            assert names.count { it.startsWith("summary_statistics (") } == 2
+        }
+    }
+
+    test("zero-unique multimapper-only sample stays on aligned branch") {
+
+        options "-stub -profile test"
+
+        when {
+            params {
+                input_csv = "${projectDir}/tests/nf/fixtures/test_stub.input_csv.csv"
+                stub_multimapper_only_samples = ["Sample1"]
+            }
+        }
+
+        then {
+            assert workflow.success
+            def names = workflow.trace.tasks()*.name
+            assert names.count { it.startsWith("star (") } == 2
+            assert names.count { it.contains("create_valid_empty_bam") } == 0
+            assert names.count { it.startsWith("filter_for_UMRs_mismatch (") } == 2
+            assert names.count { it.startsWith("multimapper_assignment (") } == 2
+            assert names.count { it.startsWith("categorize_reads (") } == 2
+            assert names.count { it.startsWith("summary_statistics (") } == 2
+        }
+    }
+
+    test("mixed aligned and STAR-empty samples each reach reports once") {
+
+        options "-stub -profile test"
+
+        when {
+            params {
+                input_csv = "${projectDir}/tests/nf/fixtures/test_stub.input_csv.csv"
+                stub_unaligned_samples = ["Sample2"]
+            }
+        }
+
+        then {
+            assert workflow.success
+            def names = workflow.trace.tasks()*.name
+            assert names.count { it.startsWith("star (") } == 2
+            assert names.count { it.contains("create_valid_empty_bam") } == 1
+            assert names.count { it.startsWith("raw_rseqc (") } == 2
+            assert names.count { it.startsWith("initial_feature_count (") } == 2
+            assert names.count { it.startsWith("filter_for_UMRs_mismatch (") } == 1
+            assert names.count { it.startsWith("categorize_reads (") } == 2
+            assert names.count { it.startsWith("summary_statistics (") } == 2
+            assert names.count { it.startsWith("qc_cascade_plot_single (") } == 2
+            assert names.count { it == "multi_sample_multiqc" } == 1
+            assert names.count { it == "qc_cascade_plot_multi" } == 1
+            assert names.count { it == "consolidated_report" } == 1
+        }
+    }
+
+    test("all QC-empty samples each reach reports once without STAR assignment") {
+
+        options "-stub -profile test"
+
+        when {
+            params {
+                input_csv = "${projectDir}/tests/nf/fixtures/test_stub.input_csv.csv"
+                stub_empty_qc_samples = ["Sample1", "Sample2"]
+            }
+        }
+
+        then {
+            assert workflow.success
+            def names = workflow.trace.tasks()*.name
+            assert names.count { it.startsWith("star (") } == 0
+            assert names.count { it.contains("create_valid_empty_bam") } == 2
+            assert names.count { it.startsWith("raw_rseqc (") } == 2
+            assert names.count { it.startsWith("initial_feature_count (") } == 2
+            assert names.count { it.startsWith("filter_for_UMRs_mismatch (") } == 0
+            assert names.count { it.startsWith("multimapper_assignment (") } == 0
+            assert names.count { it.startsWith("categorize_reads (") } == 2
+            assert names.count { it.startsWith("summary_statistics (") } == 2
+            assert names.count { it.startsWith("qc_cascade_plot_single (") } == 2
+            assert names.count { it == "multi_sample_multiqc" } == 1
+            assert names.count { it == "qc_cascade_plot_multi" } == 1
+            assert names.count { it == "consolidated_report" } == 1
         }
     }
 }

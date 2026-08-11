@@ -187,8 +187,8 @@ def test_filter_mixed_species(tmp_path):
 
 @pytest.mark.integration
 def test_filter_empty_input(tmp_path):
-    """An empty (zero-byte) input h5ad -> empty outputs and clean exit."""
-    empty = tmp_path / "empty.h5ad"
+    """A named zero-byte sentinel produces named empty outputs and exits cleanly."""
+    empty = tmp_path / "empty.empty.h5ad"
     empty.write_text("")
 
     result = subprocess.run(
@@ -198,3 +198,50 @@ def test_filter_empty_input(tmp_path):
     assert result.returncode == 0, f"STDERR:{result.stderr}"
     assert (tmp_path / "S1.100.filtered_feature_bc_matrix.empty.h5ad").exists()
     assert (tmp_path / "S1.100.raw_feature_bc_matrix.empty.h5ad").exists()
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "filename,payload",
+    [
+        ("generic-zero.h5ad", b""),
+        ("corrupt.h5ad", b"not an HDF5 file"),
+        ("nonempty.empty.h5ad", b"not an empty sentinel"),
+    ],
+)
+def test_invalid_input_cannot_mint_empty_sentinels(tmp_path, filename, payload):
+    input_path = tmp_path / filename
+    input_path.write_bytes(payload)
+
+    result = subprocess.run(
+        [sys.executable, SCRIPT, "100", str(input_path), "S1", "FALSE"],
+        capture_output=True,
+        text=True,
+        cwd=str(tmp_path),
+    )
+
+    assert result.returncode != 0
+    assert not (tmp_path / "S1.100.filtered_feature_bc_matrix.empty.h5ad").exists()
+    assert not (tmp_path / "S1.100.raw_feature_bc_matrix.empty.h5ad").exists()
+
+
+@pytest.mark.integration
+def test_missing_input_fails_without_empty_sentinels(tmp_path):
+    result = subprocess.run(
+        [
+            sys.executable,
+            SCRIPT,
+            "100",
+            str(tmp_path / "missing.empty.h5ad"),
+            "S1",
+            "FALSE",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(tmp_path),
+    )
+
+    assert result.returncode != 0
+    assert "existing regular file" in result.stderr
+    assert not (tmp_path / "S1.100.filtered_feature_bc_matrix.empty.h5ad").exists()
+    assert not (tmp_path / "S1.100.raw_feature_bc_matrix.empty.h5ad").exists()

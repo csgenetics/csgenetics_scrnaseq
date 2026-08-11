@@ -17,6 +17,8 @@ import anndata
 import numpy as np
 import re
 
+from empty_h5ad import is_empty_h5ad_sentinel
+
 class FilterCountMatrix:
     def __init__(self):
         # Whether we are working with a Human Mouse mixed samples
@@ -38,15 +40,14 @@ class FilterCountMatrix:
        
         self.sample_name = sys.argv[3]
 
-        # Read in the h5ad matrix to an anndata object
-        # If the h5ad matrix is an empty file, simply write out
-        # another empty file and exit
-        try:
-            self.anndata_obj = anndata.read_h5ad(sys.argv[2])
-        except OSError:
+        # Only the pipeline's explicit, zero-byte *.empty.h5ad sentinel may
+        # produce downstream empty sentinels. Corrupt or generic zero-byte
+        # inputs must fail rather than being relabelled as intentional emptiness.
+        if is_empty_h5ad_sentinel(sys.argv[2]):
             open(f"{self.sample_name}.{sys.argv[1]}.filtered_feature_bc_matrix.empty.h5ad", "w").close()
             open(f"{self.sample_name}.{sys.argv[1]}.raw_feature_bc_matrix.empty.h5ad", "w").close()
             sys.exit(0)
+        self.anndata_obj = anndata.read_h5ad(sys.argv[2])
 
         if self.mixed:
             # For mixed we specifically annotate Hsap and Mmus cells as well as the more generic is_called_cell and is_single_cell

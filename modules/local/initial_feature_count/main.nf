@@ -6,7 +6,7 @@ process initial_feature_count {
   publishDir "${params.outdir}/featureCounts", mode: 'copy'
 
   input:
-  tuple val(sample_id), path(bam), val(aligned_count)
+  tuple val(sample_id), path(bam), val(has_alignments)
   path(gtf)
 
   output:
@@ -14,7 +14,7 @@ process initial_feature_count {
 
   script:
   """
-  if [[ $aligned_count > 0 ]] # If the bam is not empty
+  if [[ "$has_alignments" == "true" ]] # If the bam is not empty
   then
     # Threaded coordinate sort (-@). Order-neutral downstream: featureCounts assigns per-read, and
     # every consumer re-sorts (name sort for assignment, coordinate sort in sort_index_bam for dedup).

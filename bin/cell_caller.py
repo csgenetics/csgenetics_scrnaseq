@@ -14,6 +14,8 @@ from scipy.signal import argrelextrema
 from scipy.stats import gaussian_kde
 from plotly.subplots import make_subplots
 
+from empty_h5ad import is_empty_h5ad_sentinel
+
 
 def count_threshold_from_log(log_threshold):
    """Convert a log10(counts + 1) threshold to the integer used downstream."""
@@ -307,12 +309,11 @@ class CellCaller:
       sys.exit(0)
       
    def read_in_anndata_and_handle_error(self):
-      try:
-         self.adata = ad.read_h5ad(self.count_matrix)
-      except OSError:
-         # If we encounter an empty h5ad, output empty figures and either the
-         # supplied manual threshold or the automatic minimum fallback.
+      if is_empty_h5ad_sentinel(self.count_matrix):
+         # Only the pipeline's explicit, zero-byte *.empty.h5ad sentinel takes
+         # the empty-data path. Corrupt or generic zero-byte inputs must fail.
          self.clean_exit_on_error()
+      self.adata = ad.read_h5ad(self.count_matrix)
 
    def get_prob_dens_data(self, counts):
       """

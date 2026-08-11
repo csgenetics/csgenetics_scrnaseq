@@ -19,6 +19,8 @@ import numpy as np
 from collections import defaultdict
 import pandas as pd
 
+from empty_h5ad import is_empty_h5ad_sentinel
+
 class SummaryStatistics:
     def __init__(self, args):
         self.args = args
@@ -557,13 +559,12 @@ class SummaryStatistics:
         self.metrics_dict["Cell metrics"]["total_genes_detected_across_sample"] = ("Total genes detected across sample", self.total_genes_detected_across_sample, "Total number of genes detected across the sample (each gene can be counted more than once if detected in more than one cell).")
 
     def get_cell_stats(self):
-        # Try to read in the raw h5ad and handle if it is empty
-        # by checking for an OSError (empty file) or a 0 barcode count.
-        try:
-            self.anndata = anndata.read_h5ad(self.args.h5ad)
-        except OSError: # If the h5ad is an empty file, output empty metrics
+        # Only a zero-byte *.empty.h5ad is the pipeline's intentional empty
+        # sentinel. All other inputs are parsed normally so corrupt H5ADs fail.
+        if is_empty_h5ad_sentinel(self.args.h5ad):
             self.set_cell_and_called_cell_and_multiplet_stats_to_zero()
         else:
+            self.anndata = anndata.read_h5ad(self.args.h5ad)
             if self.anndata.shape[0] == 0:
                 self.set_cell_and_called_cell_and_multiplet_stats_to_zero()
             else:
