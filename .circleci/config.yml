@@ -2,6 +2,26 @@
 # See: https://circleci.com/docs/2.0/configuration-reference
 version: 2.1
 
+# Install the same reviewed Pixi release in every locked-environment job. Keep this as a
+# reusable command so the comparator and general Python gates cannot drift onto different
+# installers when their branches are integrated.
+commands:
+  install-pinned-pixi:
+    steps:
+      - run:
+          name: Install pinned Pixi 0.47.0
+          command: |
+            readonly pixi_version="0.47.0"
+            readonly pixi_archive="/tmp/pixi-x86_64-unknown-linux-musl.tar.gz"
+            readonly pixi_sha256="9ca7b313a814f7ffc4bdc673f8fddef48a525a3d5da2e592559ba6ade8709e92"
+            curl --fail --location --silent --show-error \
+              --output "$pixi_archive" \
+              "https://github.com/prefix-dev/pixi/releases/download/v${pixi_version}/pixi-x86_64-unknown-linux-musl.tar.gz"
+            echo "$pixi_sha256  $pixi_archive" | sha256sum --check --strict
+            tar -xzf "$pixi_archive" -C /tmp pixi
+            test "$(/tmp/pixi --version)" = "pixi $pixi_version"
+            sudo install -m 0755 /tmp/pixi /usr/local/bin/pixi
+
 # Define a job to be invoked later in a workflow.
 # See: https://circleci.com/docs/2.0/configuration-reference/#jobs
 jobs:
@@ -117,6 +137,46 @@ jobs:
             export NXF_VER=26.04.1
             nf-test test tests/nf/pipeline_stub.nf.test modules/local/save_resolved_configuration/tests/main.nf.test --verbose
 
+  # General release gate for every Python test in tests/python, including tests added by
+  # later hardening tickets. The output comparator owns a separate locked environment and
+  # CI job, so it is the only ignored test file. Playwright is deliberately absent here:
+  # browser assertions remain in report-production-container/report-smoke, while their
+  # non-browser report contracts still run in this suite.
+  python-tests:
+    docker:
+      - image: cimg/base:stable
+    resource_class: medium
+    steps:
+      - checkout
+      - install-pinned-pixi
+      - restore_cache:
+          keys:
+            - python-tests-pixi-v1-{{ checksum "tests/requirements/python/pixi.lock" }}-{{ checksum "tests/requirements/gtfparse/pixi.lock" }}
+      - run:
+          name: Verify locks and install frozen Python environments
+          command: |
+            pixi lock --check \
+              --manifest-path tests/requirements/python/pixi.toml
+            pixi lock --check \
+              --manifest-path tests/requirements/gtfparse/pixi.toml
+            pixi install --frozen \
+              --manifest-path tests/requirements/python/pixi.toml
+            pixi install --frozen \
+              --manifest-path tests/requirements/gtfparse/pixi.toml
+      - run:
+          name: Frozen general Python suite
+          command: |
+            pixi run --frozen \
+              --manifest-path tests/requirements/python/pixi.toml \
+              python -m pytest tests/python \
+                --ignore=tests/python/test_compare_outputs.py \
+                -v
+      - save_cache:
+          key: python-tests-pixi-v1-{{ checksum "tests/requirements/python/pixi.lock" }}-{{ checksum "tests/requirements/gtfparse/pixi.lock" }}
+          paths:
+            - tests/requirements/python/.pixi
+            - tests/requirements/gtfparse/.pixi
+
   # This repo is PUBLIC. Fails the build if agent working files, ad-hoc internal sample
   # sheets, credentials, private S3 endpoints or beast-local paths get committed. See
   # CLAUDE.md for the remaining human-review checks. Deliberately dependency-free.
@@ -228,6 +288,7 @@ workflows:
     jobs:
       - check-no-internal-files
       - nf-test
+      - python-tests
       - report-production-container
       - report-smoke:
           requires:
