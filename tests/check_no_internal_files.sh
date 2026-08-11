@@ -8,8 +8,9 @@
 #
 #   1. agent/AI working files and ad-hoc internal test data
 #   2. credentials
-#   3. beast-local filesystem paths
-#   4. private S3 locations expressed as s3/s3a/s3n URIs or standard AWS HTTPS endpoints
+#   3. private S3 locations expressed as s3/s3a/s3n URIs or standard AWS HTTPS endpoints
+#   4. beast-local filesystem paths
+#   5. Conda recipe source paths that resolve outside this repository
 #
 # Customer/site run identifiers and colleague names still require human review. Literal
 # S3 buckets must identify themselves as public (with a delimited "public" component) or
@@ -165,7 +166,78 @@ if [ -n "$hits" ]; then
   print_match_locations <<< "$hits"
 fi
 
+# --- 5. External Conda recipe sources ----------------------------------------------
+# A public recipe that reaches into a sibling checkout cannot be built from a clean
+# clone and may accidentally package private source. Inspect the indexed recipe rather
+# than the working tree and resolve literal paths lexically, so the check also works
+# before the source directory exists.
+conda_path_is_in_repository() {
+  local recipe_path=$1
+  local source_path=$2
+  local component depth=0
+  local -a components
+
+  # Dynamic and absolute paths cannot be proven to stay in this repository. A Windows
+  # drive prefix is absolute even though this CI check runs on Linux.
+  case "$source_path" in
+    ""|/*|\~*|*'{{'*|*'}}'*|*'$'*) return 1 ;;
+  esac
+  if [[ "$source_path" =~ ^[[:alpha:]]: ]]; then
+    return 1
+  fi
+
+  IFS='/' read -r -a components <<< "${recipe_path%/*}/$source_path"
+  for component in "${components[@]}"; do
+    case "$component" in
+      ""|.) ;;
+      ..)
+        if [ "$depth" -eq 0 ]; then
+          return 1
+        fi
+        depth=$((depth - 1))
+        ;;
+      *) depth=$((depth + 1)) ;;
+    esac
+  done
+  return 0
+}
+
+conda_source_hits=''
+while IFS= read -r -d '' recipe; do
+  while IFS=$'\t' read -r line_number source_path; do
+    [ -z "$line_number" ] && continue
+    if ! conda_path_is_in_repository "$recipe" "$source_path"; then
+      conda_source_hits+="$recipe:$line_number"$'\n'
+    fi
+  done < <(
+    git show ":$recipe" | awk '
+      /^[[:space:]]*(-[[:space:]]+)?path[[:space:]]*:/ {
+        value = $0
+        sub(/^[[:space:]]*(-[[:space:]]+)?path[[:space:]]*:[[:space:]]*/, "", value)
+        quote = substr(value, 1, 1)
+        if (quote == "\"" || quote == "\047") {
+          value = substr(value, 2)
+          closing_quote = index(value, quote)
+          if (closing_quote > 0) {
+            value = substr(value, 1, closing_quote - 1)
+          }
+        } else {
+          sub(/[[:space:]]+#.*/, "", value)
+          sub(/[[:space:]]+$/, "", value)
+        }
+        printf "%d\t%s\n", NR, value
+      }
+    '
+  )
+done < <(git ls-files -z -- 'conda-recipes/**/meta.yaml')
+
+if [ -n "$conda_source_hits" ]; then
+  fail "Conda recipe source path does not resolve inside this public repository:"
+  printf '%s' "$conda_source_hits" | sed 's/^/  /'
+  printf '\n  Package only tracked source, or use a reviewed immutable public source URL.\n'
+fi
+
 if [ "$status" -eq 0 ]; then
-  echo "OK: no internal-only paths, credentials, private S3 endpoints or local paths staged."
+  echo "OK: no internal-only paths, credentials, private S3 endpoints, local paths or external Conda sources staged."
 fi
 exit "$status"

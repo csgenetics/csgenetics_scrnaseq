@@ -1,199 +1,70 @@
 # CS Genetics Conda Recipes
 
-This directory contains conda recipes for building CS Genetics custom packages for the scRNA-seq pipeline.
+This directory contains the Conda recipes whose source is maintained in this public
+repository:
 
-## Overview
+- **csgenetics-gtf2bed** - a Rust GTF-to-BED converter
+- **multiqc-csgenetics** - a platform-independent MultiQC plugin for pipeline reports
 
-Two custom packages are provided:
+The pipeline also consumes the published `csgenetics-qc` package. Its source and package
+recipe are maintained outside this repository, so there is deliberately no local
+`conda-recipes/qc` recipe. The customer-facing version pins remain in
+[`conda_envs/qc.yml`](../conda_envs/qc.yml) and
+[`conda_envs/multiqc.yml`](../conda_envs/multiqc.yml); those environment files are the
+authoritative dependencies used by the pipeline's Conda profile.
 
-1. **csgenetics-qc** - Rust binary for barcode extraction and quality control
-2. **multiqc-csgenetics** - Custom MultiQC plugins for pipeline reporting
-
-Note: The pipeline uses standard `umi_tools` from bioconda, not a custom version.
+The pipeline uses the standard `umi_tools` package from Bioconda, not a custom build.
 
 ## Prerequisites
 
-```bash
-# Install conda-build
-conda install conda-build anaconda-client
+Install [Pixi](https://pixi.sh/) and create an anaconda.org account with upload access to
+the `cs_genetics` organization. The checked-in `pixi.toml` supplies `conda-build` and the
+Anaconda client.
 
-# Create anaconda.org account and CS Genetics organization
-# Visit: https://anaconda.org/
-```
+## Build the GTF-to-BED converter
 
-## Building Packages
-
-### 1. QC Binary (Platform-Specific)
-
-The QC binary is a compiled Rust executable and must be built separately for each platform.
-
-**Prerequisites:**
-- Rust toolchain (automatically installed by conda-build via the `rust` compiler package)
-- Pixi environment with conda-build (see Prerequisites section above)
-
-**Build for Linux (most common for HPC):**
+The recipe packages a Linux MUSL binary built from the tracked Rust crate at
+`images/gtf2bed`. With the MUSL target installed, run these commands from the repository
+root:
 
 ```bash
-cd conda-recipes
-pixi run conda-build qc
-
-# Output package location:
-# .pixi/envs/default/conda-bld/linux-64/csgenetics-qc-0.3.4-0.conda
+cd images/gtf2bed
+cargo build --locked --release --target x86_64-unknown-linux-musl
+cd ../../conda-recipes
+pixi run conda-build gtf2bed
 ```
 
-**Notes:**
-- The recipe uses `cargo install` which handles binary compilation and installation
-- Currently builds from local source at `../../../rnaseq/images/qc`
-- The meta.yaml can be updated to build from GitHub once the repo has proper tags and LICENSE
+## Build the MultiQC plugin
 
-**Build for Mac:**
-
-Building on the target platform is recommended for best compatibility:
-
-```bash
-# On Mac Intel
-cd conda-recipes
-pixi run conda-build qc
-# Output: .pixi/envs/default/conda-bld/osx-64/csgenetics-qc-0.3.4-0.conda
-
-# On Mac ARM (M1/M2/M3)
-cd conda-recipes
-pixi run conda-build qc
-# Output: .pixi/envs/default/conda-bld/osx-arm64/csgenetics-qc-0.3.4-0.conda
-```
-
-**Troubleshooting:**
-
-If you encounter "cannot find qc binary" errors, the build.sh script uses `cargo install --path . --root $PREFIX` which properly handles binary installation even with `strip = true` in Cargo.toml.
-
-The test phase verifies:
-1. Binary exists and is executable
-2. Running `qc` without arguments shows usage message
-
-### 2. MultiQC Plugin (Platform-Independent)
-
-This is a Python package (noarch) that provides a custom MultiQC module for CS Genetics QC output.
-
-**Prerequisites:**
-- Pixi environment with conda-build (see Prerequisites section above)
-
-**Build:**
+From the repository root:
 
 ```bash
 cd conda-recipes
 pixi run conda-build multiqc-csgenetics
-
-# Output package location:
-# .pixi/envs/default/conda-bld/noarch/multiqc-csgenetics-0.1.0-py_0.conda
 ```
 
-**Notes:**
-- The recipe builds from local source at `../../images/multiqc`
-- Contains the `unified_qc` module that parses CS Genetics QC JSON output
-- Registers as a MultiQC plugin via Python entry points
+The recipe builds `multiqc-csgenetics` from the tracked source at `images/multiqc`.
+Conda-build prints the exact output package path when either recipe completes.
 
-**What this plugin does:**
-- Provides custom MultiQC module for CS Genetics unified QC binary output
-- Automatically discovered by MultiQC when installed
-- Displays barcode extraction stats, trimming metrics, and quality distributions
+## Upload a package
 
-
-## Uploading to Anaconda.org
-
-```
-
-### Upload Packages
-
-**Using Pixi environment:**
+Authenticate using the Anaconda client without writing credentials into this public
+repository, then upload the package path reported by conda-build:
 
 ```bash
 cd conda-recipes
-
-# Upload QC binary (do for each platform you built)
-pixi run anaconda upload .pixi/envs/default/conda-bld/linux-64/csgenetics-qc-0.3.4-0.conda --user cs_genetics
-
-# Upload MultiQC plugin
-pixi run anaconda upload .pixi/envs/default/conda-bld/noarch/multiqc-csgenetics-0.1.0-0.conda --user cs_genetics
+pixi run anaconda upload <path-reported-by-conda-build> --user cs_genetics
 ```
 
-**Authentication:**
-The upload command uses the `ANACONDA_API_TOKEN` environment variable for authentication. Make sure it's set:
-```bash
-export ANACONDA_API_TOKEN=your_token_here
-# Or add to ~/.bashrc for persistence
-```
+Verify the published packages at
+[anaconda.org/cs_genetics/csgenetics-gtf2bed](https://anaconda.org/cs_genetics/csgenetics-gtf2bed)
+and
+[anaconda.org/cs_genetics/multiqc-csgenetics](https://anaconda.org/cs_genetics/multiqc-csgenetics).
 
-**Verify uploads:**
-- QC binary: https://anaconda.org/cs_genetics/csgenetics-qc
-- MultiQC plugin: https://anaconda.org/cs_genetics/multiqc-csgenetics
+## Update a recipe
 
-
-## Using the Packages
-
-### Add CS Genetics Channel
-
-Users add the channel to their conda configuration:
-
-```bash
-# Add channel globally
-conda config --add channels cs_genetics
-
-# Or specify in environment file
-```
-
-### In Conda Environment Files
-
-```yaml
-name: my_environment
-channels:
-  - cs_genetics
-  - conda-forge
-  - bioconda
-dependencies:
-  - csgenetics-qc=0.3.4
-  - multiqc-csgenetics=0.1.0
-  - umi_tools  # from bioconda
-```
-
-### Direct Installation
-
-```bash
-# Install from cs_genetics channel
-conda install -c cs_genetics csgenetics-qc
-conda install -c cs_genetics multiqc-csgenetics
-
-# Install umi_tools from bioconda
-conda install -c bioconda umi_tools
-```
-
-
-## Updating Packages
-
-### Version Bumping
-
-1. Update version in source code
-2. Update version in `meta.yaml`
-3. Commit and tag (for git sources)
-4. Rebuild package
-5. Upload new version
-
-### Example: Updating QC to v0.3.5
-
-```bash
-# 1. Update qc source and tag
-cd /path/to/qc
-# ... make changes ...
-git tag v0.3.5
-git push --tags
-
-# 2. Update conda recipe
-cd conda-recipes/qc
-# Edit meta.yaml: change version to 0.3.5
-# Edit meta.yaml: increment build number OR reset to 0 for new version
-
-# 3. Rebuild
-conda build .
-
-# 4. Upload
-anaconda upload ~/miniconda3/conda-bld/linux-64/csgenetics-qc-0.3.5-0.tar.bz2 --user csgenetics
-```
+1. Update the version in the source package and its matching `meta.yaml` together.
+2. Reset the recipe build number to `0` for a new version, or increment it when rebuilding
+   unchanged source.
+3. Build and test the package with the applicable command above.
+4. Upload the exact artifact produced by conda-build.

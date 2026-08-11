@@ -8,6 +8,7 @@ set -euo pipefail
 repo_root=$(git rev-parse --show-toplevel)
 scratch_root=$(mktemp -d)
 trap 'rm -rf -- "$scratch_root"' EXIT
+success_message='OK: no internal-only paths, credentials, private S3 endpoints, local paths or external Conda sources staged.'
 
 create_case_repo() {
   local name=$1
@@ -32,8 +33,50 @@ expect_pass() {
     printf 'FAIL: expected %s to pass\n%s\n' "$name" "$output" >&2
     return 1
   fi
-  if [[ "$output" != "OK: no internal-only paths, credentials, private S3 endpoints or local paths staged." ]]; then
+  if [[ "$output" != "$success_message" ]]; then
     printf 'FAIL: %s returned unexpected output\n%s\n' "$name" "$output" >&2
+    return 1
+  fi
+}
+
+expect_recipe_path_pass() {
+  local name=$1
+  local content=$2
+  local case_repo output
+
+  case_repo=$(create_case_repo "$name")
+  mkdir -p "$case_repo/conda-recipes/example"
+  printf '%s\n' "$content" > "$case_repo/conda-recipes/example/meta.yaml"
+  git -C "$case_repo" add conda-recipes/example/meta.yaml
+  if ! output=$(cd "$case_repo" && tests/check_no_internal_files.sh 2>&1); then
+    printf 'FAIL: expected %s to pass\n%s\n' "$name" "$output" >&2
+    return 1
+  fi
+  if [[ "$output" != "$success_message" ]]; then
+    printf 'FAIL: %s returned unexpected output\n%s\n' "$name" "$output" >&2
+    return 1
+  fi
+}
+
+expect_recipe_path_failure() {
+  local name=$1
+  local content=$2
+  local case_repo output
+
+  case_repo=$(create_case_repo "$name")
+  mkdir -p "$case_repo/conda-recipes/example"
+  printf '%s\n' "$content" > "$case_repo/conda-recipes/example/meta.yaml"
+  git -C "$case_repo" add conda-recipes/example/meta.yaml
+  if output=$(cd "$case_repo" && tests/check_no_internal_files.sh 2>&1); then
+    printf 'FAIL: expected %s to fail\n' "$name" >&2
+    return 1
+  fi
+  if [[ "$output" != *"Conda recipe source path does not resolve inside this public repository"* ]]; then
+    printf 'FAIL: %s failed without the expected diagnostic\n%s\n' "$name" "$output" >&2
+    return 1
+  fi
+  if [[ "$output" == *"$content"* ]]; then
+    printf 'FAIL: %s repeated the recipe content in its diagnostic\n' "$name" >&2
     return 1
   fi
 }
@@ -152,6 +195,19 @@ expect_failure private_legacy_regional_path_style \
 expect_staged_failure \
   "${s3_scheme}${private_bucket}/staged/run.csv" \
   "${s3_scheme}${example_bucket}/working-tree/run.csv"
+
+expect_recipe_path_pass in_repository_recipe_source \
+  $'source:\n  path: ../../images/qc'
+expect_recipe_path_pass quoted_in_repository_recipe_source \
+  $'source:\n  - path: "../../images/qc" # tracked source'
+expect_recipe_path_failure escaping_recipe_source \
+  $'source:\n  path: ../../../sibling-project/images/qc'
+expect_recipe_path_failure absolute_recipe_source \
+  $'source:\n  path: /outside/repository/images/qc'
+expect_recipe_path_failure dynamic_recipe_source \
+  $'source:\n  path: {{ environ["QC_SOURCE"] }}'
+expect_recipe_path_failure shell_variable_recipe_source \
+  $'source:\n  path: $QC_SOURCE/images/qc'
 
 access_key='AK'
 access_key+='IA'

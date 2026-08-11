@@ -13,6 +13,9 @@ results_test_hsap_mmus_2_sample_full
 .pixi
 *.egg-info
 
+# Rust build artifacts (all in-repository crates)
+**/target/
+
 # Agent secrets and credentials (never commit)
 .env
 *.pem
