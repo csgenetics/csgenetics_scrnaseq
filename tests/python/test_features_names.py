@@ -29,6 +29,7 @@ import pytest
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 SCRIPT = os.path.join(REPO_ROOT, "bin", "features_names.py")
+IO_COUNT_EXTRACT = os.path.join(REPO_ROOT, "bin", "io_count_extract")
 GTFPARSE_ENV_DIR = os.path.join(REPO_ROOT, "tests", "requirements", "gtfparse")
 GTFPARSE_ENV_PYTHON = os.path.join(
     GTFPARSE_ENV_DIR, ".pixi", "envs", "default", "bin", "python"
@@ -97,3 +98,87 @@ def test_features_names_tsv(tmp_path):
     # Missing gene_name replaced by gene_id; version suffix stripped.
     assert "ENSG003" in rows
     assert rows["ENSG003"] == ("ENSG003", "chrM")
+
+
+@pytest.mark.integration
+def test_custom_reference_gene_ids_match_io_count_output(tmp_path):
+    """GTF feature IDs and XT tags use the same normalization contract."""
+    source_ids = [
+        "gene-alpha",
+        "gene:beta",
+        "gene.with.words",
+        "gene_under_score",
+        "12345",
+        "versioned-gene.7",
+        "gène-δ",
+    ]
+    expected_ids = [
+        "gene-alpha",
+        "gene:beta",
+        "gene.with.words",
+        "gene_under_score",
+        "12345",
+        "versioned-gene",
+        "gène-δ",
+    ]
+    gtf = tmp_path / "custom.gtf"
+    gtf.write_text("\n".join(
+        f'chr1\tsrc\tgene\t{i}\t{i + 1}\t.\t+\t.\t'
+        f'gene_id "{gene_id}"; gene_name "Gene{i}";'
+        for i, gene_id in enumerate(source_ids, start=1)
+    ) + "\n")
+    features = tmp_path / "custom_features_names.tsv"
+
+    features_result = subprocess.run(
+        _gtfparse_python() + [SCRIPT, str(gtf), str(features)],
+        capture_output=True,
+        text=True,
+        cwd=str(tmp_path),
+    )
+    assert features_result.returncode == 0, features_result.stderr
+    feature_ids = pd.read_csv(features, sep="\t")["gene_id"].tolist()
+    assert feature_ids == expected_ids
+
+    sam = "\n".join(
+        "read_ACGTACGTACGTA_\t0\tchr1\t1\t255\t1M\t*\t0\t0\tA\tI\t"
+        f"XT:Z:{gene_id}"
+        for gene_id in source_ids
+    ) + "\n"
+    extract_result = subprocess.run(
+        [IO_COUNT_EXTRACT],
+        input=sam,
+        capture_output=True,
+        text=True,
+        cwd=str(tmp_path),
+    )
+    assert extract_result.returncode == 0, extract_result.stderr
+    extracted_ids = [
+        line.split("\t", 1)[1]
+        for line in extract_result.stdout.splitlines()
+    ]
+    assert extracted_ids == expected_ids
+    assert set(extracted_ids) == set(feature_ids)
+
+
+@pytest.mark.integration
+def test_version_normalization_collision_fails_loudly(tmp_path):
+    gtf = tmp_path / "collision.gtf"
+    gtf.write_text("\n".join([
+        'chr1\tsrc\tgene\t1\t2\t.\t+\t.\tgene_id "custom.1"; gene_name "One";',
+        'chr1\tsrc\tgene\t3\t4\t.\t+\t.\tgene_id "custom"; gene_name "Two";',
+        '',
+    ]))
+    output = tmp_path / "features_names.tsv"
+
+    result = subprocess.run(
+        _gtfparse_python() + [SCRIPT, str(gtf), str(output)],
+        capture_output=True,
+        text=True,
+        cwd=str(tmp_path),
+    )
+
+    assert result.returncode != 0
+    assert "collide after version normalization" in result.stderr
+    assert "custom.1" in result.stderr
+    assert "custom" in result.stderr
+    assert not output.exists()

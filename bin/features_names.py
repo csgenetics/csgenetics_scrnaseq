@@ -19,6 +19,9 @@ import pandas as pd
 pd.options.mode.chained_assignment = None  # default='warn'
 
 
+VERSION_SUFFIX_PATTERN = r"\.[0-9]+$"
+
+
 def isnan(value):
     try:
         return math.isnan(float(value))
@@ -42,8 +45,43 @@ feature_names_out_path = sys.argv[2]
 # Keep selected columns
 gtf_obj = read_gtf(gtf_in_path, usecols=['gene_id','seqname','gene_name'])
 
-# Remove version suffix e.g. ".1" from the gene_id
-gtf_obj["gene_id"] = gtf_obj["gene_id"].str.replace("\.\d+$", "", regex=True)
+# Keep gene-ID normalization in lockstep with tools/io_count_extract: remove only a
+# terminal numeric version suffix (e.g. ".1"), preserving all other punctuation and
+# Unicode. Reject collisions rather than allowing the count-table merge to duplicate
+# counts for two distinct source identifiers that normalize to the same value.
+if gtf_obj["gene_id"].isna().any() or (gtf_obj["gene_id"].str.len() == 0).any():
+    raise ValueError("GTF contains an empty gene_id")
+
+original_gene_ids = gtf_obj["gene_id"].copy()
+normalized_gene_ids = original_gene_ids.str.replace(
+    VERSION_SUFFIX_PATTERN, "", regex=True
+)
+if (normalized_gene_ids.str.len() == 0).any():
+    raise ValueError("GTF gene_id is empty after version normalization")
+
+gene_id_mapping = pd.DataFrame({
+    "original": original_gene_ids,
+    "normalized": normalized_gene_ids,
+}).drop_duplicates()
+collision_counts = gene_id_mapping.groupby("normalized")["original"].nunique()
+colliding_ids = collision_counts[collision_counts > 1].index.tolist()
+if colliding_ids:
+    collision_details = []
+    for normalized_id in colliding_ids:
+        originals = sorted(
+            gene_id_mapping.loc[
+                gene_id_mapping["normalized"] == normalized_id, "original"
+            ].tolist()
+        )
+        collision_details.append(
+            f"{normalized_id!r} <- {', '.join(repr(value) for value in originals)}"
+        )
+    raise ValueError(
+        "GTF gene IDs collide after version normalization: "
+        + "; ".join(collision_details)
+    )
+
+gtf_obj["gene_id"] = normalized_gene_ids
 
 feature_names_obj = gtf_obj.drop_duplicates()
 

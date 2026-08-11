@@ -9,16 +9,22 @@ a featureCounts gene assignment (`XT:Z:` tag). The original implementation piped
 into an `awk` one-liner. The production container (`quay.io/biocontainers/samtools:1.17`) ships
 **BusyBox awk**, which is very slow; on a 1.4 GB mixed-species dedup BAM that stage took ~409 s.
 
-`io_count_extract` reads the same `samtools view` text stream on stdin and does the identical
-transform in compiled code, **byte-for-byte** with the awk (verified on human, empty/intergenic
-edge cases, and a 1.4 GB barnyard BAM). It is streaming and low-memory (the process is capped at
-1 GB RAM). On the 1.4 GB BAM the stage drops from ~409 s to ~22 s.
+`io_count_extract` reads the same `samtools view` text stream on stdin and performs the transform
+in compiled code. It is streaming and low-memory (the process is capped at 1 GB RAM). On the
+1.4 GB BAM the stage drops from ~409 s to ~22 s.
 
-Replaces exactly:
+It originally replaced this command byte-for-byte:
 ```
 awk '/XT:/ {match($1, /_[A-Z]+_$/); printf substr($0,RSTART+1,RLENGTH-2);
             match($0, /XT:Z:[A-Za-z0-9_]+/); print "\t" substr($0,RSTART+5,RLENGTH-5)}'
 ```
+
+The awk character class silently truncated valid custom-reference identifiers at punctuation.
+The extractor now parses `XT:Z:` as a complete SAM optional field and removes only a terminal
+numeric version suffix such as `.12`, matching `bin/features_names.py`. Hyphens, colons, other
+dots, underscores, spaces, and UTF-8 bytes are preserved. A malformed, empty, non-string, or
+duplicate `XT` field fails loudly; a record without `XT` is skipped. Distinct GTF identifiers that
+would collide after version normalization are rejected by `features_names.py`.
 
 ## Why a committed binary
 
@@ -32,10 +38,11 @@ targets are x86_64 (AWS Batch / Seqera), matching the binary target.
 
 ```
 cd tools/io_count_extract
-cargo build --release --target x86_64-unknown-linux-musl
+cargo build --locked --release --target x86_64-unknown-linux-musl
 strip target/x86_64-unknown-linux-musl/release/io_count_extract
 cp target/x86_64-unknown-linux-musl/release/io_count_extract ../../bin/io_count_extract
 ```
 
-The source has no third-party dependencies, so the build is hermetic given a Rust toolchain with
-the `x86_64-unknown-linux-musl` target installed (`rustup target add x86_64-unknown-linux-musl`).
+The source has no third-party dependencies and the lockfile is committed, so the build is
+hermetic given a Rust toolchain with the `x86_64-unknown-linux-musl` target installed
+(`rustup target add x86_64-unknown-linux-musl`).
