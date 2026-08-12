@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.0.0 - 2026-08-11
+## 2.0.0 - 2026-08-12
 
 Major overhaul: Nextflow 26 migration, performance, per-process module structure, a
 consolidated report, and run-to-run reproducibility. The changes below are runtime,
@@ -92,8 +92,13 @@ the full results, and the known differences.
 
 ### Fixed
 
-Three pre-existing bugs, all present in 1.x, found by heavy multi-lane testing. **All three caused
-the run to fail loudly; none could produce silently incorrect results.**
+All of the following were present in 1.x. They fall into two groups, and the distinction matters
+when deciding whether past results need revisiting.
+
+#### Failed loudly — could not produce incorrect results
+
+Found by heavy multi-lane testing. In each case the run stopped; it never completed with bad
+numbers.
 
 - **Multi-lane runs failed.** The cell-caller threshold channel was parsed once per input-CSV
   *row*, but a multi-lane sample occupies one row per lane. A four-lane sample therefore produced
@@ -106,6 +111,32 @@ the run to fail loudly; none could produce silently incorrect results.**
   hold a file path, failing with `Not a valid path value`. Replaced with a deterministic
   `join(by: 0)`.
 - **Empty-sample deduplication log.** Wrote a literal `\n` rather than a newline.
+
+#### Produced incorrect results silently
+
+Found during release hardening. These completed without error and returned wrong values, so if
+you are affected, results produced under 1.x should be reviewed.
+
+- **A manual Cell Caller threshold could be ignored.** Where a sample's count distribution was
+  degenerate or too small for the automatic threshold fit, the pipeline fell back to the default
+  threshold instead of using the manual threshold supplied in the sample sheet. A manual threshold
+  of `0` was also not honoured. Affected samples were cell-called against a threshold the user did
+  not ask for, with no warning. Manual thresholds are now authoritative wherever they are
+  supplied, and an unparseable one fails loudly rather than being silently discarded.
+- **Empty and multimapper-only samples produced wrong metrics.** A read that was a primary
+  multimapper alignment could be counted more than once, and samples that yielded no cells had no
+  defined handling. Count reductions are now exact over an explicit empty-sample contract, and
+  metrics for such samples are finite and zero rather than arbitrary.
+- **Custom-reference gene identifiers were truncated.** The 1.x `io_count` awk character class
+  accepted only letters, digits and underscores from an `XT:Z:` gene assignment, silently
+  discarding the remainder of any identifier containing a hyphen, colon, dot, space or UTF-8 byte.
+  Counts for those genes were attributed to a truncated name. Only custom references are affected;
+  the CS Genetics curated references were byte-identical through this step. See
+  [docs/validation.md](docs/validation.md) known difference 5.
+- **Count statistics accumulated in `float32`.** Cell and count metrics densified the matrix and
+  summed in single precision, so means and percentages could carry rounding error in their
+  low-order digits. Reductions are now exact-integer and sparse. See
+  [`docs/count-statistics.md`](docs/count-statistics.md) and known difference 4.
 
 ### Added
 
