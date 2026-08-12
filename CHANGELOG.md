@@ -52,7 +52,9 @@ the full results, and the known differences.
   single-threaded steps and rewrote/parallelised them. Verified on 8 real human samples (cell calls
   identical to before, read counts within ~0.003%); total compute dropped ~39% (945 -> 579 CPU-min):
   - `io_count`: the awk pass ran on BusyBox awk (the production container's awk) and was the single
-    largest cost. Replaced with a static Rust binary (`bin/io_count_extract`, byte-identical) -> ~150x.
+    largest cost. Replaced with a static Rust binary (`bin/io_count_extract`) -> ~150x. Output was
+    byte-identical on the standard validation references; punctuated custom-reference identifiers
+    that the old awk expression truncated are intentionally corrected as described below.
   - `dedup`: `umi_tools dedup` is single-threaded but position-local, so it is now split by reference
     contig and run in parallel (`bin/dedup_by_contig.sh`), counts identical -> ~2.5x.
   - `multimapper_transcript_assignment`/`multimapper_exon_assignment`: the multimapper assignment is
@@ -74,6 +76,11 @@ the full results, and the known differences.
   accumulation rounded; on sufficiently high-count matrices that correction can also change the
   last digits displayed in the report. See
   [`docs/count-statistics.md`](docs/count-statistics.md).
+- **Custom-reference gene identifiers.** `io_count_extract` now parses the complete SAM `XT:Z:`
+  optional field and removes only a terminal numeric version suffix, matching the GTF feature
+  extractor. Hyphens, colons, other dots, underscores, spaces, and UTF-8 bytes are preserved;
+  malformed or duplicate `XT` fields and normalization collisions fail loudly. This deliberately
+  changes output only where the 1.x awk character class truncated a valid custom identifier.
 - **Structure.** The monolithic `modules/processes.nf` is split into per-process modules at
   `modules/local/<name>/main.nf` (nf-core local-module layout).
 

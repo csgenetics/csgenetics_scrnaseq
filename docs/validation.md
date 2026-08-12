@@ -114,7 +114,7 @@ The largest single contributions:
 
 | Process | Speed-up | Why |
 |---------|----------|-----|
-| `io_count` | ~154x | The counting pass ran on BusyBox awk, the production container's awk and by far the slowest; replaced with a compiled binary producing byte-identical output |
+| `io_count` | ~154x | The counting pass ran on BusyBox awk, the production container's awk and by far the slowest; replaced with a compiled binary that was byte-identical on the standard validation references while intentionally correcting punctuated custom identifiers (known difference 5) |
 | `umr_transcript_assignment` | 5.2x | Threaded BAM compression |
 | `filter_for_multimappers_mismatch` | 3.1x | Threaded BAM compression |
 | `dedup` | 2.5x | `umi_tools dedup` is single-threaded but position-local, so it is now split by contig and run in parallel |
@@ -161,6 +161,15 @@ also correct the last displayed decimal digits. These are approved arithmetic co
 cross-version metric files remain diagnostic `TEXT_EXACT` differences rather than being claimed
 byte-identical. The validation and overflow contract is documented in
 [Count-statistics arithmetic](count-statistics.md).
+
+**5. Punctuated custom-reference gene identifiers are corrected.** The 1.x `io_count` awk
+character class accepted only letters, digits, and underscores in an `XT:Z:` gene assignment, so
+it silently truncated otherwise valid identifiers containing hyphens, colons, dots, spaces, or
+UTF-8 bytes. The 2.0 extractor reads the complete SAM optional field and removes only a terminal
+numeric version suffix, using the same normalization as GTF feature extraction. Standard
+validation references were byte-identical for this step; affected custom references intentionally
+receive the complete corrected identifier. Malformed or duplicate `XT` fields and distinct GTF
+identifiers that would collide after version normalization fail loudly.
 
 ## Multi-lane and heavy-sample testing
 

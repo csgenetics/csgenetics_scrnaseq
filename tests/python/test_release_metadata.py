@@ -137,3 +137,15 @@ def test_comparator_envelope_is_scoped_to_diagnostic_cross_version_use():
         "it is not a relaxation expected in the same-version\n"
         "reproducibility gate"
     ) in comparator_docs
+
+
+def test_io_count_docs_disclose_the_custom_identifier_correction():
+    changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    validation = (REPO_ROOT / "docs/validation.md").read_text(encoding="utf-8")
+
+    assert "`io_count_extract`, byte-identical)" not in changelog
+    assert "compiled binary producing byte-identical output" not in validation
+    assert "Custom-reference gene identifiers" in changelog
+    assert "One note on custom references" in readme
+    assert "Punctuated custom-reference gene identifiers are corrected" in validation

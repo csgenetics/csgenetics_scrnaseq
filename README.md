@@ -125,6 +125,13 @@ order and could vary between runs; it is now deterministic. This is a one-time e
 borderline cell, and re-running 1.x data through 2.0.0 reproduced the same biology. See
 [CHANGELOG.md](CHANGELOG.md) for the full detail.
 
+**One note on custom references.** Gene identifiers containing punctuation are now preserved from
+the GTF through the count matrix instead of being truncated by the former awk extractor. Only a
+terminal numeric version suffix such as `.12` is removed. Distinct identifiers that would collide
+after that normalization now fail loudly rather than being merged. Standard-reference validation
+was byte-identical for this extraction step; this is an intentional correction for affected custom
+references.
+
 ### It should also be faster, and cost less
 
 2.0.0 uses **39% less compute** than 1.x on the same data. Time-to-result improved roughly 1.7x on
