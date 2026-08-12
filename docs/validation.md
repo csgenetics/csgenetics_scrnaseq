@@ -114,7 +114,7 @@ The largest single contributions:
 
 | Process | Speed-up | Why |
 |---------|----------|-----|
-| `io_count` | ~154x | The counting pass ran on BusyBox awk, the production container's awk and by far the slowest; replaced with a compiled binary producing byte-identical output |
+| `io_count` | ~154x | The counting pass ran on BusyBox awk, the production container's awk and by far the slowest; replaced with a compiled binary that was byte-identical on the standard validation references while intentionally correcting punctuated custom identifiers (known difference 5) |
 | `umr_transcript_assignment` | 5.2x | Threaded BAM compression |
 | `filter_for_multimappers_mismatch` | 3.1x | Threaded BAM compression |
 | `dedup` | 2.5x | `umi_tools dedup` is single-threaded but position-local, so it is now split by contig and run in parallel |
@@ -150,6 +150,27 @@ equivalent — representative read for some UMI groups, because parallel dedupli
 the choice of which PCR duplicate represents the molecule differs. If you consume `dedup.bam`
 directly rather than the count matrices, this is worth knowing.
 
+**4. Exact sparse count arithmetic can correct low-order decimal digits.** During release
+hardening, count-statistics reductions were changed from dense `float32` accumulation to validated
+exact-integer sparse arithmetic. Metric definitions, CSV schemas, integer totals, and the values
+shown in customer reports retain their two-decimal formatting. The raw decimal spelling of a mean
+or percentage in `*.metrics.csv` can differ where the former `float32` accumulation rounded (for
+example, an approximation of 30% becomes exactly `30.0`). On the representative validation
+fixtures the correction was below report display precision; sufficiently high valid counts can
+also correct the last displayed decimal digits. These are approved arithmetic corrections, so
+cross-version metric files remain diagnostic `TEXT_EXACT` differences rather than being claimed
+byte-identical. The validation and overflow contract is documented in
+[Count-statistics arithmetic](count-statistics.md).
+
+**5. Punctuated custom-reference gene identifiers are corrected.** The 1.x `io_count` awk
+character class accepted only letters, digits, and underscores in an `XT:Z:` gene assignment, so
+it silently truncated otherwise valid identifiers containing hyphens, colons, dots, spaces, or
+UTF-8 bytes. The 2.0 extractor reads the complete SAM optional field and removes only a terminal
+numeric version suffix, using the same normalization as GTF feature extraction. Standard
+validation references were byte-identical for this step; affected custom references intentionally
+receive the complete corrected identifier. Malformed or duplicate `XT` fields and distinct GTF
+identifiers that would collide after version normalization fail loudly.
+
 ## Multi-lane and heavy-sample testing
 
 Beyond equivalence, 2.0.0 was tested on deliberately demanding input: four lane-merged samples,
@@ -175,21 +196,51 @@ done this.
 The comparator used for this work ships with the pipeline:
 
 ```bash
-# Strict: requires byte-identical outputs. Use this to compare two 2.0.0 runs.
+# Strict: requires output equivalence with no count-matrix envelope.
+# Use this to compare two 2.0.0 runs.
 python tests/regression/compare_outputs.py <outdir_a> <outdir_b>
 
-# Envelope: allows up to N count-matrix entries to differ, provided per-barcode
-# column sums are identical. Use this across the 1.x -> 2.0.0 boundary.
-python tests/regression/compare_outputs.py <old_outdir> <new_outdir> --envelope-max-flips 200
+# Optional cross-version diagnostic: stage matching relative paths into two
+# non-empty directories and retain the per-file details for review.
+python tests/regression/compare_outputs.py <old_common> <new_common> \
+  --allow-subset --envelope-max-flips 200 --json cross-version.json
 ```
 
-Strict mode is the default and requires byte-exact agreement. Envelope mode relaxes *only* the
-count-matrix comparison, and only on a specific condition: per-barcode column sums must still be
-identical, and the number of differing entries must fall within the budget you give it. Every
-other class of output stays strict regardless. That condition is what makes it a meaningful test
-rather than a loosened one — it permits a read to move between two genes, but not to appear,
-disappear, or move between barcodes.
+Do not point the cross-version command at both complete output directories.
+2.0 intentionally removes and replaces report filenames and changes execution
+metadata, so whole-tree path equality across the major-version boundary is
+neither expected nor what was validated here. For this release validation,
+`old_common` and `new_common` preserved matching relative paths for metrics,
+RSeQC, dedup and raw/filtered matrix outputs. This was a diagnostic inventory,
+not a command expected to exit zero: the strict `TEXT_EXACT` metric/RSeQC
+classes and strict dedup-count contract correctly reported the measured
+cross-version changes described above. Each `DIFFER` was reconciled with those
+results, and matrix envelope verdicts were assessed separately for the
+net-preserving ambiguity. `--allow-subset` disables the 2.0 complete-run
+`pipeline_info` manifest and the 2.0-only deterministic gzip-byte assertion;
+it still validates and compares the legacy archives' decompressed payloads,
+does not relax any other selected file, and does not turn a known value change
+into a pass.
+
+Strict mode is the default and applies each output class's documented equivalence contract with no
+count-matrix ambiguity allowance. Envelope mode relaxes *only* the count-matrix comparison, and
+only on a specific condition: per-barcode column sums must still be identical, and the number of
+differing entries must fall within the budget you give it. Every other class of output stays
+strict regardless. That condition is what makes it a meaningful test rather than a loosened one —
+it permits a read to move between two genes, but not to appear, disappear, or move between
+barcodes.
 
 Choose the budget to suit your data; `--json` writes the full result set if you want to inspect
 what differed. Within 2.0.0, strict mode should pass — the pipeline is now reproducible run to
-run.
+run under those per-class semantic/output contracts. This does not assert whole-directory byte
+identity: for example, the deduplicated-BAM contract deliberately permits a different representative
+read for the same stable molecule, while STAR, initial featureCounts and high-confidence annotated
+BAMs retain their full alignment content; run-specific Nextflow task IDs/timings/resources are
+normalised.
+MultiQC timestamps, work/temp directories and equivalent provenance paths are likewise
+normalised while its report data remains part of the comparison.
+The raw and filtered tripartite count-matrix archives have the stronger guarantee: identical
+inputs produce byte-identical `barcodes.tsv.gz`, `features.tsv.gz`, and `matrix.mtx.gz` files.
+The default complete-tree comparator validates each decompressed payload and then enforces those
+archive bytes; the explicit cross-version `--allow-subset` diagnostic compares legacy decompressed
+semantics because 1.x did not have the deterministic gzip-header contract.

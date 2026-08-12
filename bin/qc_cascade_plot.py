@@ -8,30 +8,95 @@ Multi-sample mode: Box plots showing distribution of reads retained across sampl
 """
 
 import argparse
+import csv
+import math
+from pathlib import Path
+import sys
+
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
 from plotly.subplots import make_subplots
-import sys
 
 
-def write_plotly_fragment(fig, html_filename):
+PLOTLY_CONFIG = {"responsive": True, "displaylogo": False}
+METRICS_HEADER = [
+    "variable_name",
+    "value",
+    "human_readable_name",
+    "description",
+    "classification",
+]
+REQUIRED_READ_QC_METRICS = (
+    "reads_pre_qc",
+    "barcode_exact_match",
+    "barcode_corrected",
+    "barcode_failed",
+    "barcode_valid_total",
+    "sss_retained",
+    "sss_too_short",
+    "polyx_retained",
+    "polyx_too_short",
+    "quality_retained",
+    "quality_failed",
+    "n_base_retained",
+    "n_base_failed",
+    "polya_retained",
+    "polya_too_short",
+)
+
+
+def safe_proportion(value, denominator):
+    """Return a finite proportion, defining every zero/zero QC step as zero."""
+    return 0.0 if denominator == 0 else value / denominator
+
+
+def write_plotly_outputs(fig, fragment_filename, standalone_filename):
     """
-    Write a Plotly figure as a bare HTML fragment with NO Plotly.js bundled.
+    Write distinct consolidated-report and standalone Plotly outputs.
 
-    These fragments are embedded into the consolidated report, which loads a
-    single inline copy of Plotly.js once. Keeping Plotly.js out of each
-    fragment keeps the consolidated report offline-safe and avoids loading
-    Plotly.js once per plot.
+    ``fragment_filename`` deliberately omits Plotly.js because the consolidated
+    report embeds one shared copy. ``standalone_filename`` embeds Plotly.js so
+    the separately published plot remains usable without internet access.
+
+    Keeping the two files distinct is important: publishing the fragment under
+    the customer-facing filename creates a page that is blank when opened on
+    its own, while feeding the standalone file into the consolidated report
+    needlessly duplicates several megabytes of JavaScript for every plot.
     """
     fragment = pio.to_html(
         fig,
         full_html=False,
         include_plotlyjs=False,
-        config={"responsive": True, "displaylogo": False},
+        config=PLOTLY_CONFIG,
     )
-    with open(html_filename, "w") as f:
+    standalone_plot = pio.to_html(
+        fig,
+        full_html=False,
+        include_plotlyjs=True,
+        config=PLOTLY_CONFIG,
+    )
+    standalone = f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; frame-src 'none'; object-src 'none'; media-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>QC cascade plot</title>
+  <style>
+    body {{ font-family: Lexend, system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; }}
+  </style>
+</head>
+<body>
+{standalone_plot}
+</body>
+</html>
+"""
+    with open(fragment_filename, "w", encoding="utf-8") as f:
         f.write(fragment)
+    with open(standalone_filename, "w", encoding="utf-8") as f:
+        f.write(standalone)
+
 
 class QCCascadePlotter:
     def __init__(self, mode, sample_id=None):
@@ -48,23 +113,84 @@ class QCCascadePlotter:
         self.loss_3 = "#D3D3D3"  # Light gray
 
     def read_metrics_csv(self, csv_path):
-        """Read metrics from CSV and return as dictionary"""
+        """Read and validate the complete Read-QC schema used by the cascade."""
         metrics = {}
-        with open(csv_path, 'r') as f:
-            header = next(f)  # Skip header
-            for line in f:
-                parts = line.strip().split(',', 4)
-                if len(parts) < 5:
+        with open(csv_path, 'r', newline='', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            try:
+                header = next(reader)
+            except StopIteration as exc:
+                raise ValueError(f"Metrics CSV is empty: {csv_path}") from exc
+            if header != METRICS_HEADER:
+                raise ValueError(
+                    f"Metrics CSV {csv_path} has invalid header {header!r}; "
+                    f"expected {METRICS_HEADER!r}"
+                )
+
+            for line_number, row in enumerate(reader, start=2):
+                if len(row) != len(METRICS_HEADER):
+                    raise ValueError(
+                        f"Metrics CSV {csv_path} row {line_number} has "
+                        f"{len(row)} columns; expected {len(METRICS_HEADER)}"
+                    )
+                var_name, value, _human_name, _description, classification = row
+                if var_name not in REQUIRED_READ_QC_METRICS:
                     continue
-                var_name, value, human_name, description, classification = parts
-                if classification == "Read QC":
+                if classification != "Read QC":
+                    raise ValueError(
+                        f"Required metric {var_name!r} in {csv_path} row "
+                        f"{line_number} has classification {classification!r}; "
+                        "expected 'Read QC'"
+                    )
+                if var_name in metrics:
+                    raise ValueError(
+                        f"Required metric {var_name!r} occurs more than once "
+                        f"in {csv_path} (duplicate at row {line_number})"
+                    )
+                try:
+                    numeric = int(value)
+                except ValueError:
                     try:
-                        metrics[var_name] = int(value)
-                    except ValueError:
-                        try:
-                            metrics[var_name] = float(value)
-                        except ValueError:
-                            pass  # Skip non-numeric values
+                        numeric = float(value)
+                    except ValueError as exc:
+                        raise ValueError(
+                            f"Required metric {var_name!r} in {csv_path} row "
+                            f"{line_number} is not numeric: {value!r}"
+                        ) from exc
+                if isinstance(numeric, float) and not math.isfinite(numeric):
+                    raise ValueError(
+                        f"Required metric {var_name!r} in {csv_path} row "
+                        f"{line_number} is not finite: {value!r}"
+                    )
+                if isinstance(numeric, float) and not numeric.is_integer():
+                    raise ValueError(
+                        f"Required metric {var_name!r} in {csv_path} row "
+                        f"{line_number} is not an integer count: {value!r}"
+                    )
+                if numeric < 0:
+                    raise ValueError(
+                        f"Required metric {var_name!r} in {csv_path} row "
+                        f"{line_number} is negative: {value!r}"
+                    )
+                metrics[var_name] = int(numeric)
+
+        missing = [name for name in REQUIRED_READ_QC_METRICS if name not in metrics]
+        if missing:
+            raise ValueError(
+                f"Metrics CSV {csv_path} is missing required Read-QC metric(s): "
+                + ", ".join(missing)
+            )
+        if metrics["reads_pre_qc"] == 0:
+            nonzero = [
+                name
+                for name in REQUIRED_READ_QC_METRICS
+                if name != "reads_pre_qc" and metrics[name] != 0
+            ]
+            if nonzero:
+                raise ValueError(
+                    f"Metrics CSV {csv_path} has zero reads_pre_qc but nonzero "
+                    "downstream Read-QC metric(s): " + ", ".join(nonzero)
+                )
         return metrics
 
     def create_single_sample_plot(self, metrics):
@@ -204,7 +330,7 @@ class QCCascadePlotter:
                 marker_color=row['color'],
                 hovertemplate=f"<b>{row['step']}</b><br>" +
                               f"{row['metric']}: {row['value']:,}<br>" +
-                              f"{row['value']/raw_reads*100:.2f}% of input<extra></extra>",
+                              f"{safe_proportion(row['value'], raw_reads)*100:.2f}% of input<extra></extra>",
                 showlegend=False
             ))
 
@@ -232,9 +358,18 @@ class QCCascadePlotter:
             margin=dict(l=80, r=40, t=80, b=80)
         )
 
-        # Save as a Plotly-free fragment for embedding into the consolidated report.
-        write_plotly_fragment(fig, f"{self.sample_id}.qc_cascade.html")
-        print(f"Created single-sample QC cascade plot: {self.sample_id}.qc_cascade.html")
+        # The fragment retains the historical task-local filename because the
+        # consolidated-report generator discovers it by sample id. Nextflow
+        # publishes only the standalone file, renaming it back to the stable
+        # customer-facing ``<sample>.qc_cascade.html`` filename.
+        fragment_filename = f"{self.sample_id}.qc_cascade.html"
+        standalone_filename = f"{self.sample_id}.qc_cascade.standalone.html"
+        write_plotly_outputs(fig, fragment_filename, standalone_filename)
+        print(
+            "Created single-sample QC cascade outputs: "
+            f"{fragment_filename}, {standalone_filename}"
+        )
+        return fig
 
     def create_multi_sample_plot(self, csv_files):
         """
@@ -245,18 +380,19 @@ class QCCascadePlotter:
         all_samples_data = []
 
         for csv_file in csv_files:
-            sample_id = csv_file.replace('.metrics.csv', '')
+            csv_name = Path(csv_file).name
+            sample_id = csv_name.removesuffix('.metrics.csv')
             metrics = self.read_metrics_csv(csv_file)
 
             sample_data = {
                 'sample_id': sample_id,
-                'Input': metrics.get('reads_pre_qc', 0),
-                'Barcode\nValidation': metrics.get('barcode_valid_total', 0),
-                'SSS\nTrimming': metrics.get('sss_retained', 0),
-                'PolyX\nTrimming': metrics.get('polyx_retained', 0),
-                'Quality\nFiltering': metrics.get('quality_retained', 0),
-                'N-Base\nFiltering': metrics.get('n_base_retained', 0),
-                'PolyA\nTrimming': metrics.get('polya_retained', 0)
+                'Input': metrics['reads_pre_qc'],
+                'Barcode\nValidation': metrics['barcode_valid_total'],
+                'SSS\nTrimming': metrics['sss_retained'],
+                'PolyX\nTrimming': metrics['polyx_retained'],
+                'Quality\nFiltering': metrics['quality_retained'],
+                'N-Base\nFiltering': metrics['n_base_retained'],
+                'PolyA\nTrimming': metrics['polya_retained']
             }
             all_samples_data.append(sample_data)
 
@@ -269,8 +405,10 @@ class QCCascadePlotter:
         # Calculate proportional data (normalized to Input = 1.0)
         df_prop = df.copy()
         for step in steps:
-            if step != 'sample_id':
-                df_prop[step] = df[step] / df['Input']
+            df_prop[step] = [
+                safe_proportion(value, input_reads)
+                for value, input_reads in zip(df[step], df['Input'])
+            ]
 
         # Create color palette for samples
         import plotly.express as px
@@ -538,9 +676,14 @@ class QCCascadePlotter:
             row=2, col=1
         )
 
-        # Save as a Plotly-free fragment for embedding into the consolidated report.
-        write_plotly_fragment(fig, "multisample_qc_cascade.html")
-        print(f"Created multi-sample QC cascade plot: multisample_qc_cascade.html")
+        fragment_filename = "multisample_qc_cascade.fragment.html"
+        standalone_filename = "multisample_qc_cascade.html"
+        write_plotly_outputs(fig, fragment_filename, standalone_filename)
+        print(
+            "Created multi-sample QC cascade outputs: "
+            f"{fragment_filename}, {standalone_filename}"
+        )
+        return fig
 
 
 def main():

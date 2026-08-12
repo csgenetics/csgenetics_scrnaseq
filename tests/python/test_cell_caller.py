@@ -1,5 +1,5 @@
 """
-Unit tests for the deterministic numeric core of bin/cell_caller.py.
+Tests for the deterministic numeric core and CLI behavior of bin/cell_caller.py.
 
 The CellCaller class performs all its work in __init__ (arg parsing, h5ad
 reading, plotting). We do NOT run __init__. Instead we build a bare instance
@@ -11,15 +11,26 @@ needs, so we can exercise the pure numeric logic in isolation:
   * ``get_prob_dens_data`` - KDE -> evenly sampled pdf dataframe.
   * ``assign_barcode_type``- mixed-species barcode classification rules.
 
-The plotting methods (generate_pdf_plot / generate_barnyard_plot) are not unit
-tested; they emit HTML and carry no metric arithmetic.
+The integration cases execute the CLI against tiny synthetic h5ad files so the
+manual-threshold value emitted to the downstream filtering process is covered.
 """
+
+import os
+import subprocess
+import sys
 
 import numpy as np
 import pandas as pd
 import pytest
+from scipy.sparse import csr_matrix
 
 import cell_caller as cc
+import create_consolidated_report as ccr
+
+
+SCRIPT = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "bin", "cell_caller.py")
+)
 
 
 def _bare_caller(minimum_count_threshold=100):
@@ -27,6 +38,317 @@ def _bare_caller(minimum_count_threshold=100):
     obj = object.__new__(cc.CellCaller)
     obj.minimum_count_threshold = minimum_count_threshold
     return obj
+
+
+def _write_single_species_h5ad(path, total_counts):
+    """Write a tiny one-gene matrix whose row sums equal total_counts."""
+    obs_names = [f"barcode_{index}" for index in range(len(total_counts))]
+    adata = cc.ad.AnnData(
+        X=csr_matrix(np.asarray(total_counts, dtype=np.float64).reshape(-1, 1)),
+        obs=pd.DataFrame(index=obs_names),
+        var=pd.DataFrame(index=["gene_1"]),
+    )
+    adata.write_h5ad(path)
+
+
+def _write_mixed_species_h5ad(path):
+    """Write populations that are valid for filtering but singular for KDE."""
+    obs = pd.DataFrame(
+        {
+            "hsap_counts": [5, 5, 1, 1],
+            "mmus_counts": [1, 1, 7, 7],
+        },
+        index=["human_1", "human_2", "mouse_1", "mouse_2"],
+    )
+    adata = cc.ad.AnnData(
+        X=csr_matrix(np.ones((4, 1), dtype=np.float64)),
+        obs=obs,
+        var=pd.DataFrame(index=["gene_1"]),
+    )
+    adata.write_h5ad(path)
+
+
+def _run_cell_caller(tmp_path, count_matrix, manual_threshold, single_species=True):
+    return subprocess.run(
+        [
+            sys.executable,
+            SCRIPT,
+            "--sample_name",
+            "sample",
+            "--single_species",
+            str(single_species),
+            "--minimum_count_threshold",
+            "100",
+            "--count_matrix",
+            str(count_matrix),
+            "--manual_threshold_str",
+            manual_threshold,
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+    )
+
+
+# ---------------------------------------------------------------------------
+# offline standalone plot output
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_standalone_plot_embeds_plotly_and_has_no_remote_font_or_script(tmp_path):
+    output = tmp_path / "cell_caller_plot.html"
+    figure = cc.go.Figure(data=cc.go.Scatter(x=[1, 2], y=[3, 4]))
+
+    cc.output_plot_to_html({"cell_caller_plot": figure}, output)
+
+    html = output.read_text(encoding="utf-8")
+    assert "<!doctype html>" in html.lower()
+    assert "Plotly.newPlot" in html
+    assert len(html) > 1_000_000, "Plotly.js was not embedded into standalone output"
+    assert "fonts.googleapis.com" not in html
+    assert '<script src="https://' not in html
+    assert "<script src='https://" not in html
+    assert '<script src="//cdn.' not in html
+
+
+@pytest.mark.unit
+def test_report_bound_cell_caller_plot_satisfies_trusted_fragment_contract(tmp_path):
+    output = tmp_path / "cell_caller_fragment.html"
+    figure = cc.go.Figure(data=cc.go.Scatter(x=[1, 2], y=[3, 4]))
+
+    cc.output_plot_to_html(
+        {"cell_caller_plot": figure}, output, include_plotlyjs=False
+    )
+
+    raw = output.read_text(encoding="utf-8")
+    trusted = ccr.validate_plot_fragment(raw)
+    assert "<html" not in raw.lower()
+    assert "Plotly.newPlot" in trusted
+    assert f'nonce="{ccr.REPORT_SCRIPT_NONCE}"' in trusted
+
+
+@pytest.mark.unit
+def test_dense_barnyard_scattergl_satisfies_trusted_fragment_contract(tmp_path):
+    """Plotly Express switches dense barnyards to scattergl automatically."""
+    output = tmp_path / "dense_barnyard_fragment.html"
+    frame = pd.DataFrame(
+        {
+            "mmus_counts": np.arange(1_001),
+            "hsap_counts": np.arange(1_001),
+        }
+    )
+    figure = cc.px.scatter(frame, x="mmus_counts", y="hsap_counts")
+    assert [trace.type for trace in figure.data] == ["scattergl"]
+
+    cc.output_plot_to_html(
+        {"dense_barnyard_plot": figure}, output, include_plotlyjs=False
+    )
+
+    trusted = ccr.validate_plot_fragment(output.read_text(encoding="utf-8"))
+    assert '"type":"scattergl"' in trusted.replace(" ", "")
+
+
+@pytest.mark.integration
+def test_standalone_cell_caller_plot_renders_offline(tmp_path):
+    playwright = pytest.importorskip("playwright.sync_api")
+    output = tmp_path / "cell_caller_plot.html"
+    figure = cc.go.Figure(data=cc.go.Scatter(x=[1, 2], y=[3, 4]))
+    cc.output_plot_to_html({"cell_caller_plot": figure}, output)
+
+    with playwright.sync_playwright() as runtime:
+        try:
+            browser = runtime.chromium.launch()
+        except Exception as exc:
+            pytest.skip(f"Playwright Chromium is unavailable: {exc}")
+
+        context = browser.new_context(offline=True)
+        page = context.new_page()
+        errors = []
+        remote_requests = []
+        page.on("console", lambda message: errors.append(message.text) if message.type == "error" else None)
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.on(
+            "request",
+            lambda request: remote_requests.append(request.url)
+            if request.url.startswith(("http://", "https://"))
+            else None,
+        )
+
+        page.goto(output.as_uri(), wait_until="load")
+        page.wait_for_selector(".js-plotly-plot .main-svg", state="attached", timeout=10_000)
+        assert page.evaluate("typeof window.Plotly !== 'undefined'")
+        assert remote_requests == []
+        assert errors == []
+        context.close()
+        browser.close()
+
+
+# ---------------------------------------------------------------------------
+# manual-threshold precedence and validation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("total_counts", [[7, 7, 7], [7]])
+def test_manual_threshold_is_used_for_degenerate_and_small_inputs(tmp_path, total_counts):
+    count_matrix = tmp_path / "counts.h5ad"
+    _write_single_species_h5ad(count_matrix, total_counts)
+    manual_log_threshold = str(np.log10(11))
+
+    result = _run_cell_caller(tmp_path, count_matrix, manual_log_threshold)
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "10"
+    assert (tmp_path / "sample_counts_pdf_with_threshold.html").stat().st_size == 0
+    assert (tmp_path / "sample_pdf_with_cutoff.html").stat().st_size == 0
+
+
+@pytest.mark.integration
+def test_zero_manual_threshold_is_valid_and_authoritative(tmp_path):
+    count_matrix = tmp_path / "counts.h5ad"
+    _write_single_species_h5ad(count_matrix, [7])
+
+    result = _run_cell_caller(tmp_path, count_matrix, "0")
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "0"
+
+
+@pytest.mark.integration
+def test_manual_mixed_thresholds_survive_degenerate_species_distributions(tmp_path):
+    count_matrix = tmp_path / "counts.h5ad"
+    _write_mixed_species_h5ad(count_matrix)
+    hsap_log_threshold = np.log10(11)
+    mmus_log_threshold = np.log10(21)
+
+    result = _run_cell_caller(
+        tmp_path,
+        count_matrix,
+        f"{hsap_log_threshold}_{mmus_log_threshold}",
+        single_species=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "10_20"
+    assert (tmp_path / "sample_hsap_pdf_with_cutoff.html").stat().st_size == 0
+    assert (tmp_path / "sample_mmus_pdf_with_cutoff.html").stat().st_size == 0
+    assert (tmp_path / "sample_barnyard_plot.html").stat().st_size > 0
+
+
+@pytest.mark.integration
+def test_partial_manual_mixed_threshold_preserves_manual_and_automatic_fallback(tmp_path):
+    count_matrix = tmp_path / "counts.h5ad"
+    _write_mixed_species_h5ad(count_matrix)
+
+    result = _run_cell_caller(
+        tmp_path,
+        count_matrix,
+        f"{np.log10(11)}_nan",
+        single_species=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "10_100"
+
+
+@pytest.mark.integration
+def test_degenerate_automatic_threshold_keeps_minimum_fallback(tmp_path):
+    count_matrix = tmp_path / "counts.h5ad"
+    _write_single_species_h5ad(count_matrix, [7])
+
+    result = _run_cell_caller(tmp_path, count_matrix, "nan")
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "100"
+
+
+@pytest.mark.integration
+def test_named_zero_byte_h5ad_uses_the_explicit_empty_path(tmp_path):
+    count_matrix = tmp_path / "sample.raw_feature_bc_matrix.empty.h5ad"
+    count_matrix.touch()
+
+    result = _run_cell_caller(tmp_path, count_matrix, "nan")
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "100"
+    assert (tmp_path / "sample_counts_pdf_with_threshold.html").stat().st_size == 0
+    assert (tmp_path / "sample_barnyard_plot.html").stat().st_size == 0
+    assert (tmp_path / "sample_pdf_with_cutoff.html").stat().st_size == 0
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "filename,payload",
+    [
+        ("generic-zero.h5ad", b""),
+        ("corrupt.h5ad", b"not an HDF5 file"),
+        ("nonempty.empty.h5ad", b"not an empty sentinel"),
+    ],
+)
+def test_invalid_h5ad_cannot_be_relabelled_as_empty(
+    tmp_path, filename, payload
+):
+    count_matrix = tmp_path / filename
+    count_matrix.write_bytes(payload)
+
+    result = _run_cell_caller(tmp_path, count_matrix, "nan")
+
+    assert result.returncode != 0
+    assert result.stdout == ""
+    assert not (tmp_path / "sample_counts_pdf_with_threshold.html").exists()
+    assert not (tmp_path / "sample_barnyard_plot.html").exists()
+    assert not (tmp_path / "sample_pdf_with_cutoff.html").exists()
+
+
+@pytest.mark.integration
+def test_missing_h5ad_fails_without_empty_outputs(tmp_path):
+    result = _run_cell_caller(tmp_path, tmp_path / "missing.empty.h5ad", "nan")
+
+    assert result.returncode != 0
+    assert "existing regular file" in result.stderr
+    assert result.stdout == ""
+    assert not (tmp_path / "sample_counts_pdf_with_threshold.html").exists()
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("manual_threshold", ["-0.1", "inf", "NaN", "invalid", "309"])
+def test_invalid_manual_threshold_fails_clearly(tmp_path, manual_threshold):
+    result = _run_cell_caller(
+        tmp_path,
+        tmp_path / "not-read-because-validation-fails.h5ad",
+        manual_threshold,
+    )
+
+    assert result.returncode == 2
+    assert "manual Cell Caller threshold" in result.stderr
+    assert result.stdout == ""
+
+
+@pytest.mark.unit
+def test_malformed_mixed_manual_threshold_fails_clearly(monkeypatch, capsys):
+    caller = object.__new__(cc.CellCaller)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            SCRIPT,
+            "--sample_name",
+            "sample",
+            "--single_species",
+            "false",
+            "--count_matrix",
+            "unused.h5ad",
+            "--manual_threshold_str",
+            "2.5",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as error:
+        caller.parse_arguments()
+
+    assert error.value.code == 2
+    assert "exactly two values separated by an underscore" in capsys.readouterr().err
 
 
 # ---------------------------------------------------------------------------

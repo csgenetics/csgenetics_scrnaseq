@@ -107,20 +107,33 @@ The separate per-sample and multi-sample HTML reports are replaced by one
 If you have scripts or LIMS integrations that consume the old report filenames, point them at
 `report/consolidated_report.html`.
 
-**Everything else in `report/` is unchanged**, including `report/<sample>/<sample>.metrics.csv`,
-`report/multisample_out.csv`, `report/multisample_qc_cascade.html` and
-`report/<sample>/<sample>.qc_cascade.html`. Metric *values* are unchanged, and all `.csv` outputs
-are byte-identical in format to 1.x.
+The remaining `report/` paths and CSV schemas are retained, including
+`report/<sample>/<sample>.metrics.csv`, `report/multisample_out.csv`,
+`report/multisample_qc_cascade.html` and
+`report/<sample>/<sample>.qc_cascade.html`. Their cross-version content is not
+byte-identical: the deterministic multimapper change causes the small metric
+and RSeQC deltas recorded in [the validation report](docs/validation.md#known-differences).
 
-**What has not changed:** parameters, the input CSV format, genome/profile names, and the
-`count_matrix` outputs. No change is needed to your sample sheets or launch commands beyond the
-Nextflow version.
+**What has not changed:** parameters, the documented input CSV layouts, genome/profile names,
+and the locations and file formats of the `count_matrix` outputs. Sample sheets using one of the
+documented headers need no changes, nor do launch commands beyond the Nextflow version. Version
+2.0 now rejects reordered, additional, or partially specified header columns instead of
+interpreting them positionally; see
+[Specifying input sequencing files](#specifying-input-sequencing-files).
 
 **One note on count matrices.** 2.0.0 resolves a pre-existing ambiguity in how multi-mapped reads
 were assigned. Previously the choice between equally-valid assignments depended on processing
 order and could vary between runs; it is now deterministic. This is a one-time effect on roughly
-0.3% of count-matrix entries. Cell calls are unaffected, and re-running 1.x data through 2.0.0
-reproduces the same biology. See [CHANGELOG.md](CHANGELOG.md) for the full detail.
+0.3% of count-matrix entries. In validation, cell calls were identical or differed by a single
+borderline cell, and re-running 1.x data through 2.0.0 reproduced the same biology. See
+[CHANGELOG.md](CHANGELOG.md) for the full detail.
+
+**One note on custom references.** Gene identifiers containing punctuation are now preserved from
+the GTF through the count matrix instead of being truncated by the former awk extractor. Only a
+terminal numeric version suffix such as `.12` is removed. Distinct identifiers that would collide
+after that normalization now fail loudly rather than being merged. Standard-reference validation
+was byte-identical for this extraction step; this is an intentional correction for affected custom
+references.
 
 ### It should also be faster, and cost less
 
@@ -141,11 +154,19 @@ records how 2.0.0 was validated against 1.x: 20 samples across four datasets cov
 supported genome types, the method (including why the baseline had to be determinism-controlled),
 the results, and an explicit account of what *did* change.
 
-The comparator used for that work ships with the pipeline, so you can run it on your own data:
+The comparator used for that work ships with the pipeline. Its release-gate use
+is to compare two runs made with the same 2.0 code and inputs:
 
 ```bash
-python tests/regression/compare_outputs.py <old_outdir> <new_outdir> --envelope-max-flips 200
+python tests/regression/compare_outputs.py <outdir_a> <outdir_b>
 ```
+
+The complete 1.x and 2.0 output trees are not directly path-comparable because
+this release intentionally replaces report files. A curated cross-version
+comparison is diagnostic rather than an all-green gate: metrics, RSeQC and
+some dedup counts have documented real deltas, and their strict comparator
+classes correctly report `DIFFER`. The linked validation guide explains how
+those results were reviewed without weakening future same-version gates.
 
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
 
@@ -276,7 +297,29 @@ The sequencing files to be analysed are specified using an input csv file.
 
 An example template can be found [here](input_csv/template.csv).
 
-The header row must be present and the full paths to files should be given.
+The header row must be present and must use one of the layouts below, in the order shown. Extra
+or reordered columns are rejected so read files and manual thresholds cannot be interpreted in
+the wrong positions. `sample_id` may be used instead of `sample`, and the legacy
+`manual_cellcaller_threshold` spelling (without the second underscore) remains accepted,
+including the corresponding `hsap_` and `mmus_` mixed-species column names.
+
+For a single-species reference:
+
+```text
+sample,fastq_1,fastq_2
+sample,fastq_1,fastq_2,manual_cell_caller_threshold
+```
+
+For `mouse_human_mix`:
+
+```text
+sample,fastq_1,fastq_2
+sample,fastq_1,fastq_2,hsap_manual_cell_caller_threshold,mmus_manual_cell_caller_threshold
+```
+
+If either mixed-species manual threshold is supplied, both threshold columns must be present;
+an individual value may be left blank to request automatic estimation for that species. The
+full paths to FASTQ files should be given.
 
 The `fastq_1` should contain the sequencing data that will be mapped to the genome. `fastq_2` should contain the CS Genetics barcode.
 
@@ -295,6 +338,10 @@ Multiple sets of sequencing files (e.g. from multiple lanes of sequencing)
 can be merged by the pipeline and used for a single sample
 by supplying the same sample name but with different sequencing file sets
 on separate lines.
+
+Sample names become output directory and file names. They must be 1-128
+characters, begin with a letter or number, and contain only letters, numbers,
+periods, underscores, or hyphens. The special names `.` and `..` are rejected.
 
 E.g.
 
@@ -383,6 +430,30 @@ The pipeline can be launched from Seqera Platform.
 The repository includes a `nextflow_schema.json` file that will automatically display required parameters when launching the pipeline from your Launchpad on Seqera Platform.
 
 To make use of containerization, don't forget to add an appropriate profile e.g. `docker` in the 'Config profiles' section of the 'Add pipeline' dialog.
+
+### Viewing the consolidated report in Seqera Platform
+
+The pipeline's `tower.yml` exposes the consolidated HTML report, the cross-sample metrics CSV,
+and the four Nextflow execution reports in the run's **Reports** tab. The paths match the files
+published under `report/` and `pipeline_info/`; no Launchpad override is needed.
+
+The consolidated report is self-contained, so its size grows with both the number and density of
+the sample plots. A scaling check using the repository's tiny single-species fixture measured
+approximately 5.7 MB of fixed assets plus 73.8 KB per sample (about 13.1 MB for 100 fixture
+samples). That is a test-fixture measurement, not a general per-sample estimate. Mixed-species
+barnyard plots can be much larger: representative fragments measured approximately 0.316 MB at
+10,000 barcodes and 3.068 MB at 100,000 barcodes. A dense 100,000-barcode mixed-species run can
+therefore cross Seqera's preview limit with around two samples.
+
+Seqera Platform previews reports smaller than 10 MB and directly downloads reports smaller than
+25 MB. The report generator prints its actual final size and an access warning whenever it reaches
+10 MB; use that measured size rather than estimating from sample count. If the report is between
+10 and 25 MB, download it from the Reports tab and open it locally. If it is larger than 25 MB,
+retrieve `report/consolidated_report.html` from the published output path. The complete report is
+written in both cases, and `report/multisample_out.csv` remains available as a lightweight,
+separately previewable fallback in the Reports tab. See the
+[Seqera report limits](https://docs.seqera.io/platform-cloud/reports/overview#limitations) for the
+current Platform behaviour.
 
 ## Available standard profiles
 
@@ -710,7 +781,12 @@ report/
 `consolidated_report.html` is a single self-contained file covering every sample in the run. It
 opens in any browser with no internet connection required (all assets are embedded), and has a
 sample selector for moving between per-sample views plus a cross-sample metrics table. It prints
-to PDF with every sample included.
+to PDF with every sample included. The single- and multi-sample QC cascade HTML files listed above
+are also self-contained and can be opened without internet access.
+
+For large runs launched through Seqera Platform, see
+[Viewing the consolidated report in Seqera Platform](#viewing-the-consolidated-report-in-seqera-platform)
+for preview/download limits and the CSV fallback.
 
 The `.csv` files are the machine-readable form of the same metrics. Numbers in them are raw and
 separator-free so they can be parsed directly, even though the on-screen tables display thousands
@@ -747,7 +823,8 @@ Contains a multi-sample MultiQC report and associated data, plus a subdirectory 
 ### `plots`
 
 Plots of the Cell Caller profiles used to generate the minimum detected nuclear genes threshold
-for cell calling.
+for cell calling. These HTML files embed the plotting library and can be opened without internet
+access.
 
 The density plot describes the number of nuclear genes detected (log10 Nuclear genes) across cells. The black line describes the default cutoff value for nuclear genes when calling cells. In contrast, the red line describes the threshold determined by the Cell Caller.
 
@@ -889,4 +966,3 @@ By default, when a task fails it will be retried (a maximum of 5 times) with inc
 ```
 
 <div style="text-align: right"><a href="#cs-genetics-scrna-seq-pipeline">top</a></div>
-

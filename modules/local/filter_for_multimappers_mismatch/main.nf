@@ -11,7 +11,8 @@ process filter_for_multimappers_mismatch {
 
   script:
   """
-  # -@ threads only the BGZF (de)compression; the per-read filter and output order are unchanged (byte-identical).
+  # -@ threads only BGZF (de)compression; alignment records and output order stay
+  # unchanged, while compressed container bytes may vary with thread count.
   samtools view -@ ${task.cpus} -h -b -e '[NH]>1 && ([nM]==0 || [nM]==1 || [nM]==2 || [nM]==3)' -b ${feature_count_bam} > ${sample_id}.multimapped.bam.featureCounts.bam
   """
 

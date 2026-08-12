@@ -3,16 +3,22 @@
 ## THIS REPOSITORY IS PUBLIC
 Everything committed here is world-readable the moment it is pushed, and stays readable
 in the git history even after deletion. Before committing, check that you are not adding:
-- internal S3 paths (`csg-nextflow`, `csg-reference`, ...) or infrastructure IDs
-- customer/site/run identifiers (e.g. `251212_UCSD_MOR027_...`) or colleague names
+- private object-storage paths (literal bucket names must be unambiguously public) or private/internal
+  infrastructure identifiers; documented, reviewed, intentionally public code-controlled IDs are permitted
+- customer/site/run identifiers (e.g. `EXAMPLE_SITE_RUN_001`) or colleague names
 - credentials, credential file paths, or anything under `agent-secrets/`
 - local machine paths (`/nssd2/...`)
 - planning docs, handoffs, campaign logs, or other agent working files
 
 Write agent working files to the session scratchpad or a private location, never into the
-tree. Ad-hoc sample sheets that point at internal data belong in
-`s3://csg-reference/internal_nf_tests_data/external_validation/`, not in this repo. The
-`check-no-internal-files` CI job enforces the mechanical parts of this.
+tree. Ad-hoc sample sheets that point at internal data belong in access-controlled storage
+outside this repo. The `check-no-internal-files` CI job enforces the mechanical parts of
+this. It scans the Git index and rejects non-public literal buckets in `s3`, `s3a`, `s3n`
+URIs and standard AWS S3 HTTPS endpoints. In CI the index is the committed tip; locally it
+is the content staged for the next commit. It also rejects Conda recipes whose local
+source path resolves outside this repository. This is not an all-history scan, and
+anything already published remains published and must be remediated or rotated as
+appropriate.
 
 ## When developing
 - Never write code that fails silently. Always fail loud.

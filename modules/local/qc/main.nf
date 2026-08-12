@@ -37,10 +37,11 @@ process qc {
   """
 
   stub:
+  def stubEmpty = (params.get('stub_empty_qc_samples') ?: []).contains(sample_id)
+  def stubFastqCommand = stubEmpty ? "gzip -n </dev/null > ${sample_id}.qc.R1.fastq.gz" : "printf '@read1\\nACGT\\n+\\nIIII\\n' | gzip -n > ${sample_id}.qc.R1.fastq.gz"
   """
-  # Emit a non-empty fastq.gz so the downstream countFastq() > 0 branch
-  # routes the sample through the STAR alignment path under -stub.
-  printf '@read1\\nACGT\\n+\\nIIII\\n' | gzip > ${sample_id}.qc.R1.fastq.gz
+  # Tests can select QC-empty samples without changing production behavior.
+  ${stubFastqCommand}
   touch ${sample_id}.qc.log
   touch ${sample_id}.R1.preQC.fastp.json ${sample_id}.R2.preQC.fastp.json ${sample_id}.R1.postQC.fastp.json
   """

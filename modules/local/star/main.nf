@@ -15,7 +15,7 @@ process star {
   path(index)
 
   output:
-  tuple val(sample_id), path("${sample_id}_Aligned.out.bam"), env('uniquely_mapped_reads'), emit: out_bam
+  tuple val(sample_id), path("${sample_id}_Aligned.out.bam"), env('uniquely_mapped_reads'), env('aligned_reads'), emit: out_bam
 
   script:
   """
@@ -36,15 +36,24 @@ process star {
         --outSAMattributes Standard \
         --outFilterMultimapNmax 1000
 
-      # Get number of uniquely aligned reads
-      uniquely_mapped_reads=\$(grep "Uniquely mapped reads number" ${sample_id}_Log.final.out | cut -d "|" -f 2 | xargs)
+      # STAR reports unique and accepted multi-locus mappings separately. Both
+      # represent real aligned reads for downstream feature assignment. The
+      # parser validates required fields, integer bounds, duplicates, overflow,
+      # and consistency with the number of input reads before routing the sample.
+      star_counts=\$(star_alignment_counts.py ${sample_id}_Log.final.out)
+      IFS=\$'\t' read -r uniquely_mapped_reads aligned_reads <<< "\${star_counts}"
 
   """
 
   stub:
+  def stubMultimapperOnly = (params.get('stub_multimapper_only_samples') ?: []).contains(sample_id)
+  def stubUnaligned = (params.get('stub_unaligned_samples') ?: []).contains(sample_id)
+  def stubUniqueCount = (stubMultimapperOnly || stubUnaligned) ? 0 : 1
+  def stubAlignedCount = stubUnaligned ? 0 : 1
   """
   touch ${sample_id}_Aligned.out.bam
-  uniquely_mapped_reads=1
+  uniquely_mapped_reads=${stubUniqueCount}
+  aligned_reads=${stubAlignedCount}
   """
 
 }

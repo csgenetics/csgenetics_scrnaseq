@@ -12,7 +12,7 @@ nextflow_process {
         when {
             process {
                 """
-                // save_resolved_configuration takes no input; it dumps params.
+                input[0] = 100
                 """
             }
         }
@@ -25,6 +25,32 @@ nextflow_process {
                 // on stable keys rather than snapshotting the whole file.
                 { assert path(process.out[0][0]).text.contains("minimum_count_threshold") },
                 { assert path(process.out[0][0]).text.contains("barcode_pattern") }
+            )
+        }
+    }
+
+    test("preserves hostile shell characters and Unicode as inert JSON data") {
+
+        when {
+            params {
+                awsregion = "eu-west-1'; printf SHOULD_NOT_EXECUTE >&2; # \$(false) — café"
+                minimum_count_threshold = "00100"
+            }
+            process {
+                """
+                input[0] = 100
+                """
+            }
+        }
+
+        then {
+            def output = path(process.out[0][0])
+            def parsed = new groovy.json.JsonSlurper().parseText(output.text)
+            assertAll(
+                { assert process.success },
+                { assert parsed.awsregion == "eu-west-1'; printf SHOULD_NOT_EXECUTE >&2; # \$(false) — café" },
+                { assert parsed.minimum_count_threshold instanceof Number },
+                { assert parsed.minimum_count_threshold == 100 }
             )
         }
     }

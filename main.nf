@@ -24,6 +24,110 @@ def getGenomeAttribute(attribute) {
     return null
 }
 
+def requireSafeSampleId(value) {
+    def sample = value == null ? '' : value.toString()
+    if (!(sample ==~ /[A-Za-z0-9][A-Za-z0-9._-]{0,127}/) || sample in ['.', '..']) {
+        throw new IllegalArgumentException(
+            "Invalid sample ID '${sample}': use 1-128 letters, numbers, '.', '_' " +
+            "or '-', beginning with a letter or number; '.' and '..' are not allowed"
+        )
+    }
+    return sample
+}
+
+def canonicalManualThreshold(value, label) {
+    def raw = value == null ? '' : value.toString().trim()
+    if (raw.isEmpty()) {
+        return 'nan'
+    }
+    def threshold
+    try {
+        threshold = new BigDecimal(raw)
+    } catch (NumberFormatException exc) {
+        throw new IllegalArgumentException(
+            "${label} manual Cell Caller threshold must be a finite non-negative number"
+        )
+    }
+    if (threshold.signum() < 0) {
+        throw new IllegalArgumentException(
+            "${label} manual Cell Caller threshold must be a finite non-negative number"
+        )
+    }
+    if (threshold > 308) {
+        throw new IllegalArgumentException(
+            "${label} manual Cell Caller threshold is too large"
+        )
+    }
+    return threshold.stripTrailingZeros().toPlainString()
+}
+
+def canonicalMinimumCountThreshold(value) {
+    def raw = value == null ? '' : value.toString().trim()
+    if (!(raw ==~ /\d+/)) {
+        throw new IllegalArgumentException(
+            "minimum_count_threshold must be a non-negative integer"
+        )
+    }
+    def threshold = new BigInteger(raw)
+    if (threshold > Integer.MAX_VALUE) {
+        throw new IllegalArgumentException(
+            "minimum_count_threshold is too large"
+        )
+    }
+    return threshold.intValue()
+}
+
+def mergeSampleThresholds(sample, thresholds, mixedSpecies) {
+    def parts = thresholds.collect { threshold ->
+        mixedSpecies ? threshold.split('_', -1).toList() : [threshold]
+    }
+    def width = mixedSpecies ? 2 : 1
+    if (parts.any { it.size() != width }) {
+        throw new IllegalArgumentException(
+            "Sample '${sample}' has malformed manual Cell Caller thresholds"
+        )
+    }
+    def merged = (0..<width).collect { index ->
+        def supplied = parts.collect { it[index] }.findAll { it != 'nan' }.unique()
+        if (supplied.size() > 1) {
+            throw new IllegalArgumentException(
+                "Sample '${sample}' has conflicting manual Cell Caller thresholds: ${thresholds.unique()}"
+            )
+        }
+        return supplied ? supplied[0] : 'nan'
+    }
+    return mixedSpecies ? merged.join('_') : merged[0]
+}
+
+def requireSamplesheetHeader(row, mixedSpecies) {
+    def keys = row.keySet().collect { it.toString() }
+    def accepted
+    if (mixedSpecies) {
+        accepted = [
+            ['sample', 'fastq_1', 'fastq_2'],
+            ['sample_id', 'fastq_1', 'fastq_2'],
+            ['sample', 'fastq_1', 'fastq_2', 'hsap_manual_cell_caller_threshold', 'mmus_manual_cell_caller_threshold'],
+            ['sample_id', 'fastq_1', 'fastq_2', 'hsap_manual_cell_caller_threshold', 'mmus_manual_cell_caller_threshold'],
+            ['sample', 'fastq_1', 'fastq_2', 'hsap_manual_cellcaller_threshold', 'mmus_manual_cellcaller_threshold'],
+            ['sample_id', 'fastq_1', 'fastq_2', 'hsap_manual_cellcaller_threshold', 'mmus_manual_cellcaller_threshold'],
+        ]
+    } else {
+        accepted = [
+            ['sample', 'fastq_1', 'fastq_2'],
+            ['sample_id', 'fastq_1', 'fastq_2'],
+            ['sample', 'fastq_1', 'fastq_2', 'manual_cell_caller_threshold'],
+            ['sample_id', 'fastq_1', 'fastq_2', 'manual_cell_caller_threshold'],
+            ['sample', 'fastq_1', 'fastq_2', 'manual_cellcaller_threshold'],
+            ['sample_id', 'fastq_1', 'fastq_2', 'manual_cellcaller_threshold'],
+        ]
+    }
+    if (!accepted.contains(keys)) {
+        throw new IllegalArgumentException(
+            "Invalid input CSV header ${keys}; expected one of ${accepted}"
+        )
+    }
+}
+
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     RESOLVE GENOME PARAMETERS
@@ -85,6 +189,14 @@ include { consolidated_report } from './modules/local/consolidated_report/main.n
 
 workflow {
 
+  // Canonicalise the only CLI numeric interpolated into a task shell. Nextflow
+  // params are immutable once the workflow starts, so carry the validated
+  // integer explicitly to every consumer instead of attempting to reassign the
+  // params entry. The JSON schema is Launch UI metadata, not runtime validation.
+  def minimum_count_threshold = canonicalMinimumCountThreshold(
+    params.minimum_count_threshold
+  )
+
   // Some users have issues accessing the S3 resources we have hosted publicly in our
   // s3://csgx.public.readonly bucket due to their local AWS configurations.
   // One workaround is to use anonymous access to the S3 resources
@@ -102,7 +214,7 @@ workflow {
   // https://github.com/nextflow-io/nextflow/issues/1515
   // They may develop this functionality in the future, but for now we will use a process
   // to output the resolved configuration to a file.
-  save_resolved_configuration()
+  save_resolved_configuration(minimum_count_threshold)
 
   // Check whether params.star_index starts with s3://csgx.public.readonly
   // and if it does, download the file in a process and set the star_index to the downloaded file
@@ -136,16 +248,18 @@ workflow {
   input_csv
     .splitCsv(header:true, sep:',', strip: true)
     .map {row ->
-        // To comply with nf-core standards, we will move from working with 'sample_id'
-        // as the first column, to 'sample'. To maintain reverse compatibility with
-        // e.g. the test resource input_csv, we will make it so that the objects of the row
-        // are accessed by index rather than specific key (column name).
-        // The .splitCsv method returns a map object, so we will convert it to a list of its values.
+        requireSamplesheetHeader(row, params.mixed_species)
         def rowList = row.values().toList()
+        def sample = requireSafeSampleId(rowList[0])
         def fastq_1 = rowList[1]
         def fastq_2 = rowList[2]
+        if (!fastq_1 || !fastq_2 || fastq_1 == fastq_2) {
+          throw new IllegalArgumentException(
+            "Sample '${sample}' must provide distinct, non-empty fastq_1 and fastq_2 paths"
+          )
+        }
         def download = fastq_1.startsWith('s3://csgx.public.readonly') && fastq_2.startsWith('s3://csgx.public.readonly') ? 'download' : 'no_download'
-        return [ rowList[0], fastq_1, fastq_2, download]
+        return [sample, fastq_1, fastq_2, download]
     }
     .branch { row ->
         download: row[3] == 'download'
@@ -258,51 +372,67 @@ workflow {
   // Align the good fastqs with STAR
   star(qc_out_filtered_ch.good_fastq, star_index)
 
-  // Filter star outputs by unique alignment counts
-  // If 0 unique alignments need to pass bam into
-  // create_valid_empty_bam_star
+  // Route STAR output by all accepted alignment evidence, not only unique
+  // alignments. A sample with zero unique reads but accepted multi-locus reads
+  // is real data and must continue through UMR/multimapper assignment.
   star.out.out_bam
         .branch { star_result ->
-          good_bam: star_result[2].toInteger() > 0
-          bad_bam: star_result[2].toInteger() == 0
+          aligned_bam: star_result[3].toLong() > 0
+          unaligned_bam: star_result[3].toLong() == 0
           }
         .set{star_out_ch}
 
   // Create an empty one-line-header bam that can be read
   // by samtools. We only create this for those samples that
-  // had 0 reads after QC (i.e. after trim_extra_polyA) or
-  // after mapping i.e. after star.
-  create_valid_empty_bam_star(qc_out_filtered_ch.empty_fastq.map({ qc_result -> [qc_result[0], "_Aligned.sortedByCoord.out"]}).mix(star_out_ch.bad_bam.map({ star_result -> [star_result[0], "_Aligned.sortedByCoord.out"]})))
+  // had 0 reads after QC or no unique/multi-locus alignments after STAR.
+  create_valid_empty_bam_star(qc_out_filtered_ch.empty_fastq.map({ qc_result -> [qc_result[0], "_Aligned.sortedByCoord.out"]}).mix(star_out_ch.unaligned_bam.map({ star_result -> [star_result[0], "_Aligned.sortedByCoord.out"]})))
+
+  // Canonical STAR BAM channel for every sample, exactly once. Aligned samples
+  // retain STAR's BAM; QC-empty and truly unaligned samples use a valid
+  // header-only BAM. Reuse this tuple shape everywhere that needs raw STAR
+  // evidence so an empty sample cannot disappear from later joins.
+  star_out_ch.aligned_bam
+    .map({ star_result -> [star_result[0], star_result[1], true] })
+    .mix(create_valid_empty_bam_star.out.out_bam.map({ bam_result -> [bam_result[0], bam_result[1], false] }))
+    .set { ch_all_star_bams }
+
+  ch_all_star_bams
+    .branch { sample_id, bam, has_alignments ->
+      aligned: has_alignments
+      empty: !has_alignments
+    }
+    .set { ch_all_star_bams_split }
 
   // Process to convert input GTF to gene model bed for RSeQC
   gtf2bed(gtf)
 
   // RSeQC read distribution on STAR output
-  // The 1 and 0 being added in the map represent bams that contain (1)
-  // or do not contain (0) alignments.
-  // If alignments are present RSeQC is run,
-  // else the empty RSeQC is populated in the process.
-  raw_rseqc(star_out_ch.good_bam.map({ star_result -> [star_result[0], star_result[1], 1]}).mix(create_valid_empty_bam_star.out.out_bam.map({ bam_result -> [bam_result[0], bam_result[1], 0]})), gtf2bed.out.bed, empty_rseqc_template, "raw")
+  // If alignments are present RSeQC is run; otherwise the empty RSeQC
+  // template is populated in the process.
+  raw_rseqc_in_ch = ch_all_star_bams.map { sample_id, bam, has_alignments ->
+    [sample_id, bam, has_alignments ? 1L : 0L]
+  }
+  raw_rseqc(raw_rseqc_in_ch, gtf2bed.out.bed, empty_rseqc_template, "raw")
   ch_raw_rseqc_multiqc = raw_rseqc.out.rseqc_log
 
   // Split feature counting into multiple processes to take advantage of parallel processing
   // Perform featurecount quantification
-  // The 1 and 0 being added as the final element of the map represent bams that contain (1)
-  // or do not contain (0) alignments.
   // If alignments are present, featureCounts is run,
   // else the empty bam is simply copied for collection from the process.
-  initial_feature_count(star_out_ch.good_bam.map({ star_result -> [star_result[0], star_result[1], 1]}).mix(create_valid_empty_bam_star.out.out_bam.map({ bam_result -> [bam_result[0], bam_result[1], 0]})), gtf)
+  initial_feature_count(ch_all_star_bams, gtf)
 
-  // Make channel feature_count_bams that contain samples with alignments (1)
-  // Using the sample names in star_out_ch.good_bam to filter
-  // Essentially performs an inner join to limit input to only samples present in star_out_ch.good_bam
+  // Make a featureCounts BAM channel containing only samples with alignments.
+  // Essentially performs an inner join to limit input to samples present in
+  // the canonical aligned branch.
   // Using combine instead of join because strict mode has failOnMismatch:true by default
-  initial_feature_count_good_bam_out_ch = star_out_ch.good_bam.map({ star_result -> [star_result[0]]}).combine(initial_feature_count.out.feature_count_bam, by: [0])
+  initial_feature_count_aligned_bam_out_ch = ch_all_star_bams_split.aligned
+    .map({ star_result -> [star_result[0]] })
+    .combine(initial_feature_count.out.feature_count_bam, by: [0])
 
   // If alignments are present run UMR and multimapper processing
   // UMRs
   // Generate a bam with only UMRs, and up to 3 mismatches
-  filter_for_UMRs_mismatch(initial_feature_count_good_bam_out_ch)
+  filter_for_UMRs_mismatch(initial_feature_count_aligned_bam_out_ch)
   // Get the first set of gene associations based on transcript feature annotations
   umr_transcript_assignment(filter_for_UMRs_mismatch.out.umr_mismatch_bam)
   // Get the second set of gene associations based on exon feature annotations (i.e. exon-tie breaking)
@@ -310,7 +440,7 @@ workflow {
 
   // Multimappers: fused filter + transcript assignment + exon tie-break + merge (one task per sample
   // to cut serial container-starts/staging on the critical path; output unchanged vs the old 4 processes)
-  multimapper_assignment(initial_feature_count_good_bam_out_ch, gtf, file("${baseDir}/bin/assign_multi_mappers.gawk"))
+  multimapper_assignment(initial_feature_count_aligned_bam_out_ch, gtf, file("${baseDir}/bin/assign_multi_mappers.gawk"))
 
   // Merge the transcript- and exon-based gene assignments for the umrs
   merge_transcript_exon_umr_bams(umr_transcript_assignment.out.umr_transcript_assigned_bam.combine(umr_exon_assignment.out.umr_exon_assigned_bam, by: 0))
@@ -318,13 +448,17 @@ workflow {
   // Merge the multimapper and UMR bams
   merge_annotated_UMRs_with_annotated_multimappers(merge_transcript_exon_umr_bams.out.high_conf_annotated_umr_bam.combine(multimapper_assignment.out.high_conf_annotated_multimapped_bam, by: 0))
   
-  // Re-merge channels for samples which had 0 or >0 alignments after STAR alignment
-  umr_multimapper_annotated_bam_out_ch = merge_annotated_UMRs_with_annotated_multimappers.out.high_conf_annotated_bam.mix(create_valid_empty_bam_star.out.out_bam)
+  // Re-merge aligned annotations with the canonical header-only BAMs.
+  umr_multimapper_annotated_bam_out_ch = merge_annotated_UMRs_with_annotated_multimappers.out.high_conf_annotated_bam
+    .mix(ch_all_star_bams_split.empty.map({ star_result -> [star_result[0], star_result[1]] }))
 
   // Count number of aligned reads
   count_high_conf_annotated_umr_multimap(umr_multimapper_annotated_bam_out_ch)
 
   // Produce RSeQC output of the annotated bam for metrics
+  // The aligned count is kept numeric here and in raw_rseqc_in_ch. A previous
+  // Boolean-only process contract silently treated every positive annotated
+  // count (for example "1") as false and emitted the empty metrics template.
   annotated_rseqc_in_ch = umr_multimapper_annotated_bam_out_ch.combine(count_high_conf_annotated_umr_multimap.out.aligned_count, by: 0)
   annotated_rseqc(annotated_rseqc_in_ch, gtf2bed.out.bed, empty_rseqc_template, "annotated")
   ch_annotated_rseqc_multiqc = annotated_rseqc.out.rseqc_log
@@ -367,14 +501,16 @@ workflow {
   input_csv
     .splitCsv(header: true, sep: ',', strip: true)
     .map { row ->
+        requireSamplesheetHeader(row, params.mixed_species)
         def rowList = row.values().toList()
+        def sample = requireSafeSampleId(rowList[0])
 
         if (params.mixed_species) {
           // In the mixed species case, any user specified hsap and mmus thresholds are expected in columns 4 and 5 of the input csv respectively
           // When specifying thresholds for mixed species, both columns must be present (even if they are left empty for some samples)
           if (rowList.size() < 5) {
             // If one or both columns are missing, no user thresholds are used so the input for cell calling is "nan_nan"
-            return [rowList[0], "nan_nan"]
+            return [sample, "nan_nan"]
           } else {
             // If both columns are present, we will set the user thresholds to "nan" if they are empty for a particular sample, otherwise we carry through the input value 
             def hsap_threshold
@@ -382,45 +518,44 @@ workflow {
             if (rowList[3].isEmpty()) {
               hsap_threshold = "nan"
             } else {
-              hsap_threshold = rowList[3]
+              hsap_threshold = canonicalManualThreshold(rowList[3], 'human')
             }
             if (rowList[4].isEmpty()) {
               mmus_threshold = "nan"
             } else {
-              mmus_threshold = rowList[4]
+              mmus_threshold = canonicalManualThreshold(rowList[4], 'mouse')
             }
-            return [rowList[0], "${hsap_threshold}_${mmus_threshold}"]
+            return [sample, "${hsap_threshold}_${mmus_threshold}"]
           }
           
         } else {
           // In the single species case, the user specified threshold is expected in column 4
           if (rowList.size() < 4) {
             // If the column is missing, we will set the user threshold to "nan"
-            return [rowList[0], "nan"]
+            return [sample, "nan"]
           } else {
             // If the column exists but is empty for a particular sample, we will set the threshold to "nan", otherwise we take the value from the input csv
             if (rowList[3].isEmpty()) {
-              return [rowList[0], "nan"]
+              return [sample, "nan"]
             } else {
-              return [rowList[0], "${rowList[3]}"]
+              return [sample, canonicalManualThreshold(rowList[3], 'single-species')]
             }
           }
         }
     }
-    // Cell-caller thresholds are SAMPLE-level metadata, but input_csv has one ROW PER LANE, so a
-    // multi-lane sample yields N identical [sample_id, threshold] tuples. Dedup to one per sample:
-    // without this, ch_h5ad.combine(.., by:0) fans cell_caller out N-fold and that multiplicity
-    // propagates through the summary_statistics combine chain, making qc_cascade_plot_multi receive
-    // N copies of each <sample>.metrics.csv -> "input file name collision" crash on multi-lane input.
-    // (Single-lane samples have one row, so .unique() is a no-op for them.)
-    .unique()
+    // Thresholds are sample-level metadata while rows are lanes. Collapse
+    // identical values and reject conflicting values before scheduling tasks.
+    .groupTuple(by: 0)
+    .map { sample, thresholds ->
+        return [sample, mergeSampleThresholds(sample, thresholds, params.mixed_species)]
+    }
     .set { user_specified_cell_caller_thresholds_ch }
 
   
   ch_cell_caller = ch_h5ad.combine(user_specified_cell_caller_thresholds_ch, by: 0)
 
   // Run cell caller
-  cell_caller(ch_cell_caller)
+  cell_caller(ch_cell_caller, minimum_count_threshold)
   ch_cell_caller_out = cell_caller.out.cell_caller_out //[val(sample), int(cell_caller_nuc_gene_threshold)]
 
   // cell_caller_out is [sample_id, threshold] and ch_h5ad is [sample_id, raw_h5ad]; join by sample_id
@@ -438,7 +573,7 @@ workflow {
 
   // Create input channel for categorize_reads process
   // Need to combine STAR BAM, raw count matrix H5AD, and qc JSON (main qc.json file)
-  ch_categorize_reads_in = star_out_ch.good_bam
+  ch_categorize_reads_in = ch_all_star_bams
     .map({ star_result -> [star_result[0], star_result[1]]})  // [sample_id, star_bam]
     .combine(filter_count_matrix.out.raw_count_matrix, by: [0])  // [sample_id, star_bam, raw_h5ad]
     .combine(ch_qc_multiqc.map({ qc_result -> [qc_result[0], qc_result[1]]}), by: [0])  // [sample_id, star_bam, raw_h5ad, qc_json]
@@ -463,11 +598,12 @@ workflow {
   // Generate summary statistics
   summary_statistics(ch_summary_statistics_in)
 
-  // Generate single-sample QC cascade plots (Plotly-free fragments)
+  // Generate single-sample QC cascade plots. Each task emits a small internal
+  // fragment for consolidated_report and a separately published offline page.
   qc_cascade_plot_single(summary_statistics.out.metrics_csv)
 
-  // Generate multi-sample QC cascade plot (Plotly-free fragment)
-  qc_cascade_plot_multi(summary_statistics.out.metrics_csv.map { it[1] }.collect())
+  // Generate the equivalent internal + standalone outputs across all samples.
+  qc_cascade_plot_multi(summary_statistics.out.metrics_csv.map { metrics_tuple -> metrics_tuple[1] }.collect())
 
   // Collect, flat, all per-sample inputs for the single consolidated report.
   // Metrics csvs are also published per-sample by summary_statistics.
@@ -476,7 +612,9 @@ workflow {
   ch_all_cell_caller_plots = cell_caller.out.cell_caller_plots
     .flatMap { sample_id, counts_pdf, barnyard -> [counts_pdf, barnyard] }
     .collect()
-  ch_all_qc_cascade_single = qc_cascade_plot_single.out.qc_cascade_plot.map { it[1] }.collect()
+  ch_all_qc_cascade_fragments = qc_cascade_plot_single.out.qc_cascade_fragment
+    .map { qc_cascade_tuple -> qc_cascade_tuple[1] }
+    .collect()
 
   // Run-provenance metadata for the report header/footer (all values already known
   // to the pipeline; factual only -- no quality judgement). Serialised to JSON and
@@ -494,19 +632,23 @@ workflow {
     nf_version:    workflow.nextflow.version.toString(),
     outdir:        params.outdir,
     barcode_kit:   params.barcode_list_path ? file(params.barcode_list_path).name : 'N/A',
-    count_threshold: params.minimum_count_threshold,
+    count_threshold: minimum_count_threshold,
     homepage:      workflow.manifest.homePage ?: 'https://github.com/csgenetics/csgenetics_scrnaseq'
   ])
+  // Never interpolate raw JSON into a task shell or env export: customer paths
+  // and run names can contain quotes/metacharacters. Base64 is shell-inert and
+  // is decoded with strict validation by create_consolidated_report.py.
+  def provenance_base64 = provenance_json.getBytes('UTF-8').encodeBase64().toString()
 
   // Generate the single consolidated, self-contained experiment report.
   consolidated_report(
     ch_all_metrics_csvs,
     ch_all_cell_caller_plots,
-    ch_all_qc_cascade_single,
-    qc_cascade_plot_multi.out.qc_cascade_plot,
+    ch_all_qc_cascade_fragments,
+    qc_cascade_plot_multi.out.qc_cascade_fragment,
     consolidated_report_template,
     report_vendor_dir,
-    provenance_json
+    provenance_base64
   )
 
 }

@@ -6,7 +6,7 @@ process initial_feature_count {
   publishDir "${params.outdir}/featureCounts", mode: 'copy'
 
   input:
-  tuple val(sample_id), path(bam), val(aligned_count)
+  tuple val(sample_id), path(bam), val(has_alignments)
   path(gtf)
 
   output:
@@ -14,7 +14,7 @@ process initial_feature_count {
 
   script:
   """
-  if [[ $aligned_count > 0 ]] # If the bam is not empty
+  if [[ "$has_alignments" == "true" ]] # If the bam is not empty
   then
     # Threaded coordinate sort (-@). Order-neutral downstream: featureCounts assigns per-read, and
     # every consumer re-sorts (name sort for assignment, coordinate sort in sort_index_bam for dedup).
@@ -22,10 +22,25 @@ process initial_feature_count {
     # Start by running feature counts on the star output
     # including strandedness and annotation of multimappers
     featureCounts -a $gtf -o ${sample_id}.star.featureCounts.gene.txt -R BAM ${sample_id}_Aligned.sortedByCoord.out.bam -T ${task.cpus} -t transcript -g gene_id --fracOverlap 0.5 --extraAttributes gene_name -s 1 -M
+    # featureCounts can emit records out of coordinate order even when its
+    # input header says SO:coordinate. Publish a genuinely coordinate-sorted
+    # BAM so customer tooling such as samtools index can consume it.
+    samtools sort -@ ${task.cpus} -m 768M \
+      -o ${sample_id}.featureCounts.coordinate.bam \
+      ${sample_id}_Aligned.sortedByCoord.out.bam.featureCounts.bam
+    mv ${sample_id}.featureCounts.coordinate.bam \
+      ${sample_id}_Aligned.sortedByCoord.out.bam.featureCounts.bam
   else
     # Simply rename the input bam so that it can be collected
     cp $bam ${sample_id}_Aligned.sortedByCoord.out.bam.featureCounts.bam
   fi
+  # Fail in the producer if the public BAM has an unreadable header or is not
+  # genuinely coordinate sorted. Indexing also supports the intentional
+  # header-only, no-@SQ sentinel used for empty samples.
+  samtools view -H ${sample_id}_Aligned.sortedByCoord.out.bam.featureCounts.bam > /dev/null
+  samtools index \
+    ${sample_id}_Aligned.sortedByCoord.out.bam.featureCounts.bam \
+    ${sample_id}.featureCounts.coordinate.validation.bai
   """
 
   stub:

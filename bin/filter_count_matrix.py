@@ -4,9 +4,9 @@
 Takes in an h5ad raw count matrix and a nuclear gene threshold to filter to
 and outputs a filtered h5ad containing only those barcodes meeting the threshold.
 Also outputs the filtered matrix in the tripartite format with:
-    cell_only.barcodes.tsv.gz
-    cell_only.features.tsv.gz
-    cell_only.matrix.mtx.gz
+    barcodes.tsv.gz
+    features.tsv.gz
+    matrix.mtx.gz
 """
 
 import sys
@@ -16,6 +16,8 @@ import os
 import anndata
 import numpy as np
 import re
+
+from empty_h5ad import is_empty_h5ad_sentinel
 
 class FilterCountMatrix:
     def __init__(self):
@@ -38,15 +40,14 @@ class FilterCountMatrix:
        
         self.sample_name = sys.argv[3]
 
-        # Read in the h5ad matrix to an anndata object
-        # If the h5ad matrix is an empty file, simply write out
-        # another empty file and exit
-        try:
-            self.anndata_obj = anndata.read_h5ad(sys.argv[2])
-        except OSError:
+        # Only the pipeline's explicit, zero-byte *.empty.h5ad sentinel may
+        # produce downstream empty sentinels. Corrupt or generic zero-byte
+        # inputs must fail rather than being relabelled as intentional emptiness.
+        if is_empty_h5ad_sentinel(sys.argv[2]):
             open(f"{self.sample_name}.{sys.argv[1]}.filtered_feature_bc_matrix.empty.h5ad", "w").close()
             open(f"{self.sample_name}.{sys.argv[1]}.raw_feature_bc_matrix.empty.h5ad", "w").close()
             sys.exit(0)
+        self.anndata_obj = anndata.read_h5ad(sys.argv[2])
 
         if self.mixed:
             # For mixed we specifically annotate Hsap and Mmus cells as well as the more generic is_called_cell and is_single_cell
@@ -86,12 +87,15 @@ class FilterCountMatrix:
     def write_out_tripartite_filtered_matrix_files(self):
         """
         write out the
-            cell_only.barcodes.tsv.gz
-            cell_only.features.tsv.gz
-            cell_only.matrix.mtx.gz
+            barcodes.tsv.gz
+            features.tsv.gz
+            matrix.mtx.gz
         """
         # Write filtered AnnData object into matrix file
-        with gzip.open('matrix.mtx.gz', 'w') as mtx_file:
+        # Use a fixed gzip header timestamp so identical filtered matrices are
+        # byte-identical across runs.  The filename and decompressed payload stay
+        # unchanged.
+        with gzip.GzipFile(filename='matrix.mtx.gz', mode='wb', mtime=0) as mtx_file:
             mmwrite(mtx_file, a = self.anndata_obj_filtered.X.T, comment='', field='integer', precision=None, symmetry='general')
 
         # Write barcode table

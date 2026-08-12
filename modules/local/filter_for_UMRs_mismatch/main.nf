@@ -12,7 +12,8 @@ process filter_for_UMRs_mismatch {
 
   script:
   """
-  # -@ threads only the BGZF (de)compression; per-read filter and output order unchanged (byte-identical).
+  # -@ threads only BGZF (de)compression; alignment records and output order stay
+  # unchanged, while compressed container bytes may vary with thread count.
   samtools view -@ ${task.cpus} -h -b -e '[NH]==1 && ([nM]==0 || [nM]==1 || [nM]==2 || [nM]==3)' -b ${featurecount_bam} > ${sample_id}.UMRs.bam.featureCounts.bam
   """
 

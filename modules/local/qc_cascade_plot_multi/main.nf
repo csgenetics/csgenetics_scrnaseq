@@ -4,13 +4,16 @@
 * Generate QC cascade plot for all samples (multi-sample)
 */
 process qc_cascade_plot_multi {
-  publishDir "${params.outdir}/report/", mode: 'copy'
+  // The customer-facing plot embeds Plotly.js and works offline. Keep the
+  // smaller fragment task-local for the consolidated report only.
+  publishDir "${params.outdir}/report/", mode: 'copy', pattern: "multisample_qc_cascade.html"
 
   input:
   path(csvs)
 
   output:
-  path("multisample_qc_cascade.html"), emit: qc_cascade_plot
+  path("multisample_qc_cascade.fragment.html"), emit: qc_cascade_fragment
+  path("multisample_qc_cascade.html"), emit: qc_cascade_report
 
   script:
   """
@@ -21,6 +24,7 @@ process qc_cascade_plot_multi {
 
   stub:
   """
+  touch multisample_qc_cascade.fragment.html
   touch multisample_qc_cascade.html
   """
 }

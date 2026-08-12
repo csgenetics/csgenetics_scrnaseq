@@ -1,0 +1,15 @@
+[workspace]
+name = "csgenetics-scrnaseq-comparator-tests"
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64"]
+
+[dependencies]
+python = "3.11.*"
+pytest = "8.4.*"
+numpy = "2.3.*"
+pandas = "2.3.*"
+scipy = "1.16.*"
+anndata = "0.12.*"
+h5py = "3.16.*"
+hdf5 = "2.1.*"
+samtools = "1.22.*"

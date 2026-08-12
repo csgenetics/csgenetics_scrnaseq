@@ -22,23 +22,23 @@ process consolidated_report {
   path(multi_qc_cascade_html)
   path(template)
   path(vendor_dir)
-  val(provenance_json)
+  val(provenance_base64)
 
   output:
   path('consolidated_report.html')
   path('multisample_out.csv')
 
   script:
-  // provenance_json is a JSON string of run metadata (genome, pipeline version, run
-  // id, etc.) built in main.nf. Single-quoted so the JSON's double quotes survive the
-  // shell; it holds only pipeline-controlled metadata (no single quotes).
+  // Groovy base64-encodes run metadata before it reaches this process. The
+  // resulting alphabet contains no quotes or shell metacharacters, so customer
+  // paths and run names remain inert data across Nextflow's generated wrapper.
   """
   create_consolidated_report.py \\
     ${template} \\
     ${params.mixed_species} \\
     ${vendor_dir} \\
     ${multi_qc_cascade_html} \\
-    '${provenance_json}'
+    'base64:${provenance_base64}'
   """
 
   stub:

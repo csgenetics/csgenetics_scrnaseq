@@ -5,7 +5,7 @@ nextflow_pipeline {
     tag "pipeline"
     tag "stub"
 
-    test("whole-workflow wiring stub-succeeds with two samples") {
+    test("whole-workflow wiring keeps two aligned samples") {
 
         options "-stub -profile test"
 
@@ -17,8 +17,222 @@ nextflow_pipeline {
 
         then {
             assert workflow.success
+            assert !workflow.stdout.any { it.contains("defined multiple times") }
             assert workflow.trace.succeeded().size() > 0
             assert workflow.trace.failed().size() == 0
+            def names = workflow.trace.tasks()*.name
+            assert names.count { it.startsWith("star (") } == 2
+            assert names.count { it.contains("create_valid_empty_bam") } == 0
+            assert names.count { it.startsWith("filter_for_UMRs_mismatch (") } == 2
+            assert names.count { it.startsWith("categorize_reads (") } == 2
+            assert names.count { it.startsWith("summary_statistics (") } == 2
+        }
+    }
+
+    test("canonicalizes a CLI string minimum threshold without reassigning params") {
+
+        options "-stub -profile test"
+
+        when {
+            params {
+                input_csv = "${projectDir}/tests/nf/fixtures/test_stub.input_csv.csv"
+                minimum_count_threshold = "00100"
+            }
+        }
+
+        then {
+            assert workflow.success
+            assert !workflow.stdout.any { it.contains("defined multiple times") }
+            assert workflow.trace.tasks().count { it.name.startsWith("cell_caller (") } == 2
+        }
+    }
+
+    test("zero-unique multimapper-only sample stays on aligned branch") {
+
+        options "-stub -profile test"
+
+        when {
+            params {
+                input_csv = "${projectDir}/tests/nf/fixtures/test_stub.input_csv.csv"
+                stub_multimapper_only_samples = ["Sample1"]
+            }
+        }
+
+        then {
+            assert workflow.success
+            def names = workflow.trace.tasks()*.name
+            assert names.count { it.startsWith("star (") } == 2
+            assert names.count { it.contains("create_valid_empty_bam") } == 0
+            assert names.count { it.startsWith("filter_for_UMRs_mismatch (") } == 2
+            assert names.count { it.startsWith("multimapper_assignment (") } == 2
+            assert names.count { it.startsWith("categorize_reads (") } == 2
+            assert names.count { it.startsWith("summary_statistics (") } == 2
+        }
+    }
+
+    test("mixed aligned and STAR-empty samples each reach reports once") {
+
+        options "-stub -profile test"
+
+        when {
+            params {
+                input_csv = "${projectDir}/tests/nf/fixtures/test_stub.input_csv.csv"
+                stub_unaligned_samples = ["Sample2"]
+            }
+        }
+
+        then {
+            assert workflow.success
+            def names = workflow.trace.tasks()*.name
+            assert names.count { it.startsWith("star (") } == 2
+            assert names.count { it.contains("create_valid_empty_bam") } == 1
+            assert names.count { it.startsWith("raw_rseqc (") } == 2
+            assert names.count { it.startsWith("initial_feature_count (") } == 2
+            assert names.count { it.startsWith("filter_for_UMRs_mismatch (") } == 1
+            assert names.count { it.startsWith("categorize_reads (") } == 2
+            assert names.count { it.startsWith("summary_statistics (") } == 2
+            assert names.count { it.startsWith("qc_cascade_plot_single (") } == 2
+            assert names.count { it == "multi_sample_multiqc" } == 1
+            assert names.count { it == "qc_cascade_plot_multi" } == 1
+            assert names.count { it == "consolidated_report" } == 1
+        }
+    }
+
+    test("all QC-empty samples each reach reports once without STAR assignment") {
+
+        options "-stub -profile test"
+
+        when {
+            params {
+                input_csv = "${projectDir}/tests/nf/fixtures/test_stub.input_csv.csv"
+                stub_empty_qc_samples = ["Sample1", "Sample2"]
+            }
+        }
+
+        then {
+            assert workflow.success
+            def names = workflow.trace.tasks()*.name
+            assert names.count { it.startsWith("star (") } == 0
+            assert names.count { it.contains("create_valid_empty_bam") } == 2
+            assert names.count { it.startsWith("raw_rseqc (") } == 2
+            assert names.count { it.startsWith("initial_feature_count (") } == 2
+            assert names.count { it.startsWith("filter_for_UMRs_mismatch (") } == 0
+            assert names.count { it.startsWith("multimapper_assignment (") } == 0
+            assert names.count { it.startsWith("categorize_reads (") } == 2
+            assert names.count { it.startsWith("summary_statistics (") } == 2
+            assert names.count { it.startsWith("qc_cascade_plot_single (") } == 2
+            assert names.count { it == "multi_sample_multiqc" } == 1
+            assert names.count { it == "qc_cascade_plot_multi" } == 1
+            assert names.count { it == "consolidated_report" } == 1
+        }
+    }
+
+    test("rejects a shell-unsafe sample ID before per-sample tasks") {
+
+        options "-stub -profile test"
+
+        when {
+            params {
+                input_csv = "${projectDir}/tests/nf/fixtures/invalid_sample_id.input.csv"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            assert workflow.stdout.any { it.contains("Invalid sample ID") }
+            assert !workflow.trace.tasks().any { it.name.startsWith("qc (") }
+        }
+    }
+
+    test("rejects a shell-unsafe manual threshold before Cell Caller") {
+
+        options "-stub -profile test"
+
+        when {
+            params {
+                input_csv = "${projectDir}/tests/nf/fixtures/invalid_threshold.input.csv"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            assert workflow.stdout.any {
+                it.contains("manual Cell Caller threshold must be")
+            }
+            assert !workflow.trace.tasks().any { it.name.startsWith("cell_caller (") }
+        }
+    }
+
+    test("rejects conflicting multilane thresholds") {
+
+        options "-stub -profile test"
+
+        when {
+            params {
+                input_csv = "${projectDir}/tests/nf/fixtures/conflicting_thresholds.input.csv"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            assert workflow.stdout.any {
+                it.contains("conflicting manual Cell Caller thresholds")
+            }
+            assert !workflow.trace.tasks().any { it.name.startsWith("cell_caller (") }
+        }
+    }
+
+    test("rejects swapped FASTQ headers instead of silently swapping reads") {
+
+        options "-stub -profile test"
+
+        when {
+            params {
+                input_csv = "${projectDir}/tests/nf/fixtures/swapped_fastq_header.input.csv"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            assert workflow.stdout.any { it.contains("Invalid input CSV header") }
+            assert !workflow.trace.tasks().any { it.name.startsWith("qc (") }
+        }
+    }
+
+    test("rejects a shell-unsafe minimum count threshold before tasks") {
+
+        options "-stub -profile test"
+
+        when {
+            params {
+                input_csv = "${projectDir}/tests/nf/fixtures/test_stub.input_csv.csv"
+                minimum_count_threshold = "100; exit 97"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            assert workflow.stdout.any {
+                it.contains("minimum_count_threshold must be a non-negative integer")
+            }
+            assert workflow.trace.tasks().size() == 0
+        }
+    }
+
+    test("propagates one multilane manual threshold to one Cell Caller task") {
+
+        options "-stub -profile test"
+
+        when {
+            params {
+                input_csv = "${projectDir}/tests/nf/fixtures/multilane_partial_threshold.input.csv"
+            }
+        }
+
+        then {
+            assert workflow.success
+            def names = workflow.trace.tasks()*.name
+            assert names.count { it.startsWith("cell_caller (") } == 1
         }
     }
 }

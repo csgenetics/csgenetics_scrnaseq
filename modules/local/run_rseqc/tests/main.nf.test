@@ -1,0 +1,83 @@
+nextflow_process {
+
+    name "Test process run_rseqc"
+    script "../main.nf"
+    process "run_rseqc"
+
+    tag "modules"
+    tag "run_rseqc"
+
+    setup {
+        run("CREATE_TEST_BAM") {
+            script "./create_test_bam.nf"
+            process {
+                """
+                input[0] = file("${moduleTestDir}/fixtures/aligned.sam")
+                """
+            }
+        }
+    }
+
+    test("positive numeric alignment count runs read_distribution") {
+        when {
+            process {
+                """
+                input[0] = CREATE_TEST_BAM.out.bam.map { bam -> tuple("ALIGNED", bam, 1) }
+                input[1] = file("${moduleTestDir}/fixtures/gene_model.bed")
+                input[2] = file("${projectDir}/templates/rseqc_empty_template.txt")
+                input[3] = "annotated"
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.trace.tasks().count { it.name.startsWith("run_rseqc (") } == 1
+            assert process.out.rseqc_log.size() == 1
+            def result = process.out.rseqc_log.get(0)
+            assert result[0] == "ALIGNED"
+            assert path(result[1]).text.contains("Total Reads                   1")
+            assert path(result[1]).text.contains("Total Tags                    1")
+        }
+    }
+
+    test("zero numeric alignment count emits the empty template") {
+        when {
+            process {
+                """
+                input[0] = CREATE_TEST_BAM.out.bam.map { bam -> tuple("EMPTY", bam, 0) }
+                input[1] = file("${moduleTestDir}/fixtures/gene_model.bed")
+                input[2] = file("${projectDir}/templates/rseqc_empty_template.txt")
+                input[3] = "annotated"
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.trace.tasks().count { it.name.startsWith("run_rseqc (") } == 1
+            assert process.out.rseqc_log.size() == 1
+            def result = process.out.rseqc_log.get(0)
+            assert result[0] == "EMPTY"
+            assert path(result[1]).text == path("${projectDir}/templates/rseqc_empty_template.txt").text
+        }
+    }
+
+    test("Boolean alignment evidence fails instead of selecting a branch") {
+        when {
+            process {
+                """
+                input[0] = CREATE_TEST_BAM.out.bam.map { bam -> tuple("INVALID", bam, false) }
+                input[1] = file("${moduleTestDir}/fixtures/gene_model.bed")
+                input[2] = file("${projectDir}/templates/rseqc_empty_template.txt")
+                input[3] = "annotated"
+                """
+            }
+        }
+
+        then {
+            assert process.failed
+            assert process.errorReport.contains("alignment_count must be a non-negative integer")
+        }
+    }
+}
