@@ -222,8 +222,8 @@ readonly poll_interval_seconds=${SEQERA_POLL_INTERVAL_SECONDS:-60}
 # Heavy validated fixtures have taken over three hours. Allow 4.5 hours while
 # retaining a 30-minute cleanup margin below CircleCI Scale's five-hour job cap.
 readonly poll_timeout_seconds=${SEQERA_POLL_TIMEOUT_SECONDS:-16200}
-[[ $poll_interval_seconds =~ ^[0-9]+$ ]] || \
-  die 'SEQERA_POLL_INTERVAL_SECONDS must be a non-negative integer.'
+[[ $poll_interval_seconds =~ ^[1-9][0-9]*$ ]] || \
+  die 'SEQERA_POLL_INTERVAL_SECONDS must be a positive integer.'
 [[ $poll_timeout_seconds =~ ^[0-9]+$ ]] || \
   die 'SEQERA_POLL_TIMEOUT_SECONDS must be a non-negative integer.'
 
@@ -246,6 +246,8 @@ readonly launch_payload="${scratch_dir}/launch-action.request.json"
 readonly run_name="CI_${CIRCLE_SHA1:0:7}_${CIRCLE_BUILD_NUM}"
 readonly output_directory="${PIPELINE_OUTDIR_ROOT%/}/circleci/${run_name}"
 
+# Seqera models these separately: revision preserves branch/tag context,
+# commitId pins its exact commit, and pullLatest=false keeps that pin.
 if ! jq -n \
   --arg name "$run_name" \
   --arg compute_environment_id "$TOWER_COMPUTE_ENV_ID" \
@@ -368,7 +370,5 @@ while true; do
       ;;
   esac
 
-  if (( poll_interval_seconds > 0 )); then
-    sleep "$poll_interval_seconds"
-  fi
+  sleep "$poll_interval_seconds"
 done

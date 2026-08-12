@@ -37,7 +37,7 @@ process consolidated_report {
     ${template} \\
     ${params.mixed_species} \\
     ${vendor_dir} \\
-    ${multi_qc_cascade_html} \
+    ${multi_qc_cascade_html} \\
     'base64:${provenance_base64}'
   """
 

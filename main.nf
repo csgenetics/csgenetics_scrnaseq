@@ -189,9 +189,11 @@ include { consolidated_report } from './modules/local/consolidated_report/main.n
 
 workflow {
 
-  // Canonicalise the only CLI numeric interpolated into a task shell. The
-  // JSON schema is Launch UI metadata and is not a runtime validation layer.
-  params.minimum_count_threshold = canonicalMinimumCountThreshold(
+  // Canonicalise the only CLI numeric interpolated into a task shell. Nextflow
+  // params are immutable once the workflow starts, so carry the validated
+  // integer explicitly to every consumer instead of attempting to reassign the
+  // params entry. The JSON schema is Launch UI metadata, not runtime validation.
+  def minimum_count_threshold = canonicalMinimumCountThreshold(
     params.minimum_count_threshold
   )
 
@@ -212,7 +214,7 @@ workflow {
   // https://github.com/nextflow-io/nextflow/issues/1515
   // They may develop this functionality in the future, but for now we will use a process
   // to output the resolved configuration to a file.
-  save_resolved_configuration()
+  save_resolved_configuration(minimum_count_threshold)
 
   // Check whether params.star_index starts with s3://csgx.public.readonly
   // and if it does, download the file in a process and set the star_index to the downloaded file
@@ -553,7 +555,7 @@ workflow {
   ch_cell_caller = ch_h5ad.combine(user_specified_cell_caller_thresholds_ch, by: 0)
 
   // Run cell caller
-  cell_caller(ch_cell_caller)
+  cell_caller(ch_cell_caller, minimum_count_threshold)
   ch_cell_caller_out = cell_caller.out.cell_caller_out //[val(sample), int(cell_caller_nuc_gene_threshold)]
 
   // cell_caller_out is [sample_id, threshold] and ch_h5ad is [sample_id, raw_h5ad]; join by sample_id
@@ -630,7 +632,7 @@ workflow {
     nf_version:    workflow.nextflow.version.toString(),
     outdir:        params.outdir,
     barcode_kit:   params.barcode_list_path ? file(params.barcode_list_path).name : 'N/A',
-    count_threshold: params.minimum_count_threshold,
+    count_threshold: minimum_count_threshold,
     homepage:      workflow.manifest.homePage ?: 'https://github.com/csgenetics/csgenetics_scrnaseq'
   ])
   // Never interpolate raw JSON into a task shell or env export: customer paths

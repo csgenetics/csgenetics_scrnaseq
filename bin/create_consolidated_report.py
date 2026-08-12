@@ -73,7 +73,9 @@ SEQERA_DOWNLOAD_LIMIT_BYTES = 25_000_000
 # Plot fragments are inserted with Jinja's ``safe`` filter, so accepting arbitrary
 # HTML here would turn an offline report into an execution/network boundary.  The
 # contract below accepts only the exact structural subset emitted by
-# ``plotly.io.to_html(..., full_html=False, include_plotlyjs=False)``.  The only
+# ``plotly.io.to_html(..., full_html=False, include_plotlyjs=False)``. Plotly
+# upgrades must revalidate these expressions and the pinned offline browser
+# suite before changing the production dependency. The only
 # legacy markup removed is a document wrapper, the old Google Fonts stylesheet,
 # and Plotly's own CDN loader. Everything else fails loud.
 REPORT_SCRIPT_NONCE = "csgenetics-trusted-report-script"

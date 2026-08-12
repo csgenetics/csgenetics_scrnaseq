@@ -25,7 +25,7 @@ process initial_feature_count {
     # featureCounts can emit records out of coordinate order even when its
     # input header says SO:coordinate. Publish a genuinely coordinate-sorted
     # BAM so customer tooling such as samtools index can consume it.
-    samtools sort -@ ${task.cpus} -m 1G \
+    samtools sort -@ ${task.cpus} -m 768M \
       -o ${sample_id}.featureCounts.coordinate.bam \
       ${sample_id}_Aligned.sortedByCoord.out.bam.featureCounts.bam
     mv ${sample_id}.featureCounts.coordinate.bam \
@@ -34,6 +34,13 @@ process initial_feature_count {
     # Simply rename the input bam so that it can be collected
     cp $bam ${sample_id}_Aligned.sortedByCoord.out.bam.featureCounts.bam
   fi
+  # Fail in the producer if the public BAM has an unreadable header or is not
+  # genuinely coordinate sorted. Indexing also supports the intentional
+  # header-only, no-@SQ sentinel used for empty samples.
+  samtools view -H ${sample_id}_Aligned.sortedByCoord.out.bam.featureCounts.bam > /dev/null
+  samtools index \
+    ${sample_id}_Aligned.sortedByCoord.out.bam.featureCounts.bam \
+    ${sample_id}.featureCounts.coordinate.validation.bai
   """
 
   stub:

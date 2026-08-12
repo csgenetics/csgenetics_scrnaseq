@@ -114,9 +114,12 @@ The remaining `report/` paths and CSV schemas are retained, including
 byte-identical: the deterministic multimapper change causes the small metric
 and RSeQC deltas recorded in [the validation report](docs/validation.md#known-differences).
 
-**What has not changed:** parameters, the input CSV format, genome/profile names, and the
-locations and file formats of the `count_matrix` outputs. No change is needed to your sample
-sheets or launch commands beyond the Nextflow version.
+**What has not changed:** parameters, the documented input CSV layouts, genome/profile names,
+and the locations and file formats of the `count_matrix` outputs. Sample sheets using one of the
+documented headers need no changes, nor do launch commands beyond the Nextflow version. Version
+2.0 now rejects reordered, additional, or partially specified header columns instead of
+interpreting them positionally; see
+[Specifying input sequencing files](#specifying-input-sequencing-files).
 
 **One note on count matrices.** 2.0.0 resolves a pre-existing ambiguity in how multi-mapped reads
 were assigned. Previously the choice between equally-valid assignments depended on processing
@@ -294,7 +297,29 @@ The sequencing files to be analysed are specified using an input csv file.
 
 An example template can be found [here](input_csv/template.csv).
 
-The header row must be present and the full paths to files should be given.
+The header row must be present and must use one of the layouts below, in the order shown. Extra
+or reordered columns are rejected so read files and manual thresholds cannot be interpreted in
+the wrong positions. `sample_id` may be used instead of `sample`, and the legacy
+`manual_cellcaller_threshold` spelling (without the second underscore) remains accepted,
+including the corresponding `hsap_` and `mmus_` mixed-species column names.
+
+For a single-species reference:
+
+```text
+sample,fastq_1,fastq_2
+sample,fastq_1,fastq_2,manual_cell_caller_threshold
+```
+
+For `mouse_human_mix`:
+
+```text
+sample,fastq_1,fastq_2
+sample,fastq_1,fastq_2,hsap_manual_cell_caller_threshold,mmus_manual_cell_caller_threshold
+```
+
+If either mixed-species manual threshold is supplied, both threshold columns must be present;
+an individual value may be left blank to request automatic estimation for that species. The
+full paths to FASTQ files should be given.
 
 The `fastq_1` should contain the sequencing data that will be mapped to the genome. `fastq_2` should contain the CS Genetics barcode.
 

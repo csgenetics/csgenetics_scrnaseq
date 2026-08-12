@@ -1,0 +1,42 @@
+nextflow_process {
+
+    name "Test process merge_annotated_UMRs_with_annotated_multimappers"
+    script "../main.nf"
+    process "merge_annotated_UMRs_with_annotated_multimappers"
+
+    tag "modules"
+    tag "merge_annotated_UMRs_with_annotated_multimappers"
+
+    setup {
+        run("CREATE_TEST_BAMS") {
+            script "./create_test_bams.nf"
+            process {
+                """
+                input[0] = file("${moduleTestDir}/fixtures/umr.sam")
+                input[1] = file("${moduleTestDir}/fixtures/multimapper.sam")
+                """
+            }
+        }
+    }
+
+    test("sorts stale-coordinate inputs and passes coordinate-index validation") {
+        when {
+            process {
+                """
+                input[0] = CREATE_TEST_BAMS.out.umr
+                    .combine(CREATE_TEST_BAMS.out.multimapper)
+                    .map { umr, multimapper -> tuple("SAMPLE", umr, multimapper) }
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.high_conf_annotated_bam.size() == 1
+            def result = process.out.high_conf_annotated_bam.get(0)
+            assert result[0] == "SAMPLE"
+            assert path(result[1]).fileName.toString() == "SAMPLE.mapped.sorted.filtered.annotated.bam"
+            assert path(result[1]).size() > 0
+        }
+    }
+}

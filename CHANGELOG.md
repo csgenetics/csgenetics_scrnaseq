@@ -19,6 +19,11 @@ the full results, and the known differences.
 - **Requires Nextflow `>= 26.04.0`** (manifest `nextflowVersion = '!>=26.04.0'`). Nextflow 26
   evaluates process directive strings eagerly at compile time and uses the v2 config parser;
   the pipeline relies on these and will not run on older Nextflow.
+- **Input CSV headers are now validated before any task runs.** Documented sample sheets remain
+  compatible, including `sample_id` and the legacy `manual_cellcaller_threshold` spellings.
+  Reordered columns, additional columns, or a mixed-species sheet containing only one of the two
+  threshold columns now fail loudly instead of being interpreted positionally. See the accepted
+  layouts in README [Specifying input sequencing files](README.md#specifying-input-sequencing-files).
 - **The HTML report is consolidated into a single file.** The separate per-sample and
   multi-sample reports are replaced by one `report/consolidated_report.html`:
   - removed: `report/<sample>/<sample>_report.html`, `report/multisample_report.html`,

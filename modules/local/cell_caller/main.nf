@@ -19,6 +19,7 @@ process cell_caller {
 
   input:
   tuple val(sample_id), path(count_matrix_h5ad), val(manual_threshold_str)
+  val(minimum_count_threshold)
 
   output:
   tuple val(sample_id), stdout, emit: cell_caller_out
@@ -28,7 +29,7 @@ process cell_caller {
 
   script:
   """
-  cell_caller.py --sample_name ${sample_id} --minimum_count_threshold ${params.minimum_count_threshold} --count_matrix ${count_matrix_h5ad} --single_species ${!params.mixed_species} --manual_threshold_str $manual_threshold_str
+  cell_caller.py --sample_name ${sample_id} --minimum_count_threshold ${minimum_count_threshold} --count_matrix ${count_matrix_h5ad} --single_species ${!params.mixed_species} --manual_threshold_str $manual_threshold_str
   """
 
   stub:
@@ -36,6 +37,6 @@ process cell_caller {
   touch ${sample_id}_counts_pdf_with_threshold.html
   touch ${sample_id}_barnyard_plot.html
   touch ${sample_id}_pdf_with_cutoff.html
-  echo "100"
+  echo "${minimum_count_threshold}"
   """
 }

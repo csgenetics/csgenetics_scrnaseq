@@ -17,6 +17,7 @@ nextflow_pipeline {
 
         then {
             assert workflow.success
+            assert !workflow.stdout.any { it.contains("defined multiple times") }
             assert workflow.trace.succeeded().size() > 0
             assert workflow.trace.failed().size() == 0
             def names = workflow.trace.tasks()*.name
@@ -25,6 +26,24 @@ nextflow_pipeline {
             assert names.count { it.startsWith("filter_for_UMRs_mismatch (") } == 2
             assert names.count { it.startsWith("categorize_reads (") } == 2
             assert names.count { it.startsWith("summary_statistics (") } == 2
+        }
+    }
+
+    test("canonicalizes a CLI string minimum threshold without reassigning params") {
+
+        options "-stub -profile test"
+
+        when {
+            params {
+                input_csv = "${projectDir}/tests/nf/fixtures/test_stub.input_csv.csv"
+                minimum_count_threshold = "00100"
+            }
+        }
+
+        then {
+            assert workflow.success
+            assert !workflow.stdout.any { it.contains("defined multiple times") }
+            assert workflow.trace.tasks().count { it.name.startsWith("cell_caller (") } == 2
         }
     }
 

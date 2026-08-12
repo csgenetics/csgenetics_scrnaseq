@@ -12,7 +12,7 @@ nextflow_process {
         when {
             process {
                 """
-                // save_resolved_configuration takes no input; it dumps params.
+                input[0] = 100
                 """
             }
         }
@@ -34,6 +34,12 @@ nextflow_process {
         when {
             params {
                 awsregion = "eu-west-1'; printf SHOULD_NOT_EXECUTE >&2; # \$(false) — café"
+                minimum_count_threshold = "00100"
+            }
+            process {
+                """
+                input[0] = 100
+                """
             }
         }
 
@@ -43,7 +49,8 @@ nextflow_process {
             assertAll(
                 { assert process.success },
                 { assert parsed.awsregion == "eu-west-1'; printf SHOULD_NOT_EXECUTE >&2; # \$(false) — café" },
-                { assert parsed.minimum_count_threshold instanceof Number }
+                { assert parsed.minimum_count_threshold instanceof Number },
+                { assert parsed.minimum_count_threshold == 100 }
             )
         }
     }

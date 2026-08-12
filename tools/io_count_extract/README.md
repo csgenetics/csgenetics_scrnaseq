@@ -46,3 +46,7 @@ cp target/x86_64-unknown-linux-musl/release/io_count_extract ../../bin/io_count_
 The source has no third-party dependencies and the lockfile is committed, so the build is
 hermetic given a Rust toolchain with the `x86_64-unknown-linux-musl` target installed
 (`rustup target add x86_64-unknown-linux-musl`).
+
+CircleCI runs the Rust unit tests and rebuilds with the reviewed Rust 1.93.0 toolchain. After
+stripping, the result must match `bin/io_count_extract` byte-for-byte, so source and the
+production artifact cannot drift independently.

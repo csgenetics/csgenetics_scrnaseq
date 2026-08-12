@@ -124,6 +124,7 @@ trap 'rm -rf -- "$scratch_root"' EXIT
 mock_bin="${scratch_root}/mock-bin"
 mkdir -p "$mock_bin"
 ln -s "$repo_root/tests/test_seqera_release_gate.sh" "$mock_bin/curl"
+ln -s /bin/true "$mock_bin/sleep"
 
 readonly expected_token='mock-seqera-token-sentinel'
 readonly private_work_directory='mock://private-work-value-"quoted"'
@@ -144,6 +145,7 @@ case_state=''
 case_output=''
 case_status=0
 case_timeout=60
+case_poll_interval=1
 case_sha=$expected_sha
 include_token=1
 
@@ -153,6 +155,7 @@ new_case() {
   case_state="${scratch_root}/${name}"
   mkdir -p "$case_state"
   case_timeout=60
+  case_poll_interval=1
   case_sha=$expected_sha
   include_token=1
 }
@@ -182,7 +185,7 @@ run_case() {
     "CIRCLE_SHA1=${case_sha}"
     "CIRCLE_BRANCH=${expected_branch}"
     'CIRCLE_BUILD_NUM=4242'
-    'SEQERA_POLL_INTERVAL_SECONDS=0'
+    "SEQERA_POLL_INTERVAL_SECONDS=${case_poll_interval}"
     "SEQERA_POLL_TIMEOUT_SECONDS=${case_timeout}"
   )
 
@@ -322,6 +325,16 @@ expect_failure missing_token 'Required environment variable TOWER_AUTH_TOKEN is 
 assert_private_values_hidden missing_token
 [[ ! -e $case_state/calls.tsv ]] || \
   fail_test 'missing-token case reached the API'
+
+# A zero interval would hammer the API continuously for the whole deadline.
+new_case zero_poll_interval
+case_poll_interval=0
+run_case
+expect_failure zero_poll_interval \
+  'SEQERA_POLL_INTERVAL_SECONDS must be a positive integer.'
+assert_private_values_hidden zero_poll_interval
+[[ ! -e $case_state/calls.tsv ]] || \
+  fail_test 'zero-poll-interval case reached the API'
 
 # The checked-out commit and requested commit must agree before launch.
 new_case mismatched_sha

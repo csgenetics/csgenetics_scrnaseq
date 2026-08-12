@@ -1,4 +1,10 @@
-"""Fail-loud checks for repository scripts executed inside process Conda envs."""
+"""Configuration contracts for scripts executed inside process Conda envs.
+
+The configured production container is exercised separately by
+``tests/test_star_container_runtime.sh``; this module verifies that the Conda
+profile explicitly declares its own pinned interpreter instead of inheriting
+one accidentally.
+"""
 
 from pathlib import Path
 
@@ -15,7 +21,7 @@ def _dependencies(environment_name):
     return environment["dependencies"]
 
 
-def test_star_conda_environment_supplies_python_for_alignment_count_parser():
+def test_star_conda_environment_declares_pinned_python_for_alignment_parser():
     module = (REPO_ROOT / "modules/local/star/main.nf").read_text(encoding="utf-8")
     config = (REPO_ROOT / "conf/conda_envs.config").read_text(encoding="utf-8")
     dependencies = _dependencies("star_samtools.yml")
