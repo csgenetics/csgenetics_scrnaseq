@@ -72,6 +72,7 @@ jobs:
             export NXF_VER=26.04.1
             nf-test test \
               tests/nf/pipeline_stub.nf.test \
+              modules/local/consolidated_report/tests/main.nf.test \
               modules/local/run_rseqc/tests/main.nf.test \
               modules/local/save_resolved_configuration/tests/main.nf.test \
               --verbose

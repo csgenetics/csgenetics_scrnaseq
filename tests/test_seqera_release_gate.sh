@@ -134,6 +134,12 @@ expected_sha=$(git -C "$repo_root" rev-parse HEAD)
 readonly expected_sha
 readonly expected_branch='release/mock-branch'
 
+grep -Fq 'SEQERA_POLL_TIMEOUT_SECONDS:-16200' \
+  "$repo_root/.circleci/run_seqera_release_gate.sh" || {
+    printf 'FAIL: production Seqera polling deadline is not 4.5 hours\n' >&2
+    exit 1
+  }
+
 case_state=''
 case_output=''
 case_status=0

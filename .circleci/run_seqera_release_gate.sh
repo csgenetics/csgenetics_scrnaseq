@@ -219,7 +219,9 @@ valid_seqera_id "$TOWER_COMPUTE_ENV_ID" || \
   die 'CIRCLE_BRANCH exceeds the supported length.'
 
 readonly poll_interval_seconds=${SEQERA_POLL_INTERVAL_SECONDS:-60}
-readonly poll_timeout_seconds=${SEQERA_POLL_TIMEOUT_SECONDS:-7200}
+# Heavy validated fixtures have taken over three hours. Allow 4.5 hours while
+# retaining a 30-minute cleanup margin below CircleCI Scale's five-hour job cap.
+readonly poll_timeout_seconds=${SEQERA_POLL_TIMEOUT_SECONDS:-16200}
 [[ $poll_interval_seconds =~ ^[0-9]+$ ]] || \
   die 'SEQERA_POLL_INTERVAL_SECONDS must be a non-negative integer.'
 [[ $poll_timeout_seconds =~ ^[0-9]+$ ]] || \
