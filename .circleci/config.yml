@@ -35,8 +35,8 @@ jobs:
     # per-branch, NOT from shared CircleCI project env vars. Each commit therefore launches
     # on the compute environment that matches its own pipeline version, and a merge carries
     # the right CE with it (no manual CircleCI env-var flip). Secrets and private storage
-    # locations remain CircleCI project env vars. The Nextflow version is likewise pinned in
-    # the launch JSON below (preRunScript), so version + CE + workspace travel with the commit.
+    # locations remain CircleCI project env vars. The Nextflow version is likewise pinned by
+    # the launcher below, so version + CE + workspace travel with the commit.
     # These two IDs are deliberately in this PUBLIC repo: they are opaque identifiers, inert
     # without TOWER_AUTH_TOKEN, and must travel with the commit for the above to work. Do not
     # "fix" them into CircleCI env vars.
@@ -48,73 +48,8 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Create the NAME environment variable
-          command: |
-            echo "BASH_ENV is $BASH_ENV"
-            NAME=$(echo CI_$(echo $CIRCLE_SHA1 | cut -c -7)_$(date +"%H_%M_%S"))
-            echo "NAME is $NAME"
-            echo "export NAME=$NAME" >> "$BASH_ENV"
-            echo "BASH_ENV is $BASH_ENV"
-      - run:
-          name: Create a new endpoint for the current branch
-          command: |
-            : "${TOWER_WORK_DIR:?Configure TOWER_WORK_DIR as a private CircleCI environment variable}"
-            myvar=`curl -X POST "https://api.tower.nf/actions?workspaceId=$TOWER_WORKSPACE_ID" \
-            -H "Accept: application/json" \
-            -H "Authorization: Bearer $TOWER_AUTH_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d '{"name":"'"$NAME"'","source":"tower","launch":{"configProfiles":["test"], "computeEnvId":"'"$TOWER_COMPUTE_ENV_ID"'","pipeline":"https://github.com/csgenetics/csgenetics_scrnaseq","workDir":"'"$TOWER_WORK_DIR"'","revision":"'"$CIRCLE_SHA1"'","pullLatest":true,"preRunScript":"export NXF_VER=26.04.1"}}'`
-            id=`echo $myvar | awk -F: {'print $2'} | sed 's/}//g'`
-            echo "export ACTION_ID=$id" >> $BASH_ENV
-            echo $id
-      - run:
-          name: Start the pipeline using the newly created endpoint
-          command: |
-            : "${PIPELINE_OUTDIR_ROOT:?Configure PIPELINE_OUTDIR_ROOT as a private CircleCI environment variable}"
-            echo "NAME is $NAME"
-            SHA=$NAME
-            echo $NAME
-            outdir="${PIPELINE_OUTDIR_ROOT%/}/circleci/${NAME}"
-            myvar=`curl -X POST "https://api.tower.nf/actions/$ACTION_ID/launch?workspaceId=$TOWER_WORKSPACE_ID" \
-            -H "Authorization: Bearer $TOWER_AUTH_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d '{"params":{"outdir":"'"$outdir"'"}}'`
-            WORKFLOW_ID=`echo $myvar | awk -F: '{print $2}' | sed 's/}//g' | sed 's/"//g'`
-            echo $WORKFLOW_ID
-            echo "export WORKFLOW_ID=$WORKFLOW_ID" >> $BASH_ENV
-      - run:
-          name: Monitor pipeline execution
-          command: |
-            status=`curl -X GET "https://api.tower.nf/workflow/$WORKFLOW_ID?workspaceId=$TOWER_WORKSPACE_ID" \
-            -H "Authorization: Bearer $TOWER_AUTH_TOKEN" \
-            -H "Content-Type: application/json" | jq '.workflow.status' | sed 's/"//g'`
-            echo $status
-            while [[ "$status" != "SUCCEEDED" ]]; do
-              if [ "$status" = "CANCELLED" ]; then
-                echo "run was cancelled, deleting endpoint"
-                curl -X DELETE "https://api.tower.nf/actions/$ACTION_ID?workspaceId=$TOWER_WORKSPACE_ID" \
-                -H "Authorization: Bearer $TOWER_AUTH_TOKEN" \
-                -H "Accept: application/json"
-                exit 1
-              fi
-              if [ "$status" = "FAILED" ]; then
-                echo "run failed"
-                curl -X DELETE "https://api.tower.nf/actions/$ACTION_ID?workspaceId=$TOWER_WORKSPACE_ID" \
-                -H "Authorization: Bearer $TOWER_AUTH_TOKEN" \
-                -H "Accept: application/json"
-                exit 1
-              fi
-              sleep 60
-              status=`curl -X GET "https://api.tower.nf/workflow/$WORKFLOW_ID?workspaceId=$TOWER_WORKSPACE_ID" \
-              -H "Authorization: Bearer $TOWER_AUTH_TOKEN" \
-              -H "Content-Type: application/json" | jq '.workflow.status' | sed 's/"//g'`
-            done
-      - run:
-          name: Delete the newly created endpoint
-          command: |
-            curl -X DELETE "https://api.tower.nf/actions/$ACTION_ID?workspaceId=$TOWER_WORKSPACE_ID" \
-            -H "Authorization: Bearer $TOWER_AUTH_TOKEN" \
-            -H "Accept: application/json"
+          name: Launch and monitor exact revision on Seqera Platform
+          command: .circleci/run_seqera_release_gate.sh
 
   # Fast structural test: runs the whole pipeline in -stub mode (no real data,
   # no AWS credentials needed - the S3 download processes are stubbed), plus the
@@ -195,6 +130,7 @@ jobs:
           command: |
             tests/check_no_internal_files.sh
             tests/check_no_internal_files_test.sh
+            tests/test_seqera_release_gate.sh
 
   # The release comparator is itself a release gate. Exercise every file-class
   # contract with a locked Python/anndata/scipy/samtools environment so a missing
@@ -315,4 +251,11 @@ workflows:
       - report-smoke:
           requires:
             - report-production-container
-      - run-current-branch
+      - run-current-branch:
+          requires:
+            - check-no-internal-files
+            - comparator-tests
+            - nf-test
+            - python-tests
+            - report-production-container
+            - report-smoke
