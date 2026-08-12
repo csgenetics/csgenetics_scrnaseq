@@ -107,4 +107,113 @@ nextflow_pipeline {
             assert names.count { it == "consolidated_report" } == 1
         }
     }
+
+    test("rejects a shell-unsafe sample ID before per-sample tasks") {
+
+        options "-stub -profile test"
+
+        when {
+            params {
+                input_csv = "${projectDir}/tests/nf/fixtures/invalid_sample_id.input.csv"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            assert workflow.stdout.any { it.contains("Invalid sample ID") }
+            assert !workflow.trace.tasks().any { it.name.startsWith("qc (") }
+        }
+    }
+
+    test("rejects a shell-unsafe manual threshold before Cell Caller") {
+
+        options "-stub -profile test"
+
+        when {
+            params {
+                input_csv = "${projectDir}/tests/nf/fixtures/invalid_threshold.input.csv"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            assert workflow.stdout.any {
+                it.contains("manual Cell Caller threshold must be")
+            }
+            assert !workflow.trace.tasks().any { it.name.startsWith("cell_caller (") }
+        }
+    }
+
+    test("rejects conflicting multilane thresholds") {
+
+        options "-stub -profile test"
+
+        when {
+            params {
+                input_csv = "${projectDir}/tests/nf/fixtures/conflicting_thresholds.input.csv"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            assert workflow.stdout.any {
+                it.contains("conflicting manual Cell Caller thresholds")
+            }
+            assert !workflow.trace.tasks().any { it.name.startsWith("cell_caller (") }
+        }
+    }
+
+    test("rejects swapped FASTQ headers instead of silently swapping reads") {
+
+        options "-stub -profile test"
+
+        when {
+            params {
+                input_csv = "${projectDir}/tests/nf/fixtures/swapped_fastq_header.input.csv"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            assert workflow.stdout.any { it.contains("Invalid input CSV header") }
+            assert !workflow.trace.tasks().any { it.name.startsWith("qc (") }
+        }
+    }
+
+    test("rejects a shell-unsafe minimum count threshold before tasks") {
+
+        options "-stub -profile test"
+
+        when {
+            params {
+                input_csv = "${projectDir}/tests/nf/fixtures/test_stub.input_csv.csv"
+                minimum_count_threshold = "100; exit 97"
+            }
+        }
+
+        then {
+            assert workflow.failed
+            assert workflow.stdout.any {
+                it.contains("minimum_count_threshold must be a non-negative integer")
+            }
+            assert workflow.trace.tasks().size() == 0
+        }
+    }
+
+    test("propagates one multilane manual threshold to one Cell Caller task") {
+
+        options "-stub -profile test"
+
+        when {
+            params {
+                input_csv = "${projectDir}/tests/nf/fixtures/multilane_partial_threshold.input.csv"
+            }
+        }
+
+        then {
+            assert workflow.success
+            def names = workflow.trace.tasks()*.name
+            assert names.count { it.startsWith("cell_caller (") } == 1
+        }
+    }
 }

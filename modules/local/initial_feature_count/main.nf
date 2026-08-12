@@ -22,6 +22,14 @@ process initial_feature_count {
     # Start by running feature counts on the star output
     # including strandedness and annotation of multimappers
     featureCounts -a $gtf -o ${sample_id}.star.featureCounts.gene.txt -R BAM ${sample_id}_Aligned.sortedByCoord.out.bam -T ${task.cpus} -t transcript -g gene_id --fracOverlap 0.5 --extraAttributes gene_name -s 1 -M
+    # featureCounts can emit records out of coordinate order even when its
+    # input header says SO:coordinate. Publish a genuinely coordinate-sorted
+    # BAM so customer tooling such as samtools index can consume it.
+    samtools sort -@ ${task.cpus} -m 1G \
+      -o ${sample_id}.featureCounts.coordinate.bam \
+      ${sample_id}_Aligned.sortedByCoord.out.bam.featureCounts.bam
+    mv ${sample_id}.featureCounts.coordinate.bam \
+      ${sample_id}_Aligned.sortedByCoord.out.bam.featureCounts.bam
   else
     # Simply rename the input bam so that it can be collected
     cp $bam ${sample_id}_Aligned.sortedByCoord.out.bam.featureCounts.bam

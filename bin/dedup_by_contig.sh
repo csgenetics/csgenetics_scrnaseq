@@ -8,9 +8,9 @@
 # identical read-count-out and an identical (barcode, gene) multiset (i.e. identical count matrix).
 #
 # NB: umi_tools' choice of WHICH read represents a UMI group is stateful, so the merged dedup.bam
-# keeps an equivalent-but-different representative read (same molecule: same barcode/UMI/position,
-# hence same gene) for some groups. All counts and metrics are identical; only the representative
-# reads in the published BAM differ.
+# keeps an equivalent-but-different representative read (same molecule: same barcode/UMI,
+# UMI-tools-adjusted 5' position and gene) for some groups. All counts and metrics are identical;
+# only the representative reads in the published BAM differ.
 #
 # Usage: dedup_by_contig.sh <bam> <sample_id> <cpus>
 set -euo pipefail

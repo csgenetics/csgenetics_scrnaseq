@@ -24,9 +24,11 @@ python3 compare_outputs.py <dir_a> <dir_b> [--json OUT] [--max-diffs N] \
   [Envelope mode](#envelope-mode-the-count-matrix-ambiguity).
 - `--allow-subset` — explicitly compare a curated, non-empty common subset.
   This supports diagnostic 1.x-to-2.0 inventories, where intentional filename
-  changes make whole-tree path equality impossible; it does not relax any
-  selected file's class. The default compares two 2.0 published trees and
-  requires all five fixed `pipeline_info` files.
+  changes make whole-tree path equality impossible. It disables the complete
+  manifest and the 2.0-only tripartite gzip-byte assertion, while retaining
+  strict decompressed payload validation/comparison for those legacy archives
+  and every other selected file contract. The default compares two 2.0
+  published trees and requires all five fixed `pipeline_info` files.
 
 Exit code is `0` when equivalent, `1` when any failure is detected.
 
@@ -54,8 +56,10 @@ fails. Extra or missing published files are never tolerated.
 By default, `resolved_configuration.txt`, execution trace, report, timeline and
 DAG must all exist beneath `pipeline_info/` in both trees. An empty tree, or two
 trees both missing any of those fixed manifest files, therefore fails.
-`--allow-subset` disables only that fixed-manifest requirement; the curated
-subset must still be non-empty and its relative file set must match exactly.
+`--allow-subset` disables that fixed-manifest requirement and the 2.0-only
+tripartite archive-byte assertion; the curated subset must still be non-empty,
+its relative file set must match exactly, and the archive payloads remain
+strictly validated and compared.
 Dynamic sample outputs cannot be inferred without the run inputs, so they are
 governed by symmetric path-set equality rather than a hard-coded minimum list.
 
@@ -76,10 +80,10 @@ output tree must have identical container bytes.
 | `MULTIQC_LOG` | `multiqc.log` | parse the pinned MultiQC 1.14 log; normalise timestamps, run/temp directories and the external update check; compare all remaining ordered log records and reject error-level/incomplete logs | yes |
 | `MULTIQC_JSON` | `multiqc_data.json`, `*.multiqc.data.json` | strictly parse the MultiQC 1.14 data object; normalise creation/analysis paths and source directories; compare all report data/configuration that remains | yes |
 | `MULTIQC_SOURCES` | `multiqc_sources.txt` | parse the four-column TSV and compare the multiset of module/section/sample/source-basename records | yes |
-| `GZ_TEXT_EXACT` | `*barcodes.tsv.gz`, `*features.tsv.gz` | gunzip, exact compare | yes |
-| `MTX` | `*matrix.mtx.gz` | strictly validate MatrixMarket structure and exact non-negative numeric values, then compare shape/field and entry triplets as an externally sorted multiset | yes |
+| `GZ_TEXT_EXACT` | `*barcodes.tsv.gz`, `*features.tsv.gz` | validate gzip/UTF-8 and exact decompressed text; the default complete-tree gate additionally requires byte-identical archives | yes |
+| `MTX` | `*matrix.mtx.gz` | strictly validate MatrixMarket structure and exact non-negative numeric values, then compare shape/field and entry triplets as an externally sorted multiset; semantic equality in the default complete-tree gate additionally requires byte-identical archives | yes |
 | `H5AD` | `*.h5ad` | open with anndata; require finite, non-negative real-numeric `X` and `raw.X`; compare `X`, obs/var annotations and names, layers, multidimensional annotations, pairwise matrices, `uns`, and `raw`; named `*.empty.h5ad` sentinels pass only when both are zero bytes | yes |
-| `BAM` | `*.bam` | fully read with samtools; compare the stable SAM header and the multiset of molecule identities within each coordinate tie | yes |
+| `BAM` | `*.bam` | fully read with samtools; compare stable headers and order-insensitive coordinate ties, using complete alignment records before deduplication and stable molecule identities only for `deduplication/*.dedup.bam` | yes |
 | `HTML` | `*.html` | parse elements/scripts and apply a filename-specific consolidated-report, MultiQC, Plotly, or Nextflow contract; compare stable Nextflow task/timeline/DAG semantics; explicitly named empty Cell Caller plots pass only when both are zero bytes | invalid, failed, unrecognised, or semantically changed Nextflow HTML fails; valid presentation HTML is `PRESENT` |
 | `BINARY_EXACT` | anything else | sha256 compare | yes |
 
@@ -136,6 +140,10 @@ output tree must have identical container bytes.
   limited to 1,000 digits, real tokens to 4,096 characters, and canonical real
   exponents to +/-10,000. Those limits are many orders of magnitude beyond a
   count-matrix producer value; exceeding one fails validation before summation.
+  When those semantics are `EQUAL`, the default complete-tree gate also requires
+  identical gzip bytes, exercising 2.0's deterministic archive contract. An
+  explicit `--allow-subset` cross-version diagnostic validates decompressed
+  semantics because legacy 1.x archives did not promise deterministic headers.
 - **`H5AD`** — byte identity is not meaningful for HDF5 containers. Both files
   must first open as AnnData, after which all customer-visible AnnData slots are
   compared. Count matrices are read in bounded row chunks and hashed in a
@@ -146,27 +154,28 @@ output tree must have identical container bytes.
   numeric overflow. The pipeline deliberately emits zero-byte `*.empty.h5ad`
   sentinels for samples without a count matrix; only that suffix, with zero
   bytes on both sides, is accepted.
-- **`BAM`** — compression and `@PG` invocation records are not alignment
-  semantics. Each BAM must pass `samtools quickcheck` and be readable end to
-  end. Within each `(reference, start)` tie, record order is immaterial and the
-  comparator checks a multiset of the pipeline's stable molecule key:
-  reference/start/strand, cell barcode, optional UMI (canonically empty for the
-  current chemistry), and the complete `XT` gene assignment. XT absence is an
-  explicit empty key for pre-annotation STAR and legitimately unassigned reads
-  in the initial featureCounts BAM. It is required for every record in the
-  high-confidence `*.mapped.sorted.filtered.annotated.bam` and downstream
-  `*.dedup.bam`; symmetric tag loss in those outputs fails validation.
-  QNAME source identity, SEQ, QUAL, MAPQ, CIGAR, mate fields, and
-  incidental optional tags are excluded because parallel deduplication may
-  select a different PCR duplicate to represent the same molecule. Comparison
-  of coordinate-sorted files is bounded by the largest coordinate-tie group.
-  The published STAR BAM is `SO:unsorted`, so it is first passed through
-  samtools' 64-MiB external merge sort; this keeps Python memory bounded while
-  using temporary disk proportional to that BAM.
-  This exclusion is an intentional residual risk: a change confined to those
-  representative-read fields will pass. Consumers who depend directly on
-  QNAME/SEQ/QUAL/MAPQ/CIGAR/mate or incidental tags must add a separate
-  comparison for their use case.
+- **`BAM`** — compression, `@PG` invocation records and coordinate-tie order are
+  not alignment semantics. Each BAM must pass `samtools quickcheck` and be
+  readable end to end. STAR, initial featureCounts and high-confidence
+  annotated BAMs compare the complete record contract: QNAME, complete FLAG,
+  reference/start, MAPQ, CIGAR, mate fields, SEQ, QUAL and every typed optional
+  tag (tag order alone is ignored). This makes clipping, splicing, alignment
+  quality, sequence or assignment regressions fail.
+
+  Only `deduplication/*.dedup.bam` uses the narrower stable-molecule multiset:
+  reference, UMI-tools-adjusted 5′ position, strand, cell barcode, optional UMI
+  (canonically empty for the current chemistry), and complete `XT` gene
+  assignment. Parallel
+  deduplication may select a different PCR duplicate representative, so that
+  stage alone excludes its QNAME prefix, SEQ, QUAL, MAPQ, CIGAR, mate fields
+  and incidental tags. `XT` is required in high-confidence annotated and dedup
+  outputs; its symmetric loss fails validation. This dedup-only exclusion is
+  the documented residual risk.
+
+  Comparison is bounded by the largest coordinate-tie group. The configured
+  STAR BAM is unsorted and STAR may omit `SO`; that exact published stage is
+  normalised to the known unsorted contract and passed through samtools' 64-MiB
+  external merge sort, using temporary disk proportional to the BAM.
 - **`HTML`** — Class D presentation artefacts contain volatile Plotly element
   IDs and run provenance, so their content is not an equivalence contract. They
   must nevertheless decode as UTF-8, parse as balanced HTML, and contain parsed
@@ -295,7 +304,9 @@ presentation HTML and normalised Nextflow/MultiQC provenance deliberately have
 other contracts. The raw and filtered tripartite count-matrix archives are the
 stronger exception: from 2.0.0 their gzip headers and payload ordering are
 deterministic, so identical inputs produce byte-identical `barcodes.tsv.gz`,
-`features.tsv.gz`, and `matrix.mtx.gz` archives.
+`features.tsv.gz`, and `matrix.mtx.gz` archives. The default complete-tree gate
+validates their decompressed semantics before enforcing byte identity;
+`--allow-subset` retains semantic comparison for legacy cross-version archives.
 
 Note that the same upstream count differences surface in **both** the
 `matrix.mtx.gz` and its `.h5ad` twin (the h5ad stores the same matrix,

@@ -314,6 +314,10 @@ can be merged by the pipeline and used for a single sample
 by supplying the same sample name but with different sequencing file sets
 on separate lines.
 
+Sample names become output directory and file names. They must be 1-128
+characters, begin with a letter or number, and contain only letters, numbers,
+periods, underscores, or hyphens. The special names `.` and `..` are rejected.
+
 E.g.
 
 ```bash

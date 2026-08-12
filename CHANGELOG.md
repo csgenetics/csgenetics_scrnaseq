@@ -62,7 +62,8 @@ the full results, and the known differences.
     `bin/assign_multi_mappers.gawk`), which allows the previously single-threaded `samtools sort -n`
     to be threaded. One-time effect: a few genuinely-ambiguous multimapped reads (~0.3% of count-matrix
     entries; cell calls unchanged) resolve to a deterministic canonical alignment.
-  - `samtools sort`/`view` threading in `initial_feature_count` and the filter steps (byte-identical).
+  - `samtools sort`/`view` threading in `initial_feature_count` and the filter steps
+    (record-identical/downstream-equivalent; BGZF container bytes can vary with thread count).
   Remaining target: the multimapper assignment gawk and RSeQC `read_distribution` (both single-threaded).
 - **Report.** A single, offline-safe (no CDN) consolidated report with CS Genetics branding,
   a searchable per-sample selector, and a cross-sample metrics table. Independently published
@@ -116,7 +117,7 @@ This release makes the pipeline **run-to-run output-reproducible** under the com
 documented per-class contracts by pinning `PYTHONHASHSEED=0`. The prior non-determinism was
 `umi_tools` choosing between equally-ranked reads via Python's hash-seed-randomized set
 iteration; pinning the seed makes that choice deterministic. This is not a claim that every
-container and report in the whole output directory has identical bytes: BAM representatives,
+container and report in the whole output directory has identical bytes: deduplicated BAM representatives,
 HDF5 encoding, presentation HTML, and normalised Nextflow/MultiQC provenance have explicit
 semantic contracts.
 

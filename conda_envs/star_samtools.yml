@@ -3,5 +3,8 @@ channels:
   - conda-forge
   - bioconda
 dependencies:
+  # STAR calls the repository's Python 3 star_alignment_counts.py parser to
+  # validate Log.final.out before downstream empty/multimapper routing.
+  - python =3.11
   - star =2.7.11b
   - samtools =1.18

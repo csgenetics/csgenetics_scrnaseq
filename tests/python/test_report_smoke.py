@@ -42,6 +42,9 @@ except ImportError:  # production report container intentionally has no browser 
 pytestmark = pytest.mark.integration
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+sys.path.insert(0, os.path.join(REPO_ROOT, "bin"))
+import create_consolidated_report  # noqa: E402
+
 GENERATOR = os.path.join(REPO_ROOT, "bin", "create_consolidated_report.py")
 TEMPLATE = os.path.join(REPO_ROOT, "templates", "consolidated_report_template.html.jinja2")
 VENDOR_DIR = os.path.join(REPO_ROOT, "assets", "vendor")
@@ -656,6 +659,59 @@ def test_run_provenance_renders_when_supplied(tmp_path):
     for token in ["Run provenance", "GRCh38", "cheeky_curie", "Key results", "Output files"]:
         assert token in html, f"provenance render missing {token!r}"
     assert "<title>CS Genetics scRNA-seq report - cheeky_curie" in html, "title lacks run id"
+
+
+def test_run_provenance_base64_treats_shell_characters_as_data(tmp_path):
+    """The production Nextflow boundary must not interpolate provenance in shell."""
+    import base64
+    import json
+
+    marker = tmp_path / "shell-payload-executed"
+    for name in os.listdir(FIXTURE_DIR):
+        shutil.copy(os.path.join(FIXTURE_DIR, name), tmp_path / name)
+    run_name = f"O'Brien;$(touch {marker})"
+    provenance = json.dumps({
+        "genome": "GRCh38", "annotation": "customer's annotation.gtf",
+        "mixed": False, "pipeline_ver": "2.0.0", "commit": "abc1234",
+        "revision": "devel", "run_name": run_name, "session_id": "session-1",
+        "start": "2026-08-12T12:00:00Z", "nf_version": "26.04.1",
+        "outdir": "/results/O'Brien; echo inert", "barcode_kit": "kit.csv",
+        "count_threshold": 100,
+        "homepage": "https://github.com/csgenetics/csgenetics_scrnaseq",
+    })
+    encoded = base64.b64encode(provenance.encode("utf-8")).decode("ascii")
+
+    subprocess.run(
+        [sys.executable, GENERATOR, TEMPLATE, "FALSE", VENDOR_DIR,
+         str(tmp_path / "multisample_qc_cascade.html"), f"base64:{encoded}"],
+        cwd=tmp_path, check=True,
+    )
+
+    html = (tmp_path / "consolidated_report.html").read_text(encoding="utf-8")
+    assert run_name.replace("'", "&#39;") in html
+    assert "/results/O&#39;Brien; echo inert" in html
+    assert not marker.exists()
+
+
+def test_nextflow_report_provenance_is_encoded_before_shell_interpolation():
+    module = (Path(REPO_ROOT) / "modules/local/consolidated_report/main.nf").read_text(
+        encoding="utf-8"
+    )
+    workflow = (Path(REPO_ROOT) / "main.nf").read_text(encoding="utf-8")
+    assert "val(provenance_base64)" in module
+    assert "'base64:${provenance_base64}'" in module
+    assert "provenance_json.getBytes('UTF-8').encodeBase64().toString()" in workflow
+    assert "'${provenance_json}'" not in module
+
+
+@pytest.mark.parametrize(
+    "encoded", ["base64:not!base64", "base64:/w=="]
+)
+def test_invalid_provenance_base64_fails_loud(encoded):
+    with pytest.raises(ValueError, match="run provenance base64 is invalid"):
+        create_consolidated_report.load_run_provenance(
+            ["generator", "template", "FALSE", "vendor", "multi", encoded]
+        )
 
 
 def test_malicious_sample_id_is_escaped_not_executed(tmp_path, browser):

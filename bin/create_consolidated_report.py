@@ -29,7 +29,12 @@ no external CDN URLs and renders with no network.
 
 Usage:
   create_consolidated_report.py <template> <mixed_species> <vendor_dir> \\
-      <multi_qc_cascade_html>
+      <multi_qc_cascade_html> [provenance_json]
+
+Nextflow supplies provenance in the optional positional argument with a
+``base64:`` prefix. Groovy performs the encoding before task generation, so raw
+customer paths and run names are never interpolated into shell source. Direct
+JSON remains supported for backwards-compatible invocation.
 
 All per-sample inputs are staged FLAT into the working directory by Nextflow.
 Samples are discovered from the ``*.metrics.csv`` files, and each sample's plot
@@ -41,6 +46,8 @@ fragments are located by their conventional filenames in the same directory:
 """
 
 import sys
+import base64
+import binascii
 import os
 import json
 import re
@@ -686,17 +693,36 @@ def read_text_asset(vendor_dir, name):
         return f.read()
 
 
+def load_run_provenance(argv):
+    """Strictly decode and parse optional run metadata."""
+    raw = argv[5] if len(argv) > 5 else ""
+    if not raw or not raw.strip():
+        return {}
+    if raw.startswith("base64:"):
+        try:
+            raw = base64.b64decode(raw.removeprefix("base64:"), validate=True).decode(
+                "utf-8", errors="strict"
+            )
+        except (binascii.Error, UnicodeDecodeError) as exc:
+            raise ValueError(f"run provenance base64 is invalid: {exc}") from exc
+    try:
+        provenance = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"run provenance is not valid JSON: {exc}") from exc
+    if not isinstance(provenance, dict):
+        raise ValueError("run provenance must be a JSON object")
+    return provenance
+
+
 class ConsolidatedReport:
     def __init__(self):
         self.template_path = sys.argv[1]
         self.mixed = sys.argv[2].upper() == "TRUE"
         self.vendor_dir = sys.argv[3]
         self.multi_qc_cascade_path = sys.argv[4]
-        # Optional run-provenance JSON (genome, pipeline version, run id, etc.) passed
-        # by the consolidated_report process. Absent/empty -> no provenance section.
-        self.provenance = (
-            json.loads(sys.argv[5]) if len(sys.argv) > 5 and sys.argv[5].strip() else {}
-        )
+        # Nextflow passes optional run-provenance JSON as a shell-inert base64
+        # argument. The direct JSON form remains supported. Absent -> no section.
+        self.provenance = load_run_provenance(sys.argv)
         # All per-sample inputs are staged flat into the cwd.
         self.work_dir = "."
         self.script_nonce = REPORT_SCRIPT_NONCE

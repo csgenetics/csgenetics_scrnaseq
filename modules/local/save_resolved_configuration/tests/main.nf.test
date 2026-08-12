@@ -28,4 +28,23 @@ nextflow_process {
             )
         }
     }
+
+    test("preserves hostile shell characters and Unicode as inert JSON data") {
+
+        when {
+            params {
+                awsregion = "eu-west-1'; printf SHOULD_NOT_EXECUTE >&2; # \$(false) — café"
+            }
+        }
+
+        then {
+            def output = path(process.out[0][0])
+            def parsed = new groovy.json.JsonSlurper().parseText(output.text)
+            assertAll(
+                { assert process.success },
+                { assert parsed.awsregion == "eu-west-1'; printf SHOULD_NOT_EXECUTE >&2; # \$(false) — café" },
+                { assert parsed.minimum_count_threshold instanceof Number }
+            )
+        }
+    }
 }

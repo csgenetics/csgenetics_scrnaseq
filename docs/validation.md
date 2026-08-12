@@ -216,9 +216,11 @@ not a command expected to exit zero: the strict `TEXT_EXACT` metric/RSeQC
 classes and strict dedup-count contract correctly reported the measured
 cross-version changes described above. Each `DIFFER` was reconciled with those
 results, and matrix envelope verdicts were assessed separately for the
-net-preserving ambiguity. `--allow-subset` disables only the 2.0 complete-run
-`pipeline_info` manifest requirement; it does not relax any selected file or
-turn a known change into a pass.
+net-preserving ambiguity. `--allow-subset` disables the 2.0 complete-run
+`pipeline_info` manifest and the 2.0-only deterministic gzip-byte assertion;
+it still validates and compares the legacy archives' decompressed payloads,
+does not relax any other selected file, and does not turn a known value change
+into a pass.
 
 Strict mode is the default and applies each output class's documented equivalence contract with no
 count-matrix ambiguity allowance. Envelope mode relaxes *only* the count-matrix comparison, and
@@ -231,9 +233,14 @@ barcodes.
 Choose the budget to suit your data; `--json` writes the full result set if you want to inspect
 what differed. Within 2.0.0, strict mode should pass — the pipeline is now reproducible run to
 run under those per-class semantic/output contracts. This does not assert whole-directory byte
-identity: for example, the BAM contract deliberately permits a different representative read for
-the same stable molecule, and run-specific Nextflow task IDs/timings/resources are normalised.
+identity: for example, the deduplicated-BAM contract deliberately permits a different representative
+read for the same stable molecule, while STAR, initial featureCounts and high-confidence annotated
+BAMs retain their full alignment content; run-specific Nextflow task IDs/timings/resources are
+normalised.
 MultiQC timestamps, work/temp directories and equivalent provenance paths are likewise
 normalised while its report data remains part of the comparison.
 The raw and filtered tripartite count-matrix archives have the stronger guarantee: identical
 inputs produce byte-identical `barcodes.tsv.gz`, `features.tsv.gz`, and `matrix.mtx.gz` files.
+The default complete-tree comparator validates each decompressed payload and then enforces those
+archive bytes; the explicit cross-version `--allow-subset` diagnostic compares legacy decompressed
+semantics because 1.x did not have the deterministic gzip-header contract.

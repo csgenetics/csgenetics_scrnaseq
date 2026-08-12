@@ -10,9 +10,11 @@ process save_resolved_configuration{
   script:
   json_str = groovy.json.JsonOutput.toJson(params)
   json_indented = groovy.json.JsonOutput.prettyPrint(json_str)
-  // NOTE: single quotes are critical here;
+  // Customer paths and CLI values may contain quotes, shell metacharacters or
+  // Unicode. Carry the UTF-8 JSON through the generated shell only as base64.
+  json_base64 = json_indented.getBytes('UTF-8').encodeBase64().toString()
   """
-  echo '${json_indented}' > resolved_configuration.txt
+  printf '%s' '${json_base64}' | base64 -d > resolved_configuration.txt
   """
 
   stub:

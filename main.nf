@@ -24,6 +24,110 @@ def getGenomeAttribute(attribute) {
     return null
 }
 
+def requireSafeSampleId(value) {
+    def sample = value == null ? '' : value.toString()
+    if (!(sample ==~ /[A-Za-z0-9][A-Za-z0-9._-]{0,127}/) || sample in ['.', '..']) {
+        throw new IllegalArgumentException(
+            "Invalid sample ID '${sample}': use 1-128 letters, numbers, '.', '_' " +
+            "or '-', beginning with a letter or number; '.' and '..' are not allowed"
+        )
+    }
+    return sample
+}
+
+def canonicalManualThreshold(value, label) {
+    def raw = value == null ? '' : value.toString().trim()
+    if (raw.isEmpty()) {
+        return 'nan'
+    }
+    def threshold
+    try {
+        threshold = new BigDecimal(raw)
+    } catch (NumberFormatException exc) {
+        throw new IllegalArgumentException(
+            "${label} manual Cell Caller threshold must be a finite non-negative number"
+        )
+    }
+    if (threshold.signum() < 0) {
+        throw new IllegalArgumentException(
+            "${label} manual Cell Caller threshold must be a finite non-negative number"
+        )
+    }
+    if (threshold > 308) {
+        throw new IllegalArgumentException(
+            "${label} manual Cell Caller threshold is too large"
+        )
+    }
+    return threshold.stripTrailingZeros().toPlainString()
+}
+
+def canonicalMinimumCountThreshold(value) {
+    def raw = value == null ? '' : value.toString().trim()
+    if (!(raw ==~ /\d+/)) {
+        throw new IllegalArgumentException(
+            "minimum_count_threshold must be a non-negative integer"
+        )
+    }
+    def threshold = new BigInteger(raw)
+    if (threshold > Integer.MAX_VALUE) {
+        throw new IllegalArgumentException(
+            "minimum_count_threshold is too large"
+        )
+    }
+    return threshold.intValue()
+}
+
+def mergeSampleThresholds(sample, thresholds, mixedSpecies) {
+    def parts = thresholds.collect { threshold ->
+        mixedSpecies ? threshold.split('_', -1).toList() : [threshold]
+    }
+    def width = mixedSpecies ? 2 : 1
+    if (parts.any { it.size() != width }) {
+        throw new IllegalArgumentException(
+            "Sample '${sample}' has malformed manual Cell Caller thresholds"
+        )
+    }
+    def merged = (0..<width).collect { index ->
+        def supplied = parts.collect { it[index] }.findAll { it != 'nan' }.unique()
+        if (supplied.size() > 1) {
+            throw new IllegalArgumentException(
+                "Sample '${sample}' has conflicting manual Cell Caller thresholds: ${thresholds.unique()}"
+            )
+        }
+        return supplied ? supplied[0] : 'nan'
+    }
+    return mixedSpecies ? merged.join('_') : merged[0]
+}
+
+def requireSamplesheetHeader(row, mixedSpecies) {
+    def keys = row.keySet().collect { it.toString() }
+    def accepted
+    if (mixedSpecies) {
+        accepted = [
+            ['sample', 'fastq_1', 'fastq_2'],
+            ['sample_id', 'fastq_1', 'fastq_2'],
+            ['sample', 'fastq_1', 'fastq_2', 'hsap_manual_cell_caller_threshold', 'mmus_manual_cell_caller_threshold'],
+            ['sample_id', 'fastq_1', 'fastq_2', 'hsap_manual_cell_caller_threshold', 'mmus_manual_cell_caller_threshold'],
+            ['sample', 'fastq_1', 'fastq_2', 'hsap_manual_cellcaller_threshold', 'mmus_manual_cellcaller_threshold'],
+            ['sample_id', 'fastq_1', 'fastq_2', 'hsap_manual_cellcaller_threshold', 'mmus_manual_cellcaller_threshold'],
+        ]
+    } else {
+        accepted = [
+            ['sample', 'fastq_1', 'fastq_2'],
+            ['sample_id', 'fastq_1', 'fastq_2'],
+            ['sample', 'fastq_1', 'fastq_2', 'manual_cell_caller_threshold'],
+            ['sample_id', 'fastq_1', 'fastq_2', 'manual_cell_caller_threshold'],
+            ['sample', 'fastq_1', 'fastq_2', 'manual_cellcaller_threshold'],
+            ['sample_id', 'fastq_1', 'fastq_2', 'manual_cellcaller_threshold'],
+        ]
+    }
+    if (!accepted.contains(keys)) {
+        throw new IllegalArgumentException(
+            "Invalid input CSV header ${keys}; expected one of ${accepted}"
+        )
+    }
+}
+
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     RESOLVE GENOME PARAMETERS
@@ -85,6 +189,12 @@ include { consolidated_report } from './modules/local/consolidated_report/main.n
 
 workflow {
 
+  // Canonicalise the only CLI numeric interpolated into a task shell. The
+  // JSON schema is Launch UI metadata and is not a runtime validation layer.
+  params.minimum_count_threshold = canonicalMinimumCountThreshold(
+    params.minimum_count_threshold
+  )
+
   // Some users have issues accessing the S3 resources we have hosted publicly in our
   // s3://csgx.public.readonly bucket due to their local AWS configurations.
   // One workaround is to use anonymous access to the S3 resources
@@ -136,16 +246,18 @@ workflow {
   input_csv
     .splitCsv(header:true, sep:',', strip: true)
     .map {row ->
-        // To comply with nf-core standards, we will move from working with 'sample_id'
-        // as the first column, to 'sample'. To maintain reverse compatibility with
-        // e.g. the test resource input_csv, we will make it so that the objects of the row
-        // are accessed by index rather than specific key (column name).
-        // The .splitCsv method returns a map object, so we will convert it to a list of its values.
+        requireSamplesheetHeader(row, params.mixed_species)
         def rowList = row.values().toList()
+        def sample = requireSafeSampleId(rowList[0])
         def fastq_1 = rowList[1]
         def fastq_2 = rowList[2]
+        if (!fastq_1 || !fastq_2 || fastq_1 == fastq_2) {
+          throw new IllegalArgumentException(
+            "Sample '${sample}' must provide distinct, non-empty fastq_1 and fastq_2 paths"
+          )
+        }
         def download = fastq_1.startsWith('s3://csgx.public.readonly') && fastq_2.startsWith('s3://csgx.public.readonly') ? 'download' : 'no_download'
-        return [ rowList[0], fastq_1, fastq_2, download]
+        return [sample, fastq_1, fastq_2, download]
     }
     .branch { row ->
         download: row[3] == 'download'
@@ -387,14 +499,16 @@ workflow {
   input_csv
     .splitCsv(header: true, sep: ',', strip: true)
     .map { row ->
+        requireSamplesheetHeader(row, params.mixed_species)
         def rowList = row.values().toList()
+        def sample = requireSafeSampleId(rowList[0])
 
         if (params.mixed_species) {
           // In the mixed species case, any user specified hsap and mmus thresholds are expected in columns 4 and 5 of the input csv respectively
           // When specifying thresholds for mixed species, both columns must be present (even if they are left empty for some samples)
           if (rowList.size() < 5) {
             // If one or both columns are missing, no user thresholds are used so the input for cell calling is "nan_nan"
-            return [rowList[0], "nan_nan"]
+            return [sample, "nan_nan"]
           } else {
             // If both columns are present, we will set the user thresholds to "nan" if they are empty for a particular sample, otherwise we carry through the input value 
             def hsap_threshold
@@ -402,38 +516,37 @@ workflow {
             if (rowList[3].isEmpty()) {
               hsap_threshold = "nan"
             } else {
-              hsap_threshold = rowList[3]
+              hsap_threshold = canonicalManualThreshold(rowList[3], 'human')
             }
             if (rowList[4].isEmpty()) {
               mmus_threshold = "nan"
             } else {
-              mmus_threshold = rowList[4]
+              mmus_threshold = canonicalManualThreshold(rowList[4], 'mouse')
             }
-            return [rowList[0], "${hsap_threshold}_${mmus_threshold}"]
+            return [sample, "${hsap_threshold}_${mmus_threshold}"]
           }
           
         } else {
           // In the single species case, the user specified threshold is expected in column 4
           if (rowList.size() < 4) {
             // If the column is missing, we will set the user threshold to "nan"
-            return [rowList[0], "nan"]
+            return [sample, "nan"]
           } else {
             // If the column exists but is empty for a particular sample, we will set the threshold to "nan", otherwise we take the value from the input csv
             if (rowList[3].isEmpty()) {
-              return [rowList[0], "nan"]
+              return [sample, "nan"]
             } else {
-              return [rowList[0], "${rowList[3]}"]
+              return [sample, canonicalManualThreshold(rowList[3], 'single-species')]
             }
           }
         }
     }
-    // Cell-caller thresholds are SAMPLE-level metadata, but input_csv has one ROW PER LANE, so a
-    // multi-lane sample yields N identical [sample_id, threshold] tuples. Dedup to one per sample:
-    // without this, ch_h5ad.combine(.., by:0) fans cell_caller out N-fold and that multiplicity
-    // propagates through the summary_statistics combine chain, making qc_cascade_plot_multi receive
-    // N copies of each <sample>.metrics.csv -> "input file name collision" crash on multi-lane input.
-    // (Single-lane samples have one row, so .unique() is a no-op for them.)
-    .unique()
+    // Thresholds are sample-level metadata while rows are lanes. Collapse
+    // identical values and reject conflicting values before scheduling tasks.
+    .groupTuple(by: 0)
+    .map { sample, thresholds ->
+        return [sample, mergeSampleThresholds(sample, thresholds, params.mixed_species)]
+    }
     .set { user_specified_cell_caller_thresholds_ch }
 
   
@@ -520,6 +633,10 @@ workflow {
     count_threshold: params.minimum_count_threshold,
     homepage:      workflow.manifest.homePage ?: 'https://github.com/csgenetics/csgenetics_scrnaseq'
   ])
+  // Never interpolate raw JSON into a task shell or env export: customer paths
+  // and run names can contain quotes/metacharacters. Base64 is shell-inert and
+  // is decoded with strict validation by create_consolidated_report.py.
+  def provenance_base64 = provenance_json.getBytes('UTF-8').encodeBase64().toString()
 
   // Generate the single consolidated, self-contained experiment report.
   consolidated_report(
@@ -529,7 +646,7 @@ workflow {
     qc_cascade_plot_multi.out.qc_cascade_fragment,
     consolidated_report_template,
     report_vendor_dir,
-    provenance_json
+    provenance_base64
   )
 
 }

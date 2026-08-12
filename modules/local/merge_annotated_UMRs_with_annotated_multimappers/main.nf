@@ -15,7 +15,13 @@ process merge_annotated_UMRs_with_annotated_multimappers {
 
   script:
   """
-  samtools merge -o ${sample_id}.mapped.sorted.filtered.annotated.bam $umr_annotated_bam $multimapper_annotated_bam
+  # Both assignment branches may be name-ordered while retaining an upstream
+  # SO:coordinate header. Canonically sort the merged customer-facing BAM so
+  # its filename/header contract is true and it can be indexed directly.
+  samtools merge -u -@ ${task.cpus} -o - \
+    $umr_annotated_bam $multimapper_annotated_bam \
+    | samtools sort -@ ${task.cpus} -m 1G \
+        -o ${sample_id}.mapped.sorted.filtered.annotated.bam -
   """
 
   stub:

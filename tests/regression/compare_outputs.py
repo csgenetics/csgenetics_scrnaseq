@@ -22,16 +22,15 @@ Stdlib only unless the compared tree contains H5AD or BAM files. Those classes
 require `anndata` or `samtools`, respectively, and fail closed if the required
 reader is unavailable.
 
-Envelope mode (--envelope-max-flips N): the pipeline has one irreducible
-non-determinism. A tiny number of multimapped reads are genuinely ambiguous
-between two genes, so a read can move between two genes for the SAME barcode
-run-to-run. This flips two count-matrix entries but leaves the per-barcode
-column total unchanged (net-preserving). Envelope mode PASSES a count-matrix
-(MTX/H5AD) difference -- with the distinct verdict ENVELOPE_OK -- IFF the
-per-column (per-barcode) sums are identical AND the number of differing entries
-is within N. Every other class keeps its documented strict contract; envelope
-mode never relaxes them. A per-column-sum change is a real regression and always
-DIFFERs.
+Envelope mode (--envelope-max-flips N) is a diagnostic for the investigated
+1.x-to-2.0 transition. A tiny number of multimapped reads in those cross-version
+results can move between two genes for the SAME barcode while leaving the
+per-barcode column total unchanged (net-preserving). Envelope mode PASSES a
+count-matrix (MTX/H5AD) difference -- with the distinct verdict ENVELOPE_OK --
+IFF the per-column (per-barcode) sums are identical AND the number of differing
+entries is within N. Every other class keeps its documented strict contract;
+envelope mode never relaxes them. A per-column-sum change is a real regression
+and always DIFFERs. Same-version 2.0 runs are expected to pass strict mode.
 """
 
 import argparse
@@ -2067,7 +2066,32 @@ def _samtools(args):
     return completed.stdout
 
 
-def _canonical_bam_header(path):
+def _bam_stage(path):
+    """Return the configured published-output stage for a BAM path.
+
+    Unknown BAM paths keep the conservative generic contract.  Stage
+    recognition deliberately uses the immediate published directory and the
+    producer filename, rather than searching arbitrary ancestor names.
+    """
+    norm = os.path.normpath(str(path)).replace(os.sep, "/")
+    parent = os.path.basename(os.path.dirname(norm))
+    base = os.path.basename(norm)
+    if parent == "STAR" and base.endswith("_Aligned.out.bam"):
+        return "star"
+    if parent == "STAR" and base.endswith("_Aligned.sortedByCoord.out.bam"):
+        return "star-empty"
+    if parent == "featureCounts" \
+            and base.endswith("_Aligned.sortedByCoord.out.bam.featureCounts.bam"):
+        return "featurecounts"
+    if parent == "featureCounts" \
+            and base.endswith(".mapped.sorted.filtered.annotated.bam"):
+        return "annotated"
+    if parent == "deduplication" and base.endswith(".dedup.bam"):
+        return "dedup"
+    return "generic"
+
+
+def _canonical_bam_header(path, stage="generic"):
     """Return stable SAM header semantics.
 
     ``@PG`` records describe the program invocation chain rather than the
@@ -2076,6 +2100,7 @@ def _canonical_bam_header(path):
     comparison contract.
     """
     header = []
+    hd_records = 0
     sort_orders = []
     for line in _samtools(["view", "-H", path]).splitlines():
         fields = line.split("\t")
@@ -2087,14 +2112,23 @@ def _canonical_bam_header(path):
             continue
         tags = fields[1:]
         if record_type == "@HD":
+            hd_records += 1
             sort_order = [tag[3:] for tag in tags if tag.startswith("SO:")]
-            if len(sort_order) != 1:
+            if len(sort_order) > 1:
+                raise ValueError("SAM @HD must contain at most one SO tag")
+            # STAR 2.7's configured `--outSAMtype BAM Unsorted` output omits
+            # SO rather than spelling SO:unsorted.  That exact producer/path is
+            # the sole accepted omission; normalise it to the known contract.
+            if not sort_order and stage == "star":
+                sort_order = ["unsorted"]
+                tags = [*tags, "SO:unsorted"]
+            elif not sort_order:
                 raise ValueError("SAM @HD must contain exactly one SO tag")
             sort_orders.extend(sort_order)
         if record_type == "@SQ":
             tags = [tag for tag in tags if not tag.startswith("UR:")]
         header.append((record_type, tuple(sorted(tags))))
-    if len(sort_orders) != 1:
+    if hd_records != 1 or len(sort_orders) != 1:
         raise ValueError("SAM header must contain exactly one @HD record")
     if sort_orders[0] not in {"coordinate", "unsorted", "queryname", "unknown"}:
         raise ValueError(f"unsupported SAM sort order {sort_orders[0]!r}")
@@ -2138,26 +2172,7 @@ def _qname_barcode_umi(qname, tags):
     return cell, umi
 
 
-def _stable_bam_molecule(line, require_xt=False):
-    """Return (coordinate tie, stable molecule identity) for one SAM record.
-
-    Parallel ``umi_tools`` deduplication may select a different source read for
-    the same molecule. Its QNAME prefix, sequence, quality, MAPQ, CIGAR, mate
-    fields and incidental alignment tags are therefore deliberately excluded.
-    The pipeline guarantees the reference/start/strand, cell, UMI and complete
-    featureCounts gene assignment (XT) for an equivalent representative.
-    """
-    fields = line.rstrip("\n").split("\t")
-    if len(fields) < 11:
-        raise ValueError(f"SAM record has {len(fields)} fields; expected at least 11")
-
-    try:
-        flag = int(fields[1])
-        position = int(fields[3])
-    except ValueError as exc:
-        raise ValueError("SAM FLAG and POS must be integers") from exc
-    tags = _parse_sam_tags(fields[11:])
-    cell, umi = _qname_barcode_umi(fields[0], tags)
+def _bam_gene(tags, require_xt):
     gene = ""
     if "XT" in tags:
         xt_type, gene = tags["XT"]
@@ -2170,13 +2185,199 @@ def _stable_bam_molecule(line, require_xt=False):
             "SAM record in a high-confidence annotated/deduplicated BAM "
             "must contain an XT gene-assignment tag"
         )
+    return gene
 
+
+def _validated_sam_record(line, require_xt=False):
+    fields = line.rstrip("\n").split("\t")
+    if len(fields) < 11:
+        raise ValueError(f"SAM record has {len(fields)} fields; expected at least 11")
+    try:
+        flag = int(fields[1])
+        position = int(fields[3])
+        mapq = int(fields[4])
+        mate_position = int(fields[7])
+        template_length = int(fields[8])
+    except ValueError as exc:
+        raise ValueError(
+            "SAM FLAG, POS, MAPQ, PNEXT and TLEN must be integers"
+        ) from exc
+    if not 0 <= flag <= 0xFFFF:
+        raise ValueError("SAM FLAG must be between 0 and 65535")
+    if position < 0 or mate_position < 0:
+        raise ValueError("SAM POS and PNEXT must be non-negative")
+    if not 0 <= mapq <= 255:
+        raise ValueError("SAM MAPQ must be between 0 and 255")
+    tags = _parse_sam_tags(fields[11:])
+    # Every pipeline read carries its cell identity in CB or the established
+    # read-name suffix.  Validate it in both contracts rather than allowing a
+    # malformed record to compare equal to itself.
+    cell, umi = _qname_barcode_umi(fields[0], tags)
+    gene = _bam_gene(tags, require_xt)
+    return fields, flag, position, mapq, mate_position, template_length, tags, cell, umi, gene
+
+
+def _stable_bam_alignment(line, require_xt=False):
+    """Return the complete stable alignment semantics for a pre-dedup record."""
+    (
+        fields, flag, position, mapq, mate_position, template_length, tags,
+        _cell, _umi, _gene,
+    ) = _validated_sam_record(line, require_xt=require_xt)
     coordinate = (fields[2], position)
-    molecule = (fields[2], position, bool(flag & 0x10), cell, umi, gene)
-    return coordinate, molecule
+    # Optional-tag order is not semantic, but every tag name/type/value is.
+    canonical_tags = tuple(
+        sorted((name, value_type, value) for name, (value_type, value) in tags.items())
+    )
+    alignment = (
+        fields[0], flag, fields[2], position, mapq, fields[5], fields[6],
+        mate_position, template_length, fields[9], fields[10], canonical_tags,
+    )
+    return coordinate, alignment
 
 
-def _iter_bam_tie_groups(path, require_xt=False):
+def _stable_bam_molecule(line, require_xt=False):
+    """Return the stable UMI-tools molecule identity for one SAM record.
+
+    Parallel ``umi_tools`` deduplication may select a different source read for
+    the same molecule. Its QNAME prefix, sequence, quality, MAPQ, CIGAR, mate
+    fields and incidental alignment tags are therefore deliberately excluded.
+    The pipeline guarantees the reference/adjusted-5'-position/strand, cell,
+    UMI and complete featureCounts gene assignment (XT) for an equivalent
+    representative. The position exactly mirrors UMI-tools 1.1.2's
+    ``get_read_position`` soft-clip adjustment, expressed in SAM's 1-based
+    coordinates.
+    """
+    fields, flag, position, _mapq, _mate_position, _template_length, _tags, cell, umi, gene = \
+        _validated_sam_record(line, require_xt=require_xt)
+
+    if flag & 0x4 or fields[2] == "*" or position == 0:
+        raise ValueError("deduplicated BAM records must be mapped")
+
+    cigar = fields[5]
+    if cigar == "*":
+        raise ValueError("mapped deduplicated SAM record must contain a CIGAR")
+    tokens = re.findall(r"(\d+)([MIDNSHP=X])", cigar)
+    if not tokens or "".join(f"{length}{op}" for length, op in tokens) != cigar:
+        raise ValueError(f"invalid SAM CIGAR {cigar!r}")
+    operations = [(int(length), op) for length, op in tokens]
+    if any(length <= 0 for length, _op in operations):
+        raise ValueError("SAM CIGAR operation lengths must be positive")
+
+    reverse = bool(flag & 0x10)
+    if reverse:
+        reference_length = sum(
+            length for length, op in operations if op in {"M", "D", "N", "=", "X"}
+        )
+        if reference_length == 0:
+            raise ValueError(
+                "mapped deduplicated SAM CIGAR must consume the reference"
+            )
+        trailing_soft_clip = operations[-1][0] if operations[-1][1] == "S" else 0
+        adjusted_position = position + reference_length - 1 + trailing_soft_clip
+    else:
+        leading_soft_clip = operations[0][0] if operations[0][1] == "S" else 0
+        adjusted_position = position - leading_soft_clip
+    if adjusted_position < 1:
+        raise ValueError(
+            "UMI-tools-adjusted 5-prime SAM position must be at least 1"
+        )
+
+    return (fields[2], adjusted_position, reverse, cell, umi, gene)
+
+
+def _spill_bam_molecule_run(records, directory, sequence):
+    records.sort()
+    path = os.path.join(directory, f"run-{sequence:08d}.jsonl")
+    with open(path, "w", encoding="utf-8", newline="") as destination:
+        destination.writelines(records)
+    return path
+
+
+def _iter_bam_molecules(path, require_xt=False):
+    """Yield validated dedup molecule keys from one BAM."""
+    proc = subprocess.Popen(
+        ["samtools", "view", path],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            yield _stable_bam_molecule(line, require_xt=require_xt)
+        assert proc.stderr is not None
+        stderr = proc.stderr.read().strip()
+        returncode = proc.wait()
+        if returncode != 0:
+            raise ValueError(stderr or f"samtools view exited {returncode}")
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()
+
+
+def _prepare_bam_molecule_runs(path, directory, require_xt=False):
+    """External-sort dedup keys with bounded memory and merge fan-in."""
+    os.makedirs(directory, exist_ok=True)
+    records = []
+    record_bytes = 0
+    runs = []
+    sequence = 0
+    count = 0
+
+    def spill():
+        nonlocal records, record_bytes, sequence
+        if records:
+            runs.append(_spill_bam_molecule_run(records, directory, sequence))
+            sequence += 1
+            records = []
+            record_bytes = 0
+
+    for molecule in _iter_bam_molecules(path, require_xt=require_xt):
+        record = json.dumps(
+            molecule, ensure_ascii=False, separators=(",", ":")
+        ) + "\n"
+        records.append(record)
+        record_bytes += len(record.encode("utf-8"))
+        count += 1
+        if record_bytes >= _MTX_SORT_CHUNK_BYTES:
+            spill()
+    spill()
+    runs = _collapse_mtx_runs(runs, directory, sequence)
+    return {"runs": tuple(runs), "count": count}
+
+
+def _iter_bam_molecule_records(prepared):
+    handles = [
+        open(path, "r", encoding="utf-8", newline="")
+        for path in prepared["runs"]
+    ]
+    try:
+        yield from heapq.merge(*handles)
+    finally:
+        for handle in handles:
+            handle.close()
+
+
+def _dedup_bam_digest(prepared):
+    digest = hashlib.sha256()
+    for record, multiplicity in _iter_counted_bam_molecule_records(prepared):
+        encoded = json.dumps(
+            [json.loads(record), multiplicity],
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        digest.update(len(encoded).to_bytes(8, "little"))
+        digest.update(encoded)
+    return digest.hexdigest()
+
+
+def _iter_counted_bam_molecule_records(prepared):
+    for record, group in itertools.groupby(_iter_bam_molecule_records(prepared)):
+        yield record, sum(1 for _item in group)
+
+
+def _iter_bam_tie_groups(path, contract="alignment", require_xt=False):
     """Yield coordinate-tie Counters, bounding memory by the largest tie group."""
     from collections import Counter
 
@@ -2191,7 +2392,11 @@ def _iter_bam_tie_groups(path, require_xt=False):
         coordinate = None
         molecules = Counter()
         for line in proc.stdout:
-            next_coordinate, molecule = _stable_bam_molecule(
+            if contract != "alignment":
+                raise ValueError(
+                    "coordinate-tie streaming is valid only for alignment BAMs"
+                )
+            next_coordinate, molecule = _stable_bam_alignment(
                 line, require_xt=require_xt
             )
             if coordinate is not None and next_coordinate != coordinate:
@@ -2219,9 +2424,10 @@ def _coordinate_ordered_bam(path, sort_order):
     such inputs with samtools' external merge sort, capped at 64 MiB per thread,
     rather than retaining every record key in Python memory.
     """
-    if sort_order == "coordinate":
-        return path, None
-
+    # Never trust only the declared SO header. Historical pipeline producers
+    # retained SO:coordinate after name sorting, and samtools index correctly
+    # rejects those published BAMs. Always canonicalise the actual records;
+    # the original header contract is compared separately above.
     scratch = tempfile.TemporaryDirectory(prefix="compare-bam-")
     output = os.path.join(scratch.name, "coordinate.bam")
     try:
@@ -2237,13 +2443,15 @@ def _coordinate_ordered_bam(path, sort_order):
 
 def _bam_requires_xt(path):
     """Whether this configured published BAM contains only assigned records."""
-    norm = os.path.normpath(str(path)).replace(os.sep, "/")
-    base = os.path.basename(norm)
-    return "/deduplication/" in f"/{norm.lstrip('/')}" \
-        or base.endswith(".mapped.sorted.filtered.annotated.bam")
+    return _bam_stage(path) in {"annotated", "dedup"}
 
 
-def _bam_signature(path, require_xt=False):
+def _bam_contract(path):
+    """Select the narrow stage-aware record-equivalence contract."""
+    return "dedup-representative" if _bam_stage(path) == "dedup" else "alignment"
+
+
+def _bam_signature(path, contract="alignment", require_xt=False):
     # quickcheck catches missing headers and absent/truncated BGZF EOF blocks;
     # streaming through gzip verifies every BGZF block checksum; consuming
     # every record then validates the decompressed BAM structure and content.
@@ -2251,13 +2459,28 @@ def _bam_signature(path, require_xt=False):
     with gzip.open(path, "rb") as bam_stream:
         for _chunk in iter(lambda: bam_stream.read(1 << 20), b""):
             pass
-    header, sort_order = _canonical_bam_header(path)
+    stage = _bam_stage(path)
+    header, sort_order = _canonical_bam_header(path, stage=stage)
+    if contract == "dedup-representative":
+        with tempfile.TemporaryDirectory(prefix="compare-bam-molecules-") as scratch:
+            prepared = _prepare_bam_molecule_runs(
+                path, scratch, require_xt=require_xt
+            )
+            count = prepared["count"]
+            digest = _dedup_bam_digest(prepared)
+        return {
+            "header": header,
+            "sort_order": sort_order,
+            "count": count,
+            "sha256": digest,
+        }
+
     digest = hashlib.sha256()
     count = 0
     ordered_path, scratch = _coordinate_ordered_bam(path, sort_order)
     try:
         for coordinate, molecules in _iter_bam_tie_groups(
-            ordered_path, require_xt=require_xt
+            ordered_path, contract=contract, require_xt=require_xt
         ):
             encoded_coordinate = json.dumps(
                 coordinate, ensure_ascii=False, separators=(",", ":")
@@ -2276,6 +2499,10 @@ def _bam_signature(path, require_xt=False):
     finally:
         if scratch is not None:
             scratch.cleanup()
+    if stage == "star-empty" and count != 0:
+        raise ValueError(
+            "published STAR empty-fallback BAM must contain zero alignment records"
+        )
     return {
         "header": header,
         "sort_order": sort_order,
@@ -2308,9 +2535,60 @@ def _bam_record_diffs(
     sort_order_b,
     require_xt_a=False,
     require_xt_b=False,
+    contract_a="alignment",
+    contract_b="alignment",
 ):
     if max_diffs == 0:
         return []
+    if contract_a == "dedup-representative":
+        with tempfile.TemporaryDirectory(prefix="compare-bam-diff-") as scratch:
+            prepared_a = _prepare_bam_molecule_runs(
+                path_a, os.path.join(scratch, "a"), require_xt=require_xt_a
+            )
+            prepared_b = _prepare_bam_molecule_runs(
+                path_b, os.path.join(scratch, "b"), require_xt=require_xt_b
+            )
+            iterator_a = iter(_iter_counted_bam_molecule_records(prepared_a))
+            iterator_b = iter(_iter_counted_bam_molecule_records(prepared_b))
+            item_a = next(iterator_a, None)
+            item_b = next(iterator_b, None)
+            only_a = []
+            only_b = []
+            while item_a is not None or item_b is not None:
+                if item_a is not None and item_b is not None \
+                        and item_a[0] == item_b[0]:
+                    if item_a[1] > item_b[1] and len(only_a) < max_diffs:
+                        only_a.append({
+                            "molecule": json.loads(item_a[0]),
+                            "count": item_a[1] - item_b[1],
+                        })
+                    elif item_b[1] > item_a[1] and len(only_b) < max_diffs:
+                        only_b.append({
+                            "molecule": json.loads(item_b[0]),
+                            "count": item_b[1] - item_a[1],
+                        })
+                    item_a = next(iterator_a, None)
+                    item_b = next(iterator_b, None)
+                elif item_b is None or (
+                    item_a is not None and item_a[0] < item_b[0]
+                ):
+                    if len(only_a) < max_diffs:
+                        only_a.append({
+                            "molecule": json.loads(item_a[0]),
+                            "count": item_a[1],
+                        })
+                    item_a = next(iterator_a, None)
+                else:
+                    if len(only_b) < max_diffs:
+                        only_b.append({
+                            "molecule": json.loads(item_b[0]),
+                            "count": item_b[1],
+                        })
+                    item_b = next(iterator_b, None)
+                if len(only_a) >= max_diffs and len(only_b) >= max_diffs:
+                    break
+            return [{"only_a": only_a, "only_b": only_b}]
+
     missing = object()
     diffs = []
     ordered_a, scratch_a = _coordinate_ordered_bam(path_a, sort_order_a)
@@ -2320,8 +2598,12 @@ def _bam_record_diffs(
         if scratch_a is not None:
             scratch_a.cleanup()
         raise
-    iter_a = _iter_bam_tie_groups(ordered_a, require_xt=require_xt_a)
-    iter_b = _iter_bam_tie_groups(ordered_b, require_xt=require_xt_b)
+    iter_a = _iter_bam_tie_groups(
+        ordered_a, contract=contract_a, require_xt=require_xt_a
+    )
+    iter_b = _iter_bam_tie_groups(
+        ordered_b, contract=contract_b, require_xt=require_xt_b
+    )
     try:
         groups = itertools.zip_longest(iter_a, iter_b, fillvalue=missing)
         for group_a, group_b in groups:
@@ -2373,10 +2655,16 @@ def _compare_bam(path_a, path_b, max_diffs):
         "a": _bam_requires_xt(path_a),
         "b": _bam_requires_xt(path_b),
     }
+    contracts = {
+        "a": _bam_contract(path_a),
+        "b": _bam_contract(path_b),
+    }
+    if contracts["a"] != contracts["b"]:
+        return DIFFER, {"contract_mismatch": contracts}
     for side, path in (("a", path_a), ("b", path_b)):
         try:
             signatures[side] = _bam_signature(
-                path, require_xt=require_xt[side]
+                path, contract=contracts[side], require_xt=require_xt[side]
             )
         except Exception as exc:
             validation_errors[side] = f"{type(exc).__name__}: {exc}"
@@ -2406,6 +2694,8 @@ def _compare_bam(path_a, path_b, max_diffs):
             sig_b["sort_order"],
             require_xt["a"],
             require_xt["b"],
+            contracts["a"],
+            contracts["b"],
         )
     return DIFFER, detail
 
@@ -3327,6 +3617,32 @@ def compare_file(cls, path_a, path_b, max_diffs, envelope_max_flips=None):
     return _COMPARATORS[cls](path_a, path_b, max_diffs)
 
 
+def _enforce_tripartite_archive_identity(
+    cls, path_a, path_b, verdict, detail, require_complete
+):
+    """Gate deterministic gzip bytes for complete same-version output trees.
+
+    The class comparator always validates and compares decompressed semantics
+    first, so identical corrupt archives cannot pass.  Curated subset mode is
+    explicitly used for 1.x-to-2.0 diagnostics whose legacy gzip headers were
+    not deterministic.  An MTX envelope difference remains ENVELOPE_OK; byte
+    identity is enforced when the matrix semantics themselves are EQUAL.
+    """
+    if not require_complete or cls not in {"GZ_TEXT_EXACT", "MTX"} \
+            or verdict != EQUAL:
+        return verdict, detail
+    archive_verdict, archive_detail = _compare_binary_exact(path_a, path_b, 0)
+    if archive_verdict == EQUAL:
+        return verdict, detail
+    return DIFFER, {
+        "reason": (
+            "validated tripartite payloads are equivalent but deterministic "
+            "gzip archive bytes differ"
+        ),
+        **archive_detail,
+    }
+
+
 # ----------------------------------------------------------------------------
 # File listing
 # ----------------------------------------------------------------------------
@@ -3405,6 +3721,14 @@ def run(
             cls, os.path.join(dir_a, rel), os.path.join(dir_b, rel),
             max_diffs, envelope_max_flips,
         )
+        verdict, detail = _enforce_tripartite_archive_identity(
+            cls,
+            os.path.join(dir_a, rel),
+            os.path.join(dir_b, rel),
+            verdict,
+            detail,
+            require_complete,
+        )
         results.append({
             "path": rel, "class": cls, "verdict": verdict, "detail": detail,
         })
@@ -3426,6 +3750,7 @@ def run(
         "samtools_available": _HAVE_SAMTOOLS,
         "envelope_max_flips": envelope_max_flips,
         "require_complete": require_complete,
+        "tripartite_archive_bytes_required": require_complete,
         "file_set_mismatch": file_set_mismatch,
         "counts": _count_verdicts(results),
         "n_files_a": len(files_a),
@@ -3552,7 +3877,10 @@ def main(argv=None):
         action="store_true",
         help="compare an explicitly curated, non-empty common subset (for the "
              "documented 1.x-to-2.0 validation). By default the five fixed "
-             "pipeline_info outputs are required as proof of complete runs.",
+             "pipeline_info outputs are required as proof of complete runs, "
+             "and 2.0 tripartite gzip archives must also be byte-identical. "
+             "Subset mode retains decompressed semantic validation but "
+             "disables that complete-tree gzip-byte assertion.",
     )
     args = parser.parse_args(argv)
 

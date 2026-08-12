@@ -1635,6 +1635,63 @@ def _write_large_mtx(path, entry_count, *, prefix=(), field="integer"):
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(
+    "archive_kind", ["barcodes", "features", "matrix-header", "matrix-order"]
+)
+def test_complete_run_gates_tripartite_archive_bytes_after_validation(
+    tmp_path, archive_kind
+):
+    dir_a = tmp_path / "a"
+    dir_b = tmp_path / "b"
+    dir_a.mkdir()
+    dir_b.mkdir()
+    _write_required_pipeline_info(dir_a)
+    _write_required_pipeline_info(dir_b)
+    relative_dir = Path("count_matrix/raw_feature_bc_matrix/SAMPLE")
+    (dir_a / relative_dir).mkdir(parents=True)
+    (dir_b / relative_dir).mkdir(parents=True)
+
+    if archive_kind in {"barcodes", "features"}:
+        relative = relative_dir / f"{archive_kind}.tsv.gz"
+        payload = "AAAC\nTTTG\n" if archive_kind == "barcodes" \
+            else "gene-1\tGene 1\n"
+        _write_gzip(dir_a / relative, payload, mtime=1)
+        _write_gzip(dir_b / relative, payload, mtime=999)
+    else:
+        relative = relative_dir / "matrix.mtx.gz"
+        entries_a = ["1 1 2", "2 1 3", "2 2 4"]
+        entries_b = entries_a if archive_kind == "matrix-header" \
+            else list(reversed(entries_a))
+        _write_gzip(
+            dir_a / relative,
+            _mtx_text(entries_a),
+            mtime=1,
+        )
+        _write_gzip(
+            dir_b / relative,
+            _mtx_text(entries_b),
+            mtime=999,
+        )
+
+    results, _summary, failed = compare_outputs.run(dir_a, dir_b, 10)
+    archive_result = next(result for result in results if result["path"] == str(relative))
+    assert failed is True
+    assert archive_result["verdict"] == compare_outputs.DIFFER
+    assert "gzip archive bytes differ" in archive_result["detail"]["reason"]
+
+    # Curated 1.x-to-2.0 subset diagnostics validate the legacy decompressed
+    # payload contract, but do not claim deterministic legacy gzip headers.
+    subset_results, _summary, subset_failed = compare_outputs.run(
+        dir_a, dir_b, 10, require_complete=False
+    )
+    subset_archive = next(
+        result for result in subset_results if result["path"] == str(relative)
+    )
+    assert subset_failed is False
+    assert subset_archive["verdict"] == compare_outputs.EQUAL
+
+
+@pytest.mark.unit
 def test_mtx_is_order_insensitive_after_strict_validation(tmp_path):
     path_a, path_b = _paired_paths(tmp_path, "matrix.mtx.gz")
     _write_gzip(path_a, _mtx_text(["1 1 2", "2 1 3", "2 2 4"]), mtime=1)
@@ -2252,7 +2309,10 @@ def _write_bam(path, records=(), extra_header=(), sort_order="coordinate"):
     if SAMTOOLS is None:
         pytest.skip("samtools is not installed")
     sam = path.with_suffix(".sam")
-    lines = [f"@HD\tVN:1.6\tSO:{sort_order}", "@SQ\tSN:chr1\tLN:1000"]
+    hd = "@HD\tVN:1.6"
+    if sort_order is not None:
+        hd += f"\tSO:{sort_order}"
+    lines = [hd, "@SQ\tSN:chr1\tLN:1000"]
     lines.extend(extra_header)
     lines.extend(records)
     sam.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -2294,11 +2354,56 @@ def _sam_record(
     )
 
 
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("relative", "stage", "contract", "require_xt"),
+    [
+        ("STAR/sample_Aligned.out.bam", "star", "alignment", False),
+        (
+            "STAR/sample_Aligned.sortedByCoord.out.bam",
+            "star-empty",
+            "alignment",
+            False,
+        ),
+        (
+            "featureCounts/sample_Aligned.sortedByCoord.out.bam.featureCounts.bam",
+            "featurecounts",
+            "alignment",
+            False,
+        ),
+        (
+            "featureCounts/sample.mapped.sorted.filtered.annotated.bam",
+            "annotated",
+            "alignment",
+            True,
+        ),
+        (
+            "deduplication/sample.dedup.bam",
+            "dedup",
+            "dedup-representative",
+            True,
+        ),
+        ("custom/sample.bam", "generic", "alignment", False),
+    ],
+)
+def test_bam_stage_contract_is_narrow_and_path_specific(
+    tmp_path, relative, stage, contract, require_xt
+):
+    path = tmp_path / relative
+    assert compare_outputs._bam_stage(path) == stage
+    assert compare_outputs._bam_contract(path) == contract
+    assert compare_outputs._bam_requires_xt(path) is require_xt
+
+
 @pytest.mark.integration
-def test_bam_compares_stable_alignment_semantics(tmp_path):
-    path_a = _write_bam(tmp_path / "a.bam", [_sam_record()])
+def test_dedup_bam_normalises_only_representative_read_volatility(tmp_path):
+    dir_a = tmp_path / "a" / "deduplication"
+    dir_b = tmp_path / "b" / "deduplication"
+    dir_a.mkdir(parents=True)
+    dir_b.mkdir(parents=True)
+    path_a = _write_bam(dir_a / "sample.dedup.bam", [_sam_record()])
     path_b = _write_bam(
-        tmp_path / "b.bam",
+        dir_b / "sample.dedup.bam",
         [_sam_record(
             name="another-source-read",
             seq="TGCA",
@@ -2318,7 +2423,96 @@ def test_bam_compares_stable_alignment_semantics(tmp_path):
 
 
 @pytest.mark.integration
-def test_bam_accepts_pipeline_read_name_identity_and_coordinate_tie_reordering(tmp_path):
+@pytest.mark.parametrize(
+    ("base", "alternate"),
+    [
+        (
+            {"pos": 10, "cigar": "4M"},
+            {"pos": 12, "cigar": "2S2M"},
+        ),
+        (
+            {"flag": 16, "pos": 10, "cigar": "4M"},
+            {"flag": 16, "pos": 10, "cigar": "2M2S"},
+        ),
+    ],
+)
+def test_dedup_bam_uses_umi_tools_adjusted_five_prime_position(
+    tmp_path, base, alternate
+):
+    dir_a = tmp_path / "a" / "deduplication"
+    dir_b = tmp_path / "b" / "deduplication"
+    dir_a.mkdir(parents=True)
+    dir_b.mkdir(parents=True)
+    path_a = _write_bam(dir_a / "sample.dedup.bam", [_sam_record(**base)])
+    path_b = _write_bam(
+        dir_b / "sample.dedup.bam", [_sam_record(**alternate)]
+    )
+
+    verdict, detail = compare_outputs._compare_bam(path_a, path_b, 10)
+
+    assert verdict == compare_outputs.EQUAL
+    assert detail == {"count": 1}
+
+
+@pytest.mark.integration
+def test_dedup_bam_external_sorts_adjusted_positions(tmp_path):
+    """Adjusted 5' keys need not follow the BAM's raw coordinate order."""
+    records_a = [
+        _sam_record(name="plain", pos=7, cell="TTTG"),
+        _sam_record(
+            name="soft-clipped",
+            pos=10,
+            cigar="4S4M",
+            seq="AAAACCCC",
+            qual="IIIIIIII",
+            cell="AAAC",
+        ),
+    ]
+    records_b = [
+        _sam_record(name="other-soft-source", pos=6, cell="AAAC"),
+        _sam_record(
+            name="other-plain-source",
+            pos=9,
+            cigar="2S4M",
+            seq="AACCCC",
+            qual="IIIIII",
+            cell="TTTG",
+        ),
+    ]
+    dir_a = tmp_path / "a" / "deduplication"
+    dir_b = tmp_path / "b" / "deduplication"
+    dir_a.mkdir(parents=True)
+    dir_b.mkdir(parents=True)
+    path_a = _write_bam(dir_a / "sample.dedup.bam", records_a)
+    path_b = _write_bam(dir_b / "sample.dedup.bam", records_b)
+
+    verdict, detail = compare_outputs._compare_bam(path_a, path_b, 10)
+
+    assert verdict == compare_outputs.EQUAL
+    assert detail == {"count": 2}
+
+
+@pytest.mark.integration
+def test_dedup_bam_rejects_changed_adjusted_five_prime_position(tmp_path):
+    dir_a = tmp_path / "a" / "deduplication"
+    dir_b = tmp_path / "b" / "deduplication"
+    dir_a.mkdir(parents=True)
+    dir_b.mkdir(parents=True)
+    path_a = _write_bam(
+        dir_a / "sample.dedup.bam", [_sam_record(pos=10, cigar="4M")]
+    )
+    path_b = _write_bam(
+        dir_b / "sample.dedup.bam", [_sam_record(pos=11, cigar="4M")]
+    )
+
+    verdict, detail = compare_outputs._compare_bam(path_a, path_b, 10)
+
+    assert verdict == compare_outputs.DIFFER
+    assert detail["record_diffs"]
+
+
+@pytest.mark.integration
+def test_dedup_bam_accepts_read_name_identity_and_coordinate_tie_reordering(tmp_path):
     records_a = [
         _sam_record(name="source-a_AAAC_TTTT", identity_tags=False),
         _sam_record(name="source-b", cell="TTTG", umi=None),
@@ -2327,8 +2521,12 @@ def test_bam_accepts_pipeline_read_name_identity_and_coordinate_tie_reordering(t
         _sam_record(name="different-source", cell="TTTG", umi=None),
         _sam_record(name="another-source_AAAC_TTTT", identity_tags=False),
     ]
-    path_a = _write_bam(tmp_path / "a.bam", records_a)
-    path_b = _write_bam(tmp_path / "b.bam", records_b)
+    dir_a = tmp_path / "a" / "deduplication"
+    dir_b = tmp_path / "b" / "deduplication"
+    dir_a.mkdir(parents=True)
+    dir_b.mkdir(parents=True)
+    path_a = _write_bam(dir_a / "sample.dedup.bam", records_a)
+    path_b = _write_bam(dir_b / "sample.dedup.bam", records_b)
 
     verdict, detail = compare_outputs._compare_bam(path_a, path_b, 10)
 
@@ -2342,30 +2540,13 @@ def test_bam_normalises_published_unsorted_star_records_with_absent_xt(tmp_path)
         _sam_record(name="source-a_AAAC_", pos=20, identity_tags=False, include_xt=False),
         _sam_record(name="source-b_TTTG_", pos=10, identity_tags=False, include_xt=False),
     ]
-    records_b = [
-        _sam_record(
-            name="other-source_TTTG_",
-            pos=10,
-            seq="TGCA",
-            qual="####",
-            mapq=1,
-            cigar="2M2S",
-            identity_tags=False,
-            include_xt=False,
-        ),
-        _sam_record(
-            name="other-source_AAAC_",
-            pos=20,
-            identity_tags=False,
-            include_xt=False,
-        ),
-    ]
+    records_b = list(reversed(records_a))
     dir_a = tmp_path / "a" / "STAR"
     dir_b = tmp_path / "b" / "STAR"
     dir_a.mkdir(parents=True)
     dir_b.mkdir(parents=True)
     path_a = _write_bam(
-        dir_a / "sample_Aligned.out.bam", records_a, sort_order="unsorted"
+        dir_a / "sample_Aligned.out.bam", records_a, sort_order=None
     )
     path_b = _write_bam(
         dir_b / "sample_Aligned.out.bam", records_b, sort_order="unsorted"
@@ -2378,7 +2559,152 @@ def test_bam_normalises_published_unsorted_star_records_with_absent_xt(tmp_path)
 
 
 @pytest.mark.integration
-def test_bam_xt_presence_contract_follows_published_bam_stage(tmp_path):
+def test_only_configured_star_output_may_omit_sort_order(tmp_path):
+    dir_a = tmp_path / "a" / "featureCounts"
+    dir_b = tmp_path / "b" / "featureCounts"
+    dir_a.mkdir(parents=True)
+    dir_b.mkdir(parents=True)
+    name = "sample_Aligned.sortedByCoord.out.bam.featureCounts.bam"
+    record = _sam_record(include_xt=False)
+    path_a = _write_bam(dir_a / name, [record], sort_order=None)
+    path_b = _write_bam(dir_b / name, [record], sort_order=None)
+
+    verdict, detail = compare_outputs._compare_bam(path_a, path_b, 10)
+
+    assert verdict == compare_outputs.DIFFER
+    assert set(detail["validation_errors"]) == {"a", "b"}
+    assert "exactly one SO tag" in detail["validation_errors"]["a"]
+
+
+@pytest.mark.integration
+def test_alignment_comparison_does_not_trust_stale_coordinate_header(tmp_path):
+    records = [
+        _sam_record(name="later", pos=20),
+        _sam_record(name="earlier", pos=10),
+    ]
+    dir_a = tmp_path / "a" / "featureCounts"
+    dir_b = tmp_path / "b" / "featureCounts"
+    dir_a.mkdir(parents=True)
+    dir_b.mkdir(parents=True)
+    filename = "sample.mapped.sorted.filtered.annotated.bam"
+    path_a = _write_bam(dir_a / filename, records, sort_order="coordinate")
+    path_b = _write_bam(
+        dir_b / filename, list(reversed(records)), sort_order="coordinate"
+    )
+
+    verdict, detail = compare_outputs._compare_bam(path_a, path_b, 10)
+
+    assert verdict == compare_outputs.EQUAL
+    assert detail == {"count": 2}
+
+
+@pytest.mark.integration
+def test_star_empty_fallback_must_have_zero_records_on_both_sides(tmp_path):
+    dir_a = tmp_path / "a" / "STAR"
+    dir_b = tmp_path / "b" / "STAR"
+    dir_a.mkdir(parents=True)
+    dir_b.mkdir(parents=True)
+    filename = "sample_Aligned.sortedByCoord.out.bam"
+    record = _sam_record(include_xt=False)
+    path_a = _write_bam(dir_a / filename, [record])
+    path_b = _write_bam(dir_b / filename, [record])
+
+    verdict, detail = compare_outputs._compare_bam(path_a, path_b, 10)
+
+    assert verdict == compare_outputs.DIFFER
+    assert set(detail["validation_errors"]) == {"a", "b"}
+    assert "must contain zero" in detail["validation_errors"]["a"]
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    ("directory", "filename", "include_xt"),
+    [
+        ("STAR", "sample_Aligned.out.bam", False),
+        (
+            "featureCounts",
+            "sample_Aligned.sortedByCoord.out.bam.featureCounts.bam",
+            False,
+        ),
+        (
+            "featureCounts",
+            "sample.mapped.sorted.filtered.annotated.bam",
+            True,
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    ("difference", "changes"),
+    [
+        ("QNAME", {"name": "other-read"}),
+        ("FLAG", {"flag": 256}),
+        ("MAPQ", {"mapq": 1}),
+        ("CIGAR", {"cigar": "2M2S"}),
+        ("mate fields", {"mate": "=\t10\t4"}),
+        ("SEQ", {"seq": "TGCA"}),
+        ("QUAL", {"qual": "####"}),
+        ("optional tags", {"extra_tags": ("AS:i:2",)}),
+    ],
+)
+def test_pre_dedup_bams_reject_changed_alignment_content(
+    tmp_path, directory, filename, include_xt, difference, changes
+):
+    dir_a = tmp_path / "a" / directory
+    dir_b = tmp_path / "b" / directory
+    dir_a.mkdir(parents=True)
+    dir_b.mkdir(parents=True)
+    base_record = _sam_record(include_xt=include_xt)
+    changed_record = _sam_record(include_xt=include_xt, **changes)
+    sort_order = "unsorted" if directory == "STAR" else "coordinate"
+    path_a = _write_bam(dir_a / filename, [base_record], sort_order=sort_order)
+    path_b = _write_bam(dir_b / filename, [changed_record], sort_order=sort_order)
+
+    verdict, detail = compare_outputs._compare_bam(path_a, path_b, 10)
+
+    assert verdict == compare_outputs.DIFFER, difference
+    assert detail["record_diffs"], difference
+
+
+@pytest.mark.integration
+def test_pre_dedup_bam_ignores_only_optional_tag_order_and_pg_header(tmp_path):
+    dir_a = tmp_path / "a" / "featureCounts"
+    dir_b = tmp_path / "b" / "featureCounts"
+    dir_a.mkdir(parents=True)
+    dir_b.mkdir(parents=True)
+    name = "sample_Aligned.sortedByCoord.out.bam.featureCounts.bam"
+    tags_a = ("AS:i:2", "NM:i:1")
+    tags_b = tuple(reversed(tags_a))
+    path_a = _write_bam(
+        dir_a / name,
+        [_sam_record(extra_tags=tags_a)],
+        extra_header=["@PG\tID:run-a\tPN:tool\tCL:tool --threads 1"],
+    )
+    path_b = _write_bam(
+        dir_b / name,
+        [_sam_record(extra_tags=tags_b)],
+        extra_header=["@PG\tID:run-b\tPN:tool\tCL:tool --threads 8"],
+    )
+
+    verdict, detail = compare_outputs._compare_bam(path_a, path_b, 10)
+
+    assert verdict == compare_outputs.EQUAL
+    assert detail == {"count": 1}
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    ("directory", "filename"),
+    [
+        (
+            "featureCounts",
+            "sample.mapped.sorted.filtered.annotated.bam",
+        ),
+        ("deduplication", "sample.dedup.bam"),
+    ],
+)
+def test_bam_xt_presence_contract_follows_published_bam_stage(
+    tmp_path, directory, filename
+):
     # The initial featureCounts BAM contains legitimate unassigned records with
     # no XT, so absence remains an explicit stable empty key at that stage.
     initial_a = tmp_path / "initial-a" / "featureCounts"
@@ -2394,12 +2720,12 @@ def test_bam_xt_presence_contract_follows_published_bam_stage(tmp_path):
 
     # High-confidence and deduplicated BAMs contain only gene-assigned records;
     # symmetric XT loss there is invalid rather than equivalent.
-    dedup_a = tmp_path / "dedup-a" / "deduplication"
-    dedup_b = tmp_path / "dedup-b" / "deduplication"
-    dedup_a.mkdir(parents=True)
-    dedup_b.mkdir(parents=True)
-    path_a = _write_bam(dedup_a / "sample.dedup.bam", [record])
-    path_b = _write_bam(dedup_b / "sample.dedup.bam", [record])
+    required_a = tmp_path / "required-a" / directory
+    required_b = tmp_path / "required-b" / directory
+    required_a.mkdir(parents=True)
+    required_b.mkdir(parents=True)
+    path_a = _write_bam(required_a / filename, [record])
+    path_b = _write_bam(required_b / filename, [record])
     verdict, detail = compare_outputs._compare_bam(path_a, path_b, 10)
     assert verdict == compare_outputs.DIFFER
     assert set(detail["validation_errors"]) == {"a", "b"}
@@ -2408,8 +2734,12 @@ def test_bam_xt_presence_contract_follows_published_bam_stage(tmp_path):
 
 @pytest.mark.integration
 def test_bam_stable_molecule_multiplicity_is_part_of_contract(tmp_path):
+    dir_a = tmp_path / "a" / "deduplication"
+    dir_b = tmp_path / "b" / "deduplication"
+    dir_a.mkdir(parents=True)
+    dir_b.mkdir(parents=True)
     path_a = _write_bam(
-        tmp_path / "a.bam",
+        dir_a / "sample.dedup.bam",
         [
             _sam_record(name="a1", cell="AAAC"),
             _sam_record(name="a2", cell="AAAC"),
@@ -2417,7 +2747,7 @@ def test_bam_stable_molecule_multiplicity_is_part_of_contract(tmp_path):
         ],
     )
     path_b = _write_bam(
-        tmp_path / "b.bam",
+        dir_b / "sample.dedup.bam",
         [
             _sam_record(name="b1", cell="AAAC"),
             _sam_record(name="b2", cell="TTTG"),
@@ -2437,7 +2767,11 @@ def test_bam_stable_molecule_multiplicity_is_part_of_contract(tmp_path):
 def test_bam_rejects_same_count_and_flagstat_with_different_alignments(
     tmp_path, difference
 ):
-    path_a = _write_bam(tmp_path / "a.bam", [_sam_record()])
+    dir_a = tmp_path / "a" / "deduplication"
+    dir_b = tmp_path / "b" / "deduplication"
+    dir_a.mkdir(parents=True)
+    dir_b.mkdir(parents=True)
+    path_a = _write_bam(dir_a / "sample.dedup.bam", [_sam_record()])
     changes = {
         "position": {"pos": 20},
         "gene": {"gene": "gene-2"},
@@ -2446,7 +2780,24 @@ def test_bam_rejects_same_count_and_flagstat_with_different_alignments(
         "strand": {"flag": 16},
     }
     record_b = _sam_record(**changes[difference])
-    path_b = _write_bam(tmp_path / "b.bam", [record_b])
+    path_b = _write_bam(dir_b / "sample.dedup.bam", [record_b])
+
+    verdict, detail = compare_outputs._compare_bam(path_a, path_b, 10)
+
+    assert verdict == compare_outputs.DIFFER
+    assert detail["record_diffs"]
+
+
+@pytest.mark.integration
+def test_unknown_bam_path_uses_conservative_complete_alignment_contract(tmp_path):
+    dir_a = tmp_path / "a" / "custom"
+    dir_b = tmp_path / "b" / "custom"
+    dir_a.mkdir(parents=True)
+    dir_b.mkdir(parents=True)
+    path_a = _write_bam(dir_a / "sample.bam", [_sam_record()])
+    path_b = _write_bam(
+        dir_b / "sample.bam", [_sam_record(cigar="2M2S", seq="TGCA")]
+    )
 
     verdict, detail = compare_outputs._compare_bam(path_a, path_b, 10)
 
