@@ -228,13 +228,17 @@ strict default command is the future same-version reproducibility gate.
 
 ## Envelope mode (the count-matrix ambiguity)
 
-The pipeline has one irreducible non-determinism. A tiny number of multimapped
-reads are genuinely ambiguous between two genes, so a read can move between two
-genes **for the same barcode** from one run to the next. This flips two
-count-matrix entries but leaves the **per-barcode column total unchanged** — it
-is *net-preserving*. This matrix invariant makes no promise about separately
-derived metrics or RSeQC output: those classes remain exact, and their known
-1.x-to-2.0 deltas correctly produce `DIFFER`.
+The 1.x-to-2.0 comparison has one characterised count-matrix ambiguity. In 1.x,
+a tiny number of genuinely ambiguous multimapped reads could move between two
+genes **for the same barcode** from one run to the next. 2.0 selects a canonical
+assignment deterministically, so envelope mode is for reviewing this known
+major-version transition (or another explicitly investigated net-preserving
+difference); it is not a relaxation expected in the same-version
+reproducibility gate. Such a move flips two count-matrix entries but leaves the
+**per-barcode column total unchanged** — it is *net-preserving*. This matrix
+invariant makes no promise about separately derived metrics or RSeQC output:
+those classes remain exact, and their known 1.x-to-2.0 deltas correctly produce
+`DIFFER`.
 
 `--envelope-max-flips N` turns on envelope mode for the `MTX` and `H5AD` classes
 **only**. A count-matrix difference then passes with the distinct verdict

@@ -126,3 +126,14 @@ def test_readme_remote_launch_examples_match_release_version():
 
 def test_changelog_heading_matches_release_version():
     assert changelog_release_version() == release_version()
+
+
+def test_comparator_envelope_is_scoped_to_diagnostic_cross_version_use():
+    comparator_docs = (REPO_ROOT / "tests/regression/README.md").read_text(
+        encoding="utf-8"
+    )
+    assert "irreducible non-determinism" not in comparator_docs
+    assert (
+        "it is not a relaxation expected in the same-version\n"
+        "reproducibility gate"
+    ) in comparator_docs
