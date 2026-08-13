@@ -13,6 +13,7 @@ mixed-species data.
 ## Contents
 
 - [What was compared](#what-was-compared)
+- [Which code this describes](#which-code-this-describes)
 - [Why the baseline was determinism-controlled](#why-the-baseline-was-determinism-controlled)
 - [Results: cell calling](#results-cell-calling)
 - [Results: reads and counts](#results-reads-and-counts)
@@ -40,6 +41,52 @@ optimised against the test data.
 Comparisons covered per-sample cell counts (including per-species counts and multiplet counts for
 barnyard data), read and count totals, median genes per cell, cell-caller thresholds, the count
 matrices themselves, and the data behind the report figures.
+
+## Which code this describes
+
+The equivalence campaign above was run against the pipeline as it stood before a subsequent
+release-hardening pass, which changed several components that affect outputs: the Cell Caller,
+the summary-statistics reductions, the count-matrix writer, read categorisation, and the
+`io_count` extractor.
+
+Rather than leave the results attributed to superseded code, both sign-off datasets were
+re-processed on the released code and compared against the stored outputs of the earlier runs.
+This isolates exactly what the hardening changed on real data.
+
+**Result: the science is unchanged.** Across the 8 sign-off samples, 584 metric values were
+compared:
+
+| | |
+|---|---|
+| Metrics compared | 584 |
+| Identical | 549 |
+| Differing | 35 — **all below 0.001%** |
+| Differing by more than 0.001% | **0** |
+
+Cell calling was **identical on every sample**, including per-species counts and multiplet counts
+on the barnyard data:
+
+| Sample | Cells |
+|--------|-------|
+| Human 1 / 3 / 10 / 11 | 1725 / 3476 / 1382 / 673 — all identical |
+| Barnyard 97 | `total` 1261, `Hsap` 691, `Mmus` 570, multiplets 48 — all identical |
+| Barnyard 98 | `total` 986, `Hsap` 517, `Mmus` 469, multiplets 40 — all identical |
+| Barnyard 106 | `total` 1323, `Hsap` 779, `Mmus` 544, multiplets 47 — all identical |
+| Barnyard 107 | `total` 1393, `Hsap` 809, `Mmus` 584, multiplets 57 — all identical |
+
+The 35 differing values are the expected consequence of replacing `float32` accumulation with
+exact integer arithmetic (known difference 4), and they look like it — for example
+`mean_total_counts_per_cell` moving from `3817.070068359375`, a value carrying visible
+single-precision error, to `3817.070144927536`. The largest relative change anywhere was
+0.000038%.
+
+One of the 35 is an integer rather than a rounding artefact: on one human sample
+`total_genes_detected_across_sample` moved from 2650344 to 2650345. A single gene whose summed
+count previously fell below the `float32` representation threshold is now counted. That is the
+correction working as intended rather than a new discrepancy.
+
+The headline results in the rest of this document therefore continue to describe the released
+pipeline's behaviour, with the metric-precision corrections in known difference 4 applied on top.
 
 ## Why the baseline was determinism-controlled
 
