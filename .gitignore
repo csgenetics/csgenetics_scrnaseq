@@ -12,3 +12,43 @@ results_test_hsap_mmus_2_sample_full
 # pixi environments
 .pixi
 *.egg-info
+
+# Rust build artifacts (all in-repository crates)
+**/target/
+
+# Agent secrets and credentials (never commit)
+.env
+*.pem
+agent-secrets/
+.aws/
+.docker/config.json
+*.token
+
+# Claude worktrees and local settings
+.claude/worktrees/
+.claude/settings.local.json
+
+# nf-test
+.nf-test/
+.nf-test.log
+
+# Nextflow debug logs (may contain ephemeral Wave/Tower access tokens; never commit)
+debug/
+
+# Internal agent-container tooling. THIS REPO IS PUBLIC; the equivalent setup lives in
+# the private csgenetics repos (navigator, CBK, GRT, rnaseq). Keep a local copy here if
+# you need one, but it must not be committed.
+docker/agent/
+
+# Agent/AI working files. THIS REPO IS PUBLIC. Planning docs, handoffs and campaign logs
+# routinely quote internal S3 paths, infrastructure IDs and customer run names, so they
+# must not live in the tree. Keep them in the session scratchpad or a private location.
+plans/
+HANDOFF.md
+
+# Ad-hoc sample sheets pointing at internal (non-public) data. Canonical copies live in
+# access-controlled storage outside the repository. Only the generic example templates
+# in input_csv/ belong here.
+*_test_data/
+mixed_testing.csv
+input_csv/badsamples.csv

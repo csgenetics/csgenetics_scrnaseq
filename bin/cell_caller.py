@@ -1,15 +1,61 @@
 #!/usr/bin/env python
 
+import argparse
+import math
+import sys
+
 import anndata as ad
 import numpy as np
 import pandas as pd
-from scipy.signal import argrelextrema
-from scipy.stats import gaussian_kde
-import sys, argparse
 import plotly.express as px
 import plotly.graph_objects as go
 import plotly.io as pio
+from scipy.signal import argrelextrema
+from scipy.stats import gaussian_kde
 from plotly.subplots import make_subplots
+
+from empty_h5ad import is_empty_h5ad_sentinel
+
+
+def count_threshold_from_log(log_threshold):
+   """Convert a log10(counts + 1) threshold to the integer used downstream."""
+   try:
+      count_threshold = 10 ** log_threshold - 1
+   except OverflowError as exc:
+      raise ValueError("threshold is too large to convert to a count") from exc
+
+   if not math.isfinite(count_threshold):
+      raise ValueError("threshold is too large to convert to a count")
+   return round(count_threshold)
+
+
+def parse_manual_threshold(raw_threshold, label):
+   """Parse and validate one optional manual threshold from the samplesheet."""
+   if raw_threshold == "nan":
+      return None
+
+   try:
+      threshold = float(raw_threshold)
+   except ValueError as exc:
+      raise ValueError(
+         f"{label} manual Cell Caller threshold must be a number in "
+         "log10(counts + 1) units"
+      ) from exc
+
+   if not math.isfinite(threshold) or threshold < 0:
+      raise ValueError(
+         f"{label} manual Cell Caller threshold must be finite and greater "
+         "than or equal to 0 in log10(counts + 1) units"
+      )
+
+   # Validate that the selected value can be represented in the integer-count
+   # form emitted to the downstream filtering process.
+   try:
+      count_threshold_from_log(threshold)
+   except ValueError as exc:
+      raise ValueError(f"{label} manual Cell Caller {exc}") from exc
+   return threshold
+
 
 """
 This is the cell caller function.
@@ -53,24 +99,46 @@ Mmus_counts > Mmus_threshold & Hsap_counts > Hsap_threshold is a multiplet.
 """
 
 # The plot to html method is defined outside the class as it will also be used later in the multi-sample summary report process. 
-def output_plot_to_html(dict_of_figs_and_names, html_filename):
+def output_plot_to_html(dict_of_figs_and_names, html_filename, include_plotlyjs=True):
    """
-   Output a suite of plots to an html file, incorporating the Lexend font.
+   Output a suite of plots to an HTML file using an offline-safe font stack.
    Expects as input a dictionary of plotly figures and their names.
    Figure names are used to name the .svg files which can be downloaded from the html.
+
+   include_plotlyjs controls how Plotly.js is bundled into the fragment:
+     - True (default): standalone, self-viewable output with Plotly.js embedded
+       inline. Used for the independently published *_pdf_with_cutoff.html plots.
+     - False: a bare Plotly <div> fragment with NO Plotly.js. Used when the
+       fragment is embedded into the consolidated report, which loads a single
+       inline copy of Plotly.js once. This keeps the consolidated report
+       offline-safe and avoids loading Plotly.js once per plot.
    """
-   # Add custom CSS to embed the Lexend font
-   html_content = """
-   <head>
-      <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;700&display=swap" rel="stylesheet">
-   </head>
-   <body>
-   """
+   if include_plotlyjs is False:
+      # Inputs to the consolidated report are fragments by contract: no document
+      # wrappers, stylesheets, or library loaders. The report generator validates
+      # this structure before trusting the inline Plotly.newPlot call.
+      html_content = ""
+   else:
+      # The report uses an embedded Lexend asset, but standalone plots do not have
+      # access to that vendor directory. Prefer a locally installed Lexend and fall
+      # back to system fonts rather than fetching a web font.
+      html_content = """<!doctype html>
+      <html lang="en">
+      <head>
+         <meta charset="utf-8">
+         <meta name="viewport" content="width=device-width, initial-scale=1">
+         <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; frame-src 'none'; object-src 'none'; media-src 'none'; base-uri 'none'; form-action 'none'">
+         <style>
+            body { font-family: Lexend, system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; }
+         </style>
+      </head>
+      <body>
+      """
 
    # Add each figure to the HTML content
    for fig_name in dict_of_figs_and_names.keys():
       fig = dict_of_figs_and_names[fig_name]
-      html_content += pio.to_html(fig, full_html=False, include_plotlyjs='cdn', config={"responsive": True, 
+      html_content += pio.to_html(fig, full_html=False, include_plotlyjs=include_plotlyjs, config={"responsive": True,
                                                                                           'displaylogo': False, 
                                                                                           'toImageButtonOptions': {'format': 'svg',
                                                                                                                   'filename': fig_name,
@@ -78,10 +146,11 @@ def output_plot_to_html(dict_of_figs_and_names, html_filename):
                                                                                                                   }
                                                                                        })
 
-   # Close the HTML tags
-   html_content += """
-   </body>
-   """
+   if include_plotlyjs is not False:
+      html_content += """
+      </body>
+      </html>
+      """
 
    # Write the HTML content to the file
    with open(html_filename, "w") as f:
@@ -115,22 +184,27 @@ class CellCaller:
          self.mixed_species = True
 
       # Extract any user specified cell caller thresholds
-      if self.mixed_species:
-         # Split the input thresholds string on _, the first value is the human threshold, the second is the mouse threshold
-         self.manual_thresholds = self.manual_threshold_str.split("_")
-         if self.manual_thresholds[0] == "nan":
-            self.mixed_species_specified_threshold_hsap = None
+      try:
+         if self.mixed_species:
+            # Split the input thresholds string on _, the first value is the human threshold, the second is the mouse threshold
+            self.manual_thresholds = self.manual_threshold_str.split("_")
+            if len(self.manual_thresholds) != 2:
+               raise ValueError(
+                  "mixed-species manual Cell Caller threshold must contain "
+                  "exactly two values separated by an underscore"
+               )
+            self.mixed_species_specified_threshold_hsap = parse_manual_threshold(
+               self.manual_thresholds[0], "human"
+            )
+            self.mixed_species_specified_threshold_mmus = parse_manual_threshold(
+               self.manual_thresholds[1], "mouse"
+            )
          else:
-            self.mixed_species_specified_threshold_hsap = float(self.manual_thresholds[0])
-         if self.manual_thresholds[1] == "nan":
-            self.mixed_species_specified_threshold_mmus = None
-         else:
-            self.mixed_species_specified_threshold_mmus = float(self.manual_thresholds[1])
-      else:
-         if self.manual_threshold_str == "nan":
-            self.single_species_specified_threshold = None
-         else:
-            self.single_species_specified_threshold = float(self.manual_threshold_str)
+            self.single_species_specified_threshold = parse_manual_threshold(
+               self.manual_threshold_str, "single-species"
+            )
+      except ValueError as exc:
+         parser.error(str(exc))
 
    def derive_count_threshold(self):
       """
@@ -139,19 +213,21 @@ class CellCaller:
       """
       if self.single_species:
          self.log10_counts = np.log10(self.adata.X.sum(axis=1).A1 + 1)
+         self.pdf_df = None
 
-         if len(set(self.log10_counts)) <= 1:
+         if len(set(self.log10_counts)) <= 1 and self.single_species_specified_threshold is None:
             self.clean_exit_on_error()
-         else:
+         elif len(set(self.log10_counts)) > 1:
             self.pdf_df = self.get_prob_dens_data(self.log10_counts)
-            if self.single_species_specified_threshold:
-               self.log_cutoff = self.single_species_specified_threshold
-            else:
-               self.log_cutoff = self.get_cutoff(self.pdf_df)
-               
-            # Transform back, and round to the nearest integer
-            self.single_species_thres = round(10 ** self.log_cutoff -1)
-            print(f"{self.single_species_thres}", end="") 
+
+         if self.single_species_specified_threshold is not None:
+            self.log_cutoff = self.single_species_specified_threshold
+         else:
+            self.log_cutoff = self.get_cutoff(self.pdf_df)
+
+         # Transform back, and round to the nearest integer
+         self.single_species_thres = count_threshold_from_log(self.log_cutoff)
+         print(f"{self.single_species_thres}", end="")
       else:
          # Identify the sub-populations of barcodes which are: 1) majority human counts and 2) majority mouse counts
          self.hsap_majority = self.adata.obs[self.adata.obs["hsap_counts"] > self.adata.obs["mmus_counts"]]
@@ -161,51 +237,83 @@ class CellCaller:
          self.log10_hsap_counts_hsap_majority = np.log10(self.hsap_majority.hsap_counts+1)
          self.log10_mmus_counts_mmus_majority = np.log10(self.mmus_majority.mmus_counts+1)
 
-         # Compute the human and mouse thresholds on a log10 scale, and output the probability density plots
-         if (len(set(self.log10_hsap_counts_hsap_majority)) <= 1) or (len(set(self.log10_mmus_counts_mmus_majority)) <= 1):
-            self.clean_exit_on_error()
-         else:
-            self.hsap_pdf_df = self.get_prob_dens_data(self.log10_hsap_counts_hsap_majority)
-            self.mmus_pdf_df = self.get_prob_dens_data(self.log10_mmus_counts_mmus_majority)
-            if self.mixed_species_specified_threshold_hsap:
-               self.hsap_log_cutoff = self.mixed_species_specified_threshold_hsap
-            else: 
-               self.hsap_log_cutoff = self.get_cutoff(self.hsap_pdf_df)
-            if self.mixed_species_specified_threshold_mmus:
-               self.mmus_log_cutoff = self.mixed_species_specified_threshold_mmus
-            else:
-               self.mmus_log_cutoff = self.get_cutoff(self.mmus_pdf_df)
+         hsap_distribution_is_estimable = len(set(self.log10_hsap_counts_hsap_majority)) > 1
+         mmus_distribution_is_estimable = len(set(self.log10_mmus_counts_mmus_majority)) > 1
 
-            # Transform back, and round to the nearest integer
-            self.hsap_thres = round(10 ** self.hsap_log_cutoff -1)
-            self.mmus_thres = round(10 ** self.mmus_log_cutoff -1)
-            
-            print(f"{self.hsap_thres}_{self.mmus_thres}", end="")
+         # Preserve the existing all-automatic fallback: if either species has
+         # no estimable distribution, both use the configured minimum.
+         if (
+            self.mixed_species_specified_threshold_hsap is None
+            and self.mixed_species_specified_threshold_mmus is None
+            and (not hsap_distribution_is_estimable or not mmus_distribution_is_estimable)
+         ):
+            self.clean_exit_on_error()
+
+         self.hsap_pdf_df = None
+         self.mmus_pdf_df = None
+         if hsap_distribution_is_estimable:
+            self.hsap_pdf_df = self.get_prob_dens_data(self.log10_hsap_counts_hsap_majority)
+         if mmus_distribution_is_estimable:
+            self.mmus_pdf_df = self.get_prob_dens_data(self.log10_mmus_counts_mmus_majority)
+
+         if self.mixed_species_specified_threshold_hsap is not None:
+            self.hsap_log_cutoff = self.mixed_species_specified_threshold_hsap
+         elif self.hsap_pdf_df is not None:
+            self.hsap_log_cutoff = self.get_cutoff(self.hsap_pdf_df)
+         else:
+            self.hsap_log_cutoff = np.log10(self.minimum_count_threshold + 1)
+
+         if self.mixed_species_specified_threshold_mmus is not None:
+            self.mmus_log_cutoff = self.mixed_species_specified_threshold_mmus
+         elif self.mmus_pdf_df is not None:
+            self.mmus_log_cutoff = self.get_cutoff(self.mmus_pdf_df)
+         else:
+            self.mmus_log_cutoff = np.log10(self.minimum_count_threshold + 1)
+
+         # Transform back, and round to the nearest integer
+         self.hsap_thres = count_threshold_from_log(self.hsap_log_cutoff)
+         self.mmus_thres = count_threshold_from_log(self.mmus_log_cutoff)
+
+         print(f"{self.hsap_thres}_{self.mmus_thres}", end="")
 
    def clean_exit_on_error(self):
       """
-      If we encounter an error, we output empty figures and return the
-      default minimum_count_threshold in either single or mixed species format
+      If the input matrix cannot support cell calling, output empty figures.
+      Explicit manual thresholds remain authoritative; any threshold that was
+      not supplied falls back to minimum_count_threshold.
       """
       open(f"{self.sample_name}_counts_pdf_with_threshold.html", "w").close()
       open(f"{self.sample_name}_barnyard_plot.html", "w").close()
 
       if self.single_species:
          open(f"{self.sample_name}_pdf_with_cutoff.html", "w").close()
-         print(int(self.minimum_count_threshold), end="")
+         if self.single_species_specified_threshold is None:
+            count_threshold = int(self.minimum_count_threshold)
+         else:
+            count_threshold = count_threshold_from_log(self.single_species_specified_threshold)
+         print(count_threshold, end="")
       else:
          open(f"{self.sample_name}_hsap_pdf_with_cutoff.html", "w").close()
          open(f"{self.sample_name}_mmus_pdf_with_cutoff.html", "w").close()
-         print(f"{int(self.minimum_count_threshold)}_{int(self.minimum_count_threshold)}", end="")
+         hsap_threshold = (
+            int(self.minimum_count_threshold)
+            if self.mixed_species_specified_threshold_hsap is None
+            else count_threshold_from_log(self.mixed_species_specified_threshold_hsap)
+         )
+         mmus_threshold = (
+            int(self.minimum_count_threshold)
+            if self.mixed_species_specified_threshold_mmus is None
+            else count_threshold_from_log(self.mixed_species_specified_threshold_mmus)
+         )
+         print(f"{hsap_threshold}_{mmus_threshold}", end="")
       sys.exit(0)
       
    def read_in_anndata_and_handle_error(self):
-      try:
-         self.adata = ad.read_h5ad(self.count_matrix)
-      except OSError:
-         # If we encounter an empty h5ad then we output an empty figure and return the
-         # default minimum_count_threshold
+      if is_empty_h5ad_sentinel(self.count_matrix):
+         # Only the pipeline's explicit, zero-byte *.empty.h5ad sentinel takes
+         # the empty-data path. Corrupt or generic zero-byte inputs must fail.
          self.clean_exit_on_error()
+      self.adata = ad.read_h5ad(self.count_matrix)
 
    def get_prob_dens_data(self, counts):
       """
@@ -273,8 +381,14 @@ class CellCaller:
       pdf_html_filename = f"{self.sample_name}_counts_pdf_with_threshold.html"
 
       if self.single_species:
+         if self.pdf_df is None:
+            open(pdf_html_filename, "w").close()
+            open(f"{self.sample_name}_pdf_with_cutoff.html", "w").close()
+            return
+
          total_counts_pdf_fig = self.pdf_plotter(self.pdf_df, self.log_cutoff, "total")
-         output_plot_to_html({f"{self.sample_name}_cellcaller_plot":total_counts_pdf_fig}, pdf_html_filename)
+         # Report-bound fragment: no Plotly.js (the consolidated report embeds it once).
+         output_plot_to_html({f"{self.sample_name}_cellcaller_plot":total_counts_pdf_fig}, pdf_html_filename, include_plotlyjs=False)
 
          # Save the figure as an HTML file
          # We used to write this out as .png, but in some HPC systems that was
@@ -284,10 +398,21 @@ class CellCaller:
          pdf_html_standalone_filename = f"{self.sample_name}_pdf_with_cutoff.html"
          output_plot_to_html({f"{self.sample_name}_cellcaller_plot":total_counts_pdf_fig}, pdf_html_standalone_filename)
       else:
-         human_counts_pdf_fig = self.pdf_plotter(self.hsap_pdf_df, self.hsap_log_cutoff, "human")
-         mouse_counts_pdf_fig = self.pdf_plotter(self.mmus_pdf_df, self.mmus_log_cutoff, "mouse")
-         output_plot_to_html({f"{self.sample_name}_hsap_cellcaller_plot":human_counts_pdf_fig, f"{self.sample_name}_mmus_cellcaller_plot":mouse_counts_pdf_fig},
-                              pdf_html_filename)
+         density_figures = {}
+         human_counts_pdf_fig = None
+         mouse_counts_pdf_fig = None
+         if self.hsap_pdf_df is not None:
+            human_counts_pdf_fig = self.pdf_plotter(self.hsap_pdf_df, self.hsap_log_cutoff, "human")
+            density_figures[f"{self.sample_name}_hsap_cellcaller_plot"] = human_counts_pdf_fig
+         if self.mmus_pdf_df is not None:
+            mouse_counts_pdf_fig = self.pdf_plotter(self.mmus_pdf_df, self.mmus_log_cutoff, "mouse")
+            density_figures[f"{self.sample_name}_mmus_cellcaller_plot"] = mouse_counts_pdf_fig
+
+         # Report-bound fragment: no Plotly.js (the consolidated report embeds it once).
+         if density_figures:
+            output_plot_to_html(density_figures, pdf_html_filename, include_plotlyjs=False)
+         else:
+            open(pdf_html_filename, "w").close()
 
          # Save the figures as HTML files
          # We used to write this out as .png, but in some HPC systems that was
@@ -295,9 +420,15 @@ class CellCaller:
          # Kaleido is only used by plotly when trying to write to .png.
          # As such, we write as .html.
          human_pdf_html_filename = f"{self.sample_name}_hsap_pdf_with_cutoff.html"
-         output_plot_to_html({f"{self.sample_name}_hsap_cellcaller_plot":human_counts_pdf_fig}, human_pdf_html_filename)
+         if human_counts_pdf_fig is None:
+            open(human_pdf_html_filename, "w").close()
+         else:
+            output_plot_to_html({f"{self.sample_name}_hsap_cellcaller_plot":human_counts_pdf_fig}, human_pdf_html_filename)
          mouse_pdf_html_filename = f"{self.sample_name}_mmus_pdf_with_cutoff.html"
-         output_plot_to_html({f"{self.sample_name}_mmus_cellcaller_plot":mouse_counts_pdf_fig}, mouse_pdf_html_filename)
+         if mouse_counts_pdf_fig is None:
+            open(mouse_pdf_html_filename, "w").close()
+         else:
+            output_plot_to_html({f"{self.sample_name}_mmus_cellcaller_plot":mouse_counts_pdf_fig}, mouse_pdf_html_filename)
 
    def pdf_plotter(self, input_pdf_df, input_log_cutoff, count_type_str):
       """
@@ -393,7 +524,7 @@ class CellCaller:
       """
       Create barnyard plot for mixed species samples. If single species then output an empty html. 
       """
-      if self.single_species:
+      if self.single_species or self.adata.n_obs == 0:
          open(f"{self.sample_name}_barnyard_plot.html", "w").close()
       else:
          # Create a new column in the adata object to assign barcode types
@@ -483,7 +614,8 @@ class CellCaller:
 
          barnyard_html_filename = f"{self.sample_name}_barnyard_plot.html"
 
-         output_plot_to_html({f"{self.sample_name}_barnyard_plot":barnyard_fig}, barnyard_html_filename)
+         # Report-bound fragment: no Plotly.js (the consolidated report embeds it once).
+         output_plot_to_html({f"{self.sample_name}_barnyard_plot":barnyard_fig}, barnyard_html_filename, include_plotlyjs=False)
       
 if __name__ == "__main__":
    CellCaller()

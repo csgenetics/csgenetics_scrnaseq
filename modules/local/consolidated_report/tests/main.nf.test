@@ -1,0 +1,59 @@
+nextflow_process {
+
+    name "Test process consolidated_report"
+    script "../main.nf"
+    process "consolidated_report"
+
+    tag "modules"
+    tag "consolidated_report"
+
+    test("provenance metacharacters remain inert data") {
+        when {
+            process {
+                """
+                def fixture = "${projectDir}/tests/python/fixtures/report"
+                def provenance = groovy.json.JsonOutput.toJson([
+                    genome: "GRCh38",
+                    annotation: "customer's annotation.gtf",
+                    mixed: false,
+                    pipeline_ver: "2.0.0",
+                    commit: "abc1234",
+                    revision: "devel",
+                    run_name: "O'Brien; exit 97; café-shell-metacharacters-stay-inert",
+                    session_id: "session-1",
+                    start: "2026-08-12T12:00:00Z",
+                    nf_version: "26.04.1",
+                    outdir: "/results/O'Brien; echo inert",
+                    barcode_kit: "kit.csv",
+                    count_threshold: 100,
+                    homepage: "https://github.com/csgenetics/csgenetics_scrnaseq"
+                ])
+                def provenanceBase64 = provenance.getBytes('UTF-8').encodeBase64().toString()
+                input[0] = [
+                    file(fixture + "/SAMPLE1.metrics.csv"),
+                    file(fixture + "/SAMPLE2.metrics.csv")
+                ]
+                input[1] = [
+                    file(fixture + "/SAMPLE1_counts_pdf_with_threshold.html"),
+                    file(fixture + "/SAMPLE2_counts_pdf_with_threshold.html")
+                ]
+                input[2] = [
+                    file(fixture + "/SAMPLE1.qc_cascade.html"),
+                    file(fixture + "/SAMPLE2.qc_cascade.html")
+                ]
+                input[3] = file(fixture + "/multisample_qc_cascade.html")
+                input[4] = file("${projectDir}/templates/consolidated_report_template.html.jinja2")
+                input[5] = file("${projectDir}/assets/vendor")
+                input[6] = provenanceBase64
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert path(process.out[0][0]).text.contains("O&#39;Brien; exit 97; café")
+            assert path(process.out[0][0]).text.contains("/results/O&#39;Brien; echo inert")
+            assert path(process.out[1][0]).exists()
+        }
+    }
+}

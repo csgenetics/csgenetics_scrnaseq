@@ -1,0 +1,57 @@
+nextflow_process {
+
+    name "Test process save_resolved_configuration"
+    script "../main.nf"
+    process "save_resolved_configuration"
+
+    tag "modules"
+    tag "save_resolved_configuration"
+
+    test("writes resolved_configuration.txt containing the pipeline params") {
+
+        when {
+            process {
+                """
+                input[0] = 100
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert process.success },
+                { assert path(process.out[0][0]).exists() },
+                // The dump is params JSON, so it carries volatile paths -> assert
+                // on stable keys rather than snapshotting the whole file.
+                { assert path(process.out[0][0]).text.contains("minimum_count_threshold") },
+                { assert path(process.out[0][0]).text.contains("barcode_pattern") }
+            )
+        }
+    }
+
+    test("preserves hostile shell characters and Unicode as inert JSON data") {
+
+        when {
+            params {
+                awsregion = "eu-west-1'; printf SHOULD_NOT_EXECUTE >&2; # \$(false) — café"
+                minimum_count_threshold = "00100"
+            }
+            process {
+                """
+                input[0] = 100
+                """
+            }
+        }
+
+        then {
+            def output = path(process.out[0][0])
+            def parsed = new groovy.json.JsonSlurper().parseText(output.text)
+            assertAll(
+                { assert process.success },
+                { assert parsed.awsregion == "eu-west-1'; printf SHOULD_NOT_EXECUTE >&2; # \$(false) — café" },
+                { assert parsed.minimum_count_threshold instanceof Number },
+                { assert parsed.minimum_count_threshold == 100 }
+            )
+        }
+    }
+}

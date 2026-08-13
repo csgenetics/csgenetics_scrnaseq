@@ -1,0 +1,2 @@
+sample,fastq_1,fastq_2
+Sample1;exit-97,s3://csgx.public.readonly/resources/stub_test/Sample1_R1.fastq.gz,s3://csgx.public.readonly/resources/stub_test/Sample1_R2.fastq.gz

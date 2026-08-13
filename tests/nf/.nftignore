@@ -1,0 +1,11 @@
+*.bam
+*.bai
+*.sam
+*.h5ad
+*.h5
+*.png
+*.svg
+*.pdf
+*.html
+*.zip
+*.gz

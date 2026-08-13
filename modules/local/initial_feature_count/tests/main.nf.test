@@ -1,0 +1,62 @@
+nextflow_process {
+
+    name "Test process initial_feature_count"
+    script "../main.nf"
+    process "initial_feature_count"
+
+    tag "modules"
+    tag "initial_feature_count"
+
+    setup {
+        run("CREATE_TEST_BAM") {
+            script "./create_test_bam.nf"
+            process {
+                """
+                input[0] = file("${moduleTestDir}/fixtures/aligned.sam")
+                """
+            }
+        }
+        run("CREATE_EMPTY_BAM") {
+            script "./create_empty_bam.nf"
+        }
+    }
+
+    test("publishes a featureCounts BAM that passes coordinate-index validation") {
+        when {
+            process {
+                """
+                input[0] = CREATE_TEST_BAM.out.bam.map { bam -> tuple("SAMPLE", bam, true) }
+                input[1] = file("${moduleTestDir}/fixtures/annotation.gtf")
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.feature_count_bam.size() == 1
+            def result = process.out.feature_count_bam.get(0)
+            assert result[0] == "SAMPLE"
+            assert path(result[1]).fileName.toString() == "SAMPLE_Aligned.sortedByCoord.out.bam.featureCounts.bam"
+            assert path(result[1]).size() > 0
+        }
+    }
+
+    test("retains and validates the intentional header-only empty BAM") {
+        when {
+            process {
+                """
+                input[0] = CREATE_EMPTY_BAM.out.bam.map { bam -> tuple("EMPTY", bam, false) }
+                input[1] = file("${moduleTestDir}/fixtures/annotation.gtf")
+                """
+            }
+        }
+
+        then {
+            assert process.success
+            assert process.out.feature_count_bam.size() == 1
+            def result = process.out.feature_count_bam.get(0)
+            assert result[0] == "EMPTY"
+            assert path(result[1]).size() > 0
+        }
+    }
+}
