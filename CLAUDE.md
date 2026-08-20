@@ -79,3 +79,27 @@ printf 'protocol=https\nhost=github.com\npath=csgenetics/csgenetics_scrnaseq.git
 To repair, run `/nssd2/humebc/agent-secrets/bin/install_agent_identity.sh`. It sets both halves
 of the config and refuses to report success unless it has watched git hand over
 `x-access-token`, so it cannot leave a broken identity looking installed.
+
+### Opening PRs, commenting, reviewing: use the wrapper, never bare `gh`
+
+There are **three** identities here and they are configured independently:
+
+| | governed by | |
+|---|---|---|
+| author | `git user.email` | a label on the commit |
+| pusher | git credential helper | who the push authenticates as |
+| **API** | **`gh`'s own auth** | **who opens the PR, comments, reviews** |
+
+Getting the first two right does not give you the third. `gh` asks git for credentials
+**without a path**, so the path-scoped helper above never matches its query and `gh` falls
+through to Ben's token in `~/.config/gh/hosts.yml`. On 2026-08-20 seven of nine repos were in
+exactly that state: bot commits, bot pushes, and every PR opened by Ben.
+
+```
+/nssd2/humebc/Metis/infra/github/gh-as-repo-bot pr create --fill
+/nssd2/humebc/Metis/infra/github/gh-as-repo-bot --verify
+```
+
+It refuses rather than falling back to Ben, and it takes no command substitution -- which
+matters, because a sandboxed session is refused on the inline
+`GH_TOKEN="$(...)" gh ...` form and the next thing it reaches for is bare `gh`, which is Ben.
