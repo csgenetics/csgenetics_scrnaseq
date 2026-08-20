@@ -42,3 +42,40 @@ appropriate.
 - The .nextflow.log shows partial directory hashes (e.g., [eb/2ee0b1]). Always use wildcards to delete the full directory: rm -rf work/eb/2ee0b1*
 - Search for BOTH "Cached" and "Submitted" entries: grep "process_name" .nextflow.log | grep -E "\[[a-f0-9]{2}/[a-f0-9]{6}\]"
 - First show the user the full list of directories to be deleted, then delete them all in a single clear command.
+
+## Agent identity: this repo pushes as a bot, not as Ben
+
+Agent sessions here commit and push as **`themis-bios-scrnaseq-agent[bot]`**, a GitHub App installed on
+this repository and no other. Private key: `agent-secrets/scrnaseq/github/scrnaseq-agent-app.pem` (mode 600).
+
+The register of every App, id and key path is `Metis:infra/credential-inventory.md`; the
+mechanism and its failure modes are `Metis:infra/github/README.md`.
+
+This repo is PUBLIC. That is a reason the bot identity matters more, not less: Ben's personal address is already in this history 524 times, and every agent commit under his identity adds another to a public record. Only `/nssd2/humebc/external/csgenetics_scrnaseq` is wired.
+
+### Verify it before you trust it
+
+**The commit author line is NOT proof.** It is `user.email` config, set independently of the
+credential that actually pushes, and the two have been wrong in opposite directions on
+different repos in this org. Ask git what it would really hand over:
+
+```
+printf 'protocol=https\nhost=github.com\npath=csgenetics/csgenetics_scrnaseq.git\n\n' \
+  | git credential fill | grep '^username='
+```
+
+It must print `x-access-token`. Pipe through `grep` -- `credential fill` prints the token
+itself. Anything else means your pushes go out as that identity.
+
+If it is wrong, the answer alone cannot tell you why: **a helper that is skipped and a helper
+that loses a race are indistinguishable from the output.** Only the trace separates them --
+one is still run, the other never appears:
+
+```
+printf 'protocol=https\nhost=github.com\npath=csgenetics/csgenetics_scrnaseq.git\n\n' \
+  | GIT_TRACE=1 git credential fill 2>&1 | grep run_command
+```
+
+To repair, run `/nssd2/humebc/agent-secrets/bin/install_agent_identity.sh`. It sets both halves
+of the config and refuses to report success unless it has watched git hand over
+`x-access-token`, so it cannot leave a broken identity looking installed.
