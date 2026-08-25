@@ -285,7 +285,40 @@ workflows:
       - report-smoke:
           requires:
             - report-production-container
+      # THE ONLY CREDENTIALED JOB, AND THE ONLY ONE WITH A BRANCH FILTER (GRT-1405).
+      #
+      # It holds TOWER_AUTH_TOKEN and an AWS key pair while running a script from the checkout.
+      # CircleCI reads .circleci/ from the branch being built, so on any branch the code in this
+      # job -- this file included -- is whatever that branch says it is. There is no arrangement
+      # in which a CircleCI job's definition is not repo content; the only real lever is WHICH
+      # BRANCHES MAY RUN IT.
+      #
+      # So it runs on `devel` and on version tags, and nowhere else. Contributor code reaches the
+      # other seven jobs, which hold no credential; it reaches this one only after a merge.
+      #
+      # WHAT THIS IS WORTH, STATED PLAINLY so nobody later mistakes it for more. `devel` requires a
+      # pull request but `required_approving_review_count` is 0, deliberately -- Ben decided on
+      # 2026-08-25 that he merges his own PRs, because mutual review between two admins costs more
+      # than it buys here. So this filter means "only someone with push access can cause the
+      # credentialed job to run", which is two people. It does NOT mean "only reviewed code runs
+      # with credentials". The bound on what that code could do lives in AWS instead: GRT-1404
+      # replaced the Batch role's blanket S3 read with seven named buckets, and egress control is
+      # still open there.
+      #
+      # To e2e a PR before merging it, trigger this pipeline through the CircleCI API against a
+      # branch you have pushed after reading the diff. Same job definition, deliberately -- a
+      # written "run the equivalent by hand" procedure drifts from what CI does, and the drift is
+      # invisible until it matters.
       - run-current-branch:
+          #
+          # NO `tags:` CLAUSE, and that is not an omission. CircleCI requires every job named in
+          # `requires` to carry tag filters too if this one does; the seven below have none, so a
+          # tags clause here breaks tag builds rather than extending cover to them. The gate has
+          # already run on `devel` by the time a release is cut from it, so the tag adds nothing.
+          filters:
+            branches:
+              only:
+                - devel
           requires:
             - check-no-internal-files
             - comparator-tests
