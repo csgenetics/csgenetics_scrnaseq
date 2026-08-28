@@ -1,15 +1,5 @@
 # Changelog
 
-## Unreleased
-
-### Changed
-
-- **Credentialed Seqera e2e no longer checkouts.** `run-current-branch` launches a
-  pinned revision via the Seqera API from the job definition itself. It runs on
-  `devel` and version tags (`N.N.N`), not on contributor branches. A maintainer
-  can run the identical job against a PR SHA by triggering the pipeline from
-  `devel` with `launch_sha` set. PRs to `main` must come from `devel`.
-
 ## 2.0.0 - 2026-08-12
 
 Major overhaul: Nextflow 26 migration, performance, per-process module structure, a
@@ -49,6 +39,11 @@ the full results, and the known differences.
 
 ### Changed
 
+- **Credentialed Seqera e2e no longer checkouts.** `run-current-branch` launches a
+  pinned revision via the Seqera API from the job definition itself. It runs on
+  `devel` and version tags (`N.N.N`), not on contributor branches. A maintainer
+  can run the identical job against a PR SHA by triggering the pipeline from
+  `devel` with `launch_sha` set.
 - **Nextflow 26 migration.** `publishDir`/`pattern` directives that interpolate input
   variables are closure-wrapped; the redundant `nextflow.enable.strict` flag is removed.
 - **Performance (cluster throughput, not single-task speed).** Per-process cpu reservations were

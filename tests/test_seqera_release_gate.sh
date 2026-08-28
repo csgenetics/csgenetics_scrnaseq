@@ -569,11 +569,22 @@ grep -Fq 'launch_sha:' "$config_yml" || \
 grep -Fq 'seqera-on-demand:' "$config_yml" || \
   fail_test 'config.yml is missing the seqera-on-demand workflow'
 
-[[ -f $repo_root/.github/workflows/branch.yml ]] || \
-  fail_test 'branch.yml is missing'
-grep -Fq 'github.head_ref == devel' "$repo_root/.github/workflows/branch.yml" || \
-  grep -Fq 'GITHUB_HEAD_REF == devel' "$repo_root/.github/workflows/branch.yml" || \
-  fail_test 'branch.yml does not require head ref devel'
+# Deliverable 4: PRs to main only from devel. The App cannot push workflow
+# files, so this check is a skip-with-warning until Ben pastes
+# docs/grt-1405-ci-separation/proposed-branch-yml.md as
+# .github/workflows/branch.yml. Once that file exists, the check is a hard
+# fail so a later edit cannot silently drop the policy.
+branch_yml="$repo_root/.github/workflows/branch.yml"
+if [[ ! -f $branch_yml ]]; then
+  printf 'WARN: GRT-1405 deliverable 4: .github/workflows/branch.yml is absent. Skipping the main-from-devel check until it is pasted from docs/grt-1405-ci-separation/proposed-branch-yml.md.\n' >&2
+else
+  grep -Fq 'pull_request_target' "$branch_yml" || \
+    fail_test 'branch.yml exists but is not pull_request_target'
+  grep -Fq 'csgenetics/csgenetics_scrnaseq' "$branch_yml" || \
+    fail_test 'branch.yml exists but does not pin this repository'
+  grep -Fq 'devel' "$branch_yml" || \
+    fail_test 'branch.yml exists but does not require head ref devel'
+fi
 
 python3 - "$config_yml" "$launcher_file" <<'PY' || fail_test 'config.yml credentialed-job contract failed'
 import pathlib, re, sys
