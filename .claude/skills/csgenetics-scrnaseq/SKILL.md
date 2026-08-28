@@ -82,14 +82,21 @@ CHANGELOG.md             # Release notes -- update this for user-visible changes
 
 ## Testing
 
-CircleCI (`.circleci/config.yml`) runs four jobs on every PR:
+CircleCI (`.circleci/config.yml`) runs the uncredentialed jobs on every PR. The
+Seqera e2e job holds credentials, does not checkout, and runs only on `devel`,
+on version tags (`N.N.N`), or when a maintainer triggers the pipeline from
+`devel` with `launch_sha` set.
 
-| Job | What it does | Cost |
-|-----|--------------|------|
-| `check-no-internal-files` | Fails if agent working files, credentials or beast-local paths get committed. **This repo is public** — see `CLAUDE.md`. | seconds |
-| `nf-test` | Whole-pipeline `-stub` DAG test plus per-process module tests. Catches wiring and output-declaration regressions without touching real data. | ~minutes |
-| `report-smoke` | Renders the consolidated report in headless Chromium and asserts it is *functional*: no JS errors, plots drew SVGs, dropdown works, print reveals all panes. | ~minutes |
-| `run-current-branch` | Launches a real end-to-end run on Seqera Platform against the `test` profile. | a full pipeline run |
+| Job | What it does | When | Cost |
+|-----|--------------|------|------|
+| `check-no-internal-files` | Fails if agent working files, credentials or beast-local paths get committed. **This repo is public** — see `CLAUDE.md`. | every PR | seconds |
+| `comparator-tests` | Adversarial tests for the output-equivalence comparator. | every PR | ~minutes |
+| `io-count-extract` | Rust tests and committed-binary parity for `bin/io_count_extract`. | every PR | ~minutes |
+| `nf-test` | Whole-pipeline `-stub` DAG test plus per-process module tests. | every PR | ~minutes |
+| `python-tests` | Frozen general Python suite. | every PR | ~minutes |
+| `report-production-container` | Report contract tests in the production HTML image. | every PR | ~minutes |
+| `report-smoke` | Renders the consolidated report in headless Chromium and asserts it is functional. | every PR | ~minutes |
+| `run-current-branch` | Launches a real Seqera run of a pinned revision against the `test` profile. Holds `TOWER_AUTH_TOKEN`. No checkout. | `devel`, version tags, or on-demand from `devel` | a full pipeline run |
 
 Run the fast checks locally before pushing:
 

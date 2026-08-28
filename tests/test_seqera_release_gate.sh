@@ -147,6 +147,9 @@ case_status=0
 case_timeout=60
 case_poll_interval=1
 case_sha=$expected_sha
+case_circle_sha=$expected_sha
+case_circle_branch=$expected_branch
+case_revision=$expected_branch
 include_token=1
 
 new_case() {
@@ -157,6 +160,9 @@ new_case() {
   case_timeout=60
   case_poll_interval=1
   case_sha=$expected_sha
+  case_circle_sha=$expected_sha
+  case_circle_branch=$expected_branch
+  case_revision=$expected_branch
   include_token=1
 }
 
@@ -182,8 +188,10 @@ run_case() {
     "PIPELINE_OUTDIR_ROOT=${private_output_root}"
     "TOWER_WORKSPACE_ID=${workspace_id}"
     "TOWER_COMPUTE_ENV_ID=${compute_environment_id}"
-    "CIRCLE_SHA1=${case_sha}"
-    "CIRCLE_BRANCH=${expected_branch}"
+    "CIRCLE_SHA1=${case_circle_sha}"
+    "CIRCLE_BRANCH=${case_circle_branch}"
+    "SEQERA_COMMIT_ID=${case_sha}"
+    "SEQERA_REVISION=${case_revision}"
     'CIRCLE_BUILD_NUM=4242'
     "SEQERA_POLL_INTERVAL_SECONDS=${case_poll_interval}"
     "SEQERA_POLL_TIMEOUT_SECONDS=${case_timeout}"
@@ -298,10 +306,10 @@ assert_call 3 GET "/workflow/workflow_XYZ-456?workspaceId=${workspace_id}"
 assert_call 6 DELETE "/actions/action_ABC-123?workspaceId=${workspace_id}"
 jq -e \
   --arg sha "$expected_sha" \
-  --arg branch "$expected_branch" \
+  --arg revision "$expected_branch" \
   --arg work_directory "$private_work_directory" \
   '.launch.commitId == $sha and
-   .launch.revision == $branch and
+   .launch.revision == $revision and
    .launch.pullLatest == false and
    .launch.workDir == $work_directory and
    .launch.configProfiles == ["test"]' \
@@ -336,14 +344,15 @@ assert_private_values_hidden zero_poll_interval
 [[ ! -e $case_state/calls.tsv ]] || \
   fail_test 'zero-poll-interval case reached the API'
 
-# The checked-out commit and requested commit must agree before launch.
-new_case mismatched_sha
-case_sha='0000000000000000000000000000000000000000'
+# A missing pin is rejected before any API request. CIRCLE_SHA1 is not the pin.
+new_case missing_pin
+case_sha=''
 run_case
-expect_failure mismatched_sha 'CIRCLE_SHA1 does not match the checked-out Git commit.'
-assert_private_values_hidden mismatched_sha
+expect_failure missing_pin \
+  'Required environment variable SEQERA_COMMIT_ID is not configured.'
+assert_private_values_hidden missing_pin
 [[ ! -e $case_state/calls.tsv ]] || \
-  fail_test 'mismatched-SHA case reached the API'
+  fail_test 'missing-pin case reached the API'
 
 # HTTP failures fail loud without replaying the response body.
 new_case create_http_failure
@@ -505,9 +514,161 @@ response 4 ''
 response 5 ''
 run_case
 expect_failure mismatched_executed_commit \
-  'Seqera reported a workflow commit that differs from CIRCLE_SHA1.'
+  'Seqera reported a workflow commit that differs from SEQERA_COMMIT_ID.'
 assert_private_values_hidden mismatched_executed_commit
 assert_call 4 POST "/workflow/workflow_XYZ-456/cancel?workspaceId=${workspace_id}"
 assert_call 5 DELETE "/actions/action_ABC-123?workspaceId=${workspace_id}"
+
+# On-demand pin: CIRCLE_SHA1 is devel HEAD and must not be the Seqera commit.
+new_case on_demand_pin
+readonly on_demand_sha='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+case_sha=$on_demand_sha
+case_circle_sha=$expected_sha
+case_revision='feature/on-demand'
+response 1 '{"actionId":"action_ABC-123"}'
+response 2 '{"workflowId":"workflow_XYZ-456"}'
+response 3 "{\"workflow\":{\"status\":\"SUCCEEDED\",\"commitId\":\"${on_demand_sha}\"}}"
+response 4 ''
+run_case
+expect_success on_demand_pin
+assert_private_values_hidden on_demand_pin
+jq -e \
+  --arg sha "$on_demand_sha" \
+  --arg revision 'feature/on-demand' \
+  '.launch.commitId == $sha and .launch.revision == $revision and .launch.pullLatest == false' \
+  "$case_state/request-body.1.json" >/dev/null || \
+  fail_test 'on-demand pin used CIRCLE_SHA1 or dropped pullLatest=false'
+
+# Tag pipelines leave CIRCLE_BRANCH empty. The pin is SEQERA_REVISION.
+new_case tag_revision
+case_circle_branch=''
+case_revision='2.0.0'
+response 1 '{"actionId":"action_ABC-123"}'
+response 2 '{"workflowId":"workflow_XYZ-456"}'
+response 3 "{\"workflow\":{\"status\":\"SUCCEEDED\",\"commitId\":\"${expected_sha}\"}}"
+response 4 ''
+run_case
+expect_success tag_revision
+assert_private_values_hidden tag_revision
+jq -e \
+  --arg sha "$expected_sha" \
+  --arg revision '2.0.0' \
+  '.launch.commitId == $sha and .launch.revision == $revision' \
+  "$case_state/request-body.1.json" >/dev/null || \
+  fail_test 'tag revision was not used as the Seqera revision'
+
+# --- config.yml contract: no checkout, one job, devel/version-tag filters, on-demand ---
+config_yml="$repo_root/.circleci/config.yml"
+launcher_file="$repo_root/.circleci/run_seqera_release_gate.sh"
+
+[[ -f $config_yml ]] || fail_test 'config.yml is missing'
+grep -Fq 'parameters:' "$config_yml" || \
+  fail_test 'config.yml has no pipeline parameters'
+grep -Fq 'launch_sha:' "$config_yml" || \
+  fail_test 'config.yml is missing launch_sha'
+grep -Fq 'seqera-on-demand:' "$config_yml" || \
+  fail_test 'config.yml is missing the seqera-on-demand workflow'
+
+# Deliverable 4: PRs to main only from devel. The App cannot push workflow
+# files, so this check is a skip-with-warning until Ben pastes
+# docs/grt-1405-ci-separation/proposed-branch-yml.md as
+# .github/workflows/branch.yml. Once that file exists, the check is a hard
+# fail so a later edit cannot silently drop the policy.
+branch_yml="$repo_root/.github/workflows/branch.yml"
+if [[ ! -f $branch_yml ]]; then
+  printf 'WARN: GRT-1405 deliverable 4: .github/workflows/branch.yml is absent. Skipping the main-from-devel check until it is pasted from docs/grt-1405-ci-separation/proposed-branch-yml.md.\n' >&2
+else
+  grep -Fq 'pull_request_target' "$branch_yml" || \
+    fail_test 'branch.yml exists but is not pull_request_target'
+  grep -Fq 'csgenetics/csgenetics_scrnaseq' "$branch_yml" || \
+    fail_test 'branch.yml exists but does not pin this repository'
+  grep -Fq 'devel' "$branch_yml" || \
+    fail_test 'branch.yml exists but does not require head ref devel'
+fi
+
+python3 - "$config_yml" "$launcher_file" <<'PY' || fail_test 'config.yml credentialed-job contract failed'
+import pathlib, re, sys
+
+config = pathlib.Path(sys.argv[1]).read_text()
+launcher = pathlib.Path(sys.argv[2]).read_text()
+
+begin = "# BEGIN_SEQERA_RELEASE_GATE\n"
+end = "# END_SEQERA_RELEASE_GATE"
+if begin not in config or end not in config:
+    raise SystemExit("missing BEGIN/END_SEQERA_RELEASE_GATE markers")
+marked = config.split(begin, 1)[1].split(end, 1)[0]
+# Strip the YAML block indent shared by every line of the marked region.
+lines = marked.splitlines()
+indents = [len(line) - len(line.lstrip(" ")) for line in lines if line.strip()]
+if not indents:
+    raise SystemExit("marked launcher body is empty")
+strip = min(indents)
+body = "\n".join(line[strip:] if len(line) >= strip else line for line in lines)
+if body.startswith("\n"):
+    body = body[1:]
+if not body.endswith("\n"):
+    body += "\n"
+if body != launcher:
+    raise SystemExit("marked launcher body is not byte-identical to run_seqera_release_gate.sh")
+
+job = re.search(
+    r"^  run-current-branch:\n(?:.*\n)*?^    steps:\n((?:^      .*\n)+)",
+    config,
+    re.M,
+)
+if not job:
+    raise SystemExit("could not find run-current-branch steps")
+steps = job.group(1)
+if re.search(r"^\s*- checkout\s*$", steps, re.M):
+    raise SystemExit("run-current-branch still checkouts")
+if ".circleci/run_seqera_release_gate.sh" in steps:
+    raise SystemExit("run-current-branch still executes the checkout script path")
+if "SEQERA_COMMIT_ID" not in config.split(begin, 1)[0]:
+    raise SystemExit("prelude does not set SEQERA_COMMIT_ID")
+
+if not re.search(
+    r'seqera-on-demand:[\s\S]*?equal:\s*\[\s*devel,\s*"<< pipeline.git.branch >>"\s*\]',
+    config,
+):
+    raise SystemExit("seqera-on-demand when is not restricted to devel")
+if re.search(
+    r"seqera-on-demand:[\s\S]*?pipeline.git.tag",
+    config,
+):
+    raise SystemExit("seqera-on-demand when still allows tags")
+
+# Credentialed job entry in the ci workflow: devel branches + version tags.
+ci = re.search(r"^  ci:\n([\s\S]*?)^  seqera-on-demand:", config, re.M)
+if not ci:
+    raise SystemExit("could not find ci workflow before seqera-on-demand")
+ci_block = ci.group(1)
+cred = re.search(
+    r"- run-current-branch:\n([\s\S]*?)(?:^      - |\Z)",
+    ci_block,
+)
+if not cred:
+    raise SystemExit("ci workflow does not name run-current-branch")
+cred_block = cred.group(1)
+if "only:\n                - devel" not in cred_block and "only: devel" not in cred_block:
+    if not re.search(r"branches:\n\s+only:\n\s+- devel", cred_block):
+        raise SystemExit("ci run-current-branch is not filtered to devel")
+if r"/^[0-9]+\.[0-9]+\.[0-9]+$/" not in cred_block:
+    raise SystemExit("ci run-current-branch is not filtered to version tags")
+if r"only: /.*/" in cred_block:
+    raise SystemExit("ci run-current-branch still uses tags.only: /.*/")
+
+# Every other job listed under ci must have a tags filter so version-tag
+# pipelines can satisfy requires.
+for match in re.finditer(r"^      - ([a-z0-9-]+):", ci_block, re.M):
+    name = match.group(1)
+    if name == "run-current-branch":
+        continue
+    # Slice from this job to the next job or end
+    start = match.start()
+    nxt = re.search(r"^      - [a-z0-9-]+:", ci_block[match.end():], re.M)
+    chunk = ci_block[start: match.end() + (nxt.start() if nxt else len(ci_block))]
+    if "tags:" not in chunk:
+        raise SystemExit(f"ci job {name} has no tags filter")
+PY
 
 printf 'OK: CircleCI -> Seqera release-gate contract tests passed.\n'
