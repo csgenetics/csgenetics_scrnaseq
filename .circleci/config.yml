@@ -741,9 +741,8 @@ workflows:
       # tags are excluded because pushing an arbitrary tag at a feature SHA
       # would otherwise be the old every-branch exposure.
       #
-      # The bound on what credentialed code could do lives in AWS: GRT-1404
-      # replaced the Batch role's blanket S3 read with seven named buckets, and
-      # egress control is still open there. GRT-1406 retires the AWS key pair.
+      # The bound on what credentialed code could do lives in AWS (GRT-1404,
+      # still open on egress). GRT-1406 retires the AWS key pair.
       - run-current-branch:
           filters:
             branches:
