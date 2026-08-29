@@ -12,10 +12,22 @@ jobs:
     name: PRs to main must come from devel
     runs-on: ubuntu-latest
     steps:
+      # main is what the wetlab runs. The normal path in is devel, so that
+      # anything reaching main has been integrated and tested there first.
+      #
+      # hotfix/* is the deliberate exception. Routing an urgent fix through
+      # devel is not merely slower - merging devel into main drags in every
+      # other unreleased commit on devel, which is the opposite of what a
+      # hotfix wants. The branch name is the record of why integration was
+      # skipped. After a hotfix lands, merge main back into devel or the fix
+      # is lost at the next release.
+      #
+      # This is a process guard, not a security boundary: pushes to main are
+      # restricted to two humans, so a branch name grants nobody anything.
       - name: Check PR source
         env:
           HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
           { [[ "$HEAD_REPO" == csgenetics/csgenetics_scrnaseq ]] && \
-            [[ "$HEAD_REF" == devel ]]; }
+            { [[ "$HEAD_REF" == devel ]] || [[ "$HEAD_REF" == hotfix/* ]]; }; }
