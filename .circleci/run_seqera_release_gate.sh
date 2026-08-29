@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 
-# Launch the exact CircleCI revision on Seqera Platform, wait for a terminal
-# result, and remove the temporary action. This script deliberately owns the
-# complete lifecycle in one shell so EXIT/TERM cleanup can cancel an incomplete
-# workflow and delete its action.
+# Launch a pinned revision on Seqera Platform, wait for a terminal result, and
+# remove the temporary action. This script deliberately owns the complete
+# lifecycle in one shell so EXIT/TERM cleanup can cancel an incomplete workflow
+# and delete its action. It does not read the git checkout: SEQERA_COMMIT_ID and
+# SEQERA_REVISION are the pin (supplied by the CircleCI job prelude).
 
 set -Eeuo pipefail
 
@@ -201,8 +202,8 @@ for required_name in \
   PIPELINE_OUTDIR_ROOT \
   TOWER_WORKSPACE_ID \
   TOWER_COMPUTE_ENV_ID \
-  CIRCLE_SHA1 \
-  CIRCLE_BRANCH \
+  SEQERA_COMMIT_ID \
+  SEQERA_REVISION \
   CIRCLE_BUILD_NUM; do
   require_environment_variable "$required_name"
 done
@@ -211,12 +212,12 @@ done
   die 'TOWER_WORKSPACE_ID must be a numeric workspace identifier.'
 valid_seqera_id "$TOWER_COMPUTE_ENV_ID" || \
   die 'TOWER_COMPUTE_ENV_ID is not a valid Seqera identifier.'
-[[ $CIRCLE_SHA1 =~ ^[0-9a-fA-F]{40}$ ]] || \
-  die 'CIRCLE_SHA1 must be a full 40-character Git commit hash.'
+[[ $SEQERA_COMMIT_ID =~ ^[0-9a-fA-F]{40}$ ]] || \
+  die 'SEQERA_COMMIT_ID must be a full 40-character Git commit hash.'
 [[ $CIRCLE_BUILD_NUM =~ ^[0-9]+$ ]] || \
   die 'CIRCLE_BUILD_NUM must be numeric.'
-[[ ${#CIRCLE_BRANCH} -le 255 ]] || \
-  die 'CIRCLE_BRANCH exceeds the supported length.'
+[[ ${#SEQERA_REVISION} -le 255 ]] || \
+  die 'SEQERA_REVISION exceeds the supported length.'
 
 readonly poll_interval_seconds=${SEQERA_POLL_INTERVAL_SECONDS:-60}
 # Heavy validated fixtures have taken over three hours. Allow 4.5 hours while
@@ -226,12 +227,6 @@ readonly poll_timeout_seconds=${SEQERA_POLL_TIMEOUT_SECONDS:-16200}
   die 'SEQERA_POLL_INTERVAL_SECONDS must be a positive integer.'
 [[ $poll_timeout_seconds =~ ^[0-9]+$ ]] || \
   die 'SEQERA_POLL_TIMEOUT_SECONDS must be a non-negative integer.'
-
-checked_out_sha=$(git rev-parse --verify HEAD 2>/dev/null) || \
-  die 'Unable to resolve the checked-out Git commit.'
-if [[ ${checked_out_sha,,} != "${CIRCLE_SHA1,,}" ]]; then
-  die 'CIRCLE_SHA1 does not match the checked-out Git commit.'
-fi
 
 umask 077
 scratch_dir=$(mktemp -d)
@@ -243,7 +238,7 @@ readonly launch_response="${scratch_dir}/launch-action.response.json"
 readonly workflow_response="${scratch_dir}/workflow.response.json"
 readonly action_payload="${scratch_dir}/create-action.request.json"
 readonly launch_payload="${scratch_dir}/launch-action.request.json"
-readonly run_name="CI_${CIRCLE_SHA1:0:7}_${CIRCLE_BUILD_NUM}"
+readonly run_name="CI_${SEQERA_COMMIT_ID:0:7}_${CIRCLE_BUILD_NUM}"
 readonly output_directory="${PIPELINE_OUTDIR_ROOT%/}/circleci/${run_name}"
 
 # Seqera models these separately: revision preserves branch/tag context,
@@ -253,8 +248,8 @@ if ! jq -n \
   --arg compute_environment_id "$TOWER_COMPUTE_ENV_ID" \
   --arg pipeline "$pipeline_url" \
   --arg work_directory "$TOWER_WORK_DIR" \
-  --arg revision "$CIRCLE_BRANCH" \
-  --arg commit_id "$CIRCLE_SHA1" \
+  --arg revision "$SEQERA_REVISION" \
+  --arg commit_id "$SEQERA_COMMIT_ID" \
   --arg nextflow_version "$nextflow_version" \
   '{
     name: $name,
@@ -312,7 +307,7 @@ valid_seqera_id "$candidate_workflow_id" || \
   die 'Seqera launch-action response contained an invalid workflowId.'
 workflow_id=$candidate_workflow_id
 
-printf 'Seqera workflow submitted for the exact CircleCI commit.\n'
+printf 'Seqera workflow submitted for the pinned commit.\n'
 SECONDS=0
 
 while true; do
@@ -338,8 +333,8 @@ while true; do
   case "$workflow_status" in
     SUCCEEDED|FAILED|CANCELLED) workflow_terminal=1 ;;
   esac
-  if [[ -n $observed_commit_id && ${observed_commit_id,,} != "${CIRCLE_SHA1,,}" ]]; then
-    die 'Seqera reported a workflow commit that differs from CIRCLE_SHA1.'
+  if [[ -n $observed_commit_id && ${observed_commit_id,,} != "${SEQERA_COMMIT_ID,,}" ]]; then
+    die 'Seqera reported a workflow commit that differs from SEQERA_COMMIT_ID.'
   fi
 
   printf 'Seqera workflow status: %s (elapsed %ss).\n' "$workflow_status" "$SECONDS"
@@ -348,7 +343,7 @@ while true; do
       if [[ -z $observed_commit_id ]]; then
         die 'Succeeded Seqera workflow did not report its executed commitId.'
       fi
-      printf 'Seqera workflow succeeded at the exact CircleCI commit.\n'
+      printf 'Seqera workflow succeeded at the pinned commit.\n'
       break
       ;;
     FAILED)
