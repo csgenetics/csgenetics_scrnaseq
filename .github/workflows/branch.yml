@@ -1,0 +1,21 @@
+name: PRs to main must come from devel
+
+on:
+  pull_request_target:
+    branches:
+      - main
+
+permissions: {}
+
+jobs:
+  main-from-devel:
+    name: PRs to main must come from devel
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR source
+        env:
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          { [[ "$HEAD_REPO" == csgenetics/csgenetics_scrnaseq ]] && \
+            [[ "$HEAD_REF" == devel ]]; }
