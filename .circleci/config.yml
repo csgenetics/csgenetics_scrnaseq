@@ -60,6 +60,65 @@ jobs:
     # See: https://circleci.com/docs/2.0/configuration-reference/#steps
     steps:
       - run:
+          name: Install AWS CLI
+          command: |
+            curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o awscliv2.zip
+            unzip -q awscliv2.zip
+            sudo ./aws/install
+      - run:
+          # GRT-1406. Fetches the Seqera token from AWS per job, so this PUBLIC repo's CircleCI
+          # project stores no long-lived Tower token at all.
+          #
+          # INLINE, NOT A SCRIPT FROM THE REPO, AND THAT IS THE WHOLE POINT. This job
+          # deliberately has no `checkout`: GRT-1405 removed it because the job holds a
+          # credential while it runs, and on a public repo any branch could otherwise change
+          # what executes. Calling a repo script here would hand that back.
+          #
+          # NO HEREDOCS AND NO HERESTRINGS. Double-angle-bracket is CircleCI parameter syntax in
+          # this file, and either shell form breaks the config. This comment deliberately spells
+          # that out in words rather than showing the characters, because CircleCI preprocesses
+          # them even inside a comment.
+          #
+          # The assumed credentials are confined to the single command that needs them by an
+          # environment prefix, so they never enter the job environment. This job holds no
+          # static AWS key pair at all -- assuming a role with a web identity needs none -- and
+          # it should stay that way.
+          name: Fetch Tower token via OIDC (never printed)
+          command: |
+            set -Eeuo pipefail
+            role_arn="arn:aws:iam::837012689225:role/circleci-oidc-csgenetics-scrnaseq"
+            sid="seqera/csgenetics_scrnaseq/tower-access-token"
+            region="us-east-1"
+            if [[ -z ${CIRCLE_OIDC_TOKEN_V2:-} ]]; then
+              echo "FAIL: CIRCLE_OIDC_TOKEN_V2 is empty; cannot assume the OIDC role." >&2
+              echo "      V1 carries no vcs claims, so this does not fall back to it." >&2
+              exit 1
+            fi
+            if [[ -z ${BASH_ENV:-} ]]; then
+              echo "FAIL: BASH_ENV is unset; cannot pass the token to the launcher step." >&2
+              exit 1
+            fi
+            creds=$(aws sts assume-role-with-web-identity \
+              --role-arn "$role_arn" \
+              --role-session-name "${CIRCLE_JOB:-circleci}" \
+              --web-identity-token "$CIRCLE_OIDC_TOKEN_V2" \
+              --duration-seconds 3600 --region "$region" \
+              --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' --output text)
+            tok=$(AWS_ACCESS_KEY_ID=$(printf '%s' "$creds" | cut -f1) \
+                  AWS_SECRET_ACCESS_KEY=$(printf '%s' "$creds" | cut -f2) \
+                  AWS_SESSION_TOKEN=$(printf '%s' "$creds" | cut -f3) \
+                  aws secretsmanager get-secret-value --secret-id "$sid" \
+                    --region "$region" --query SecretString --output text)
+            unset creds
+            tok=${tok%$'\n'}
+            if [[ -z $tok ]]; then
+              echo "FAIL: Secrets Manager returned an empty SecretString" >&2
+              exit 1
+            fi
+            printf 'export TOWER_AUTH_TOKEN=%q\n' "$tok" >> "$BASH_ENV"
+            printf 'TOWER_AUTH_TOKEN from AWS: PRESENT len=%s sha256_16=%s\n' \
+              "${#tok}" "$(printf '%s' "$tok" | sha256sum | cut -c1-16)"
+      - run:
           name: Launch and monitor exact revision on Seqera Platform
           command: |
             set -Eeuo pipefail
